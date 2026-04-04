@@ -1,0 +1,12 @@
+{{define "content"}}
+<h1>Резюме</h1>
+{{with .Data}}
+  {{if .BodyHTML}}
+  <div class="prose">
+    {{safeHTML .BodyHTML}}
+  </div>
+  {{else}}
+  <p style="color:var(--muted)">Резюме пока не заполнено.</p>
+  {{end}}
+{{end}}
+{{end}}

@@ -1,0 +1,62 @@
+{{define "admin_content"}}
+<div class="admin-header">
+  <h1>Настройки</h1>
+</div>
+
+<form method="POST" action="/admin/settings">
+
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:1.25rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em">Основное</h2>
+    <div class="form-group">
+      <label>Название сайта</label>
+      <input type="text" name="site_title" value="{{index .Data "site_title"}}">
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label>Описание</label>
+      <input type="text" name="site_desc" value="{{index .Data "site_desc"}}">
+    </div>
+  </div>
+
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:1.25rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em">Социальные сети</h2>
+    <div class="form-group">
+      <label>GitHub</label>
+      <input type="url" name="social_github" placeholder="https://github.com/username" value="{{index .Data "social_github"}}">
+    </div>
+    <div class="form-group">
+      <label>Telegram</label>
+      <input type="url" name="social_telegram" placeholder="https://t.me/username" value="{{index .Data "social_telegram"}}">
+    </div>
+    <div class="form-group">
+      <label>Instagram</label>
+      <input type="url" name="social_instagram" placeholder="https://instagram.com/username" value="{{index .Data "social_instagram"}}">
+    </div>
+    <div class="form-group">
+      <label>Twitter / X</label>
+      <input type="url" name="social_twitter" placeholder="https://x.com/username" value="{{index .Data "social_twitter"}}">
+    </div>
+    <div class="form-group">
+      <label>Bluesky</label>
+      <input type="url" name="social_bluesky" placeholder="https://bsky.app/profile/username" value="{{index .Data "social_bluesky"}}">
+    </div>
+    <div class="form-group">
+      <label>Mastodon</label>
+      <input type="url" name="social_mastodon" placeholder="https://mastodon.social/@username" value="{{index .Data "social_mastodon"}}">
+    </div>
+    <div class="form-group">
+      <label>ВКонтакте</label>
+      <input type="url" name="social_vk" placeholder="https://vk.com/username" value="{{index .Data "social_vk"}}">
+    </div>
+    <div class="form-group">
+      <label>LinkedIn</label>
+      <input type="url" name="social_linkedin" placeholder="https://linkedin.com/in/username" value="{{index .Data "social_linkedin"}}">
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label>Email</label>
+      <input type="email" name="social_email" placeholder="you@example.com" value="{{index .Data "social_email"}}">
+    </div>
+  </div>
+
+  <button type="submit" class="btn btn-primary">Сохранить</button>
+</form>
+{{end}}

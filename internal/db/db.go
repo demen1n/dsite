@@ -1,0 +1,132 @@
+package db
+
+import (
+	"database/sql"
+	"fmt"
+	"log"
+
+	_ "modernc.org/sqlite"
+)
+
+var DB *sql.DB
+
+func Init(path string) error {
+	var err error
+	DB, err = sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on")
+	if err != nil {
+		return fmt.Errorf("open db: %w", err)
+	}
+	if err = DB.Ping(); err != nil {
+		return fmt.Errorf("ping db: %w", err)
+	}
+	if err = migratePhotosOrder(); err != nil {
+		return fmt.Errorf("migrate photos order: %w", err)
+	}
+	if err = migrate(); err != nil {
+		return fmt.Errorf("migrate: %w", err)
+	}
+	if err = migrateCategoryColumn(); err != nil {
+		return fmt.Errorf("migrate category column: %w", err)
+	}
+	if err = migratePostsViews(); err != nil {
+		return fmt.Errorf("migrate posts views: %w", err)
+	}
+	if err = migrateTagsTables(); err != nil {
+		return fmt.Errorf("migrate tags tables: %w", err)
+	}
+	log.Println("DB initialized:", path)
+	return nil
+}
+
+// migratePhotosOrder adds sort_order column to existing photos tables.
+// ALTER TABLE doesn't support IF NOT EXISTS, so we ignore the "duplicate column" error.
+func migratePhotosOrder() error {
+	DB.Exec(`ALTER TABLE photos ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`UPDATE photos SET sort_order = id WHERE sort_order = 0`)
+	return nil
+}
+
+// migrateCategoryColumn adds category_id to photos for existing databases.
+func migrateCategoryColumn() error {
+	DB.Exec(`ALTER TABLE photos ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL`)
+	return nil
+}
+
+func migratePostsViews() error {
+	DB.Exec(`ALTER TABLE posts ADD COLUMN views INTEGER NOT NULL DEFAULT 0`)
+	return nil
+}
+
+func migrateTagsTables() error {
+	_, err := DB.Exec(`
+	CREATE TABLE IF NOT EXISTS tags (
+		id   INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		slug TEXT NOT NULL UNIQUE
+	);
+	CREATE TABLE IF NOT EXISTS post_tags (
+		post_id INTEGER NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+		tag_id  INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+		PRIMARY KEY (post_id, tag_id)
+	);
+	`)
+	return err
+}
+
+func migrate() error {
+	_, err := DB.Exec(`
+	CREATE TABLE IF NOT EXISTS users (
+		id       INTEGER PRIMARY KEY,
+		login    TEXT NOT NULL UNIQUE,
+		password TEXT NOT NULL  -- bcrypt hash
+	);
+
+	CREATE TABLE IF NOT EXISTS posts (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		slug       TEXT NOT NULL UNIQUE,
+		title      TEXT NOT NULL,
+		body_md    TEXT NOT NULL DEFAULT '',  -- исходный Markdown
+		body_html  TEXT NOT NULL DEFAULT '',  -- скомпилированный HTML
+		cover      TEXT NOT NULL DEFAULT '',  -- путь к обложке
+		published  INTEGER NOT NULL DEFAULT 0, -- 0=draft, 1=published
+		views      INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+
+	CREATE TABLE IF NOT EXISTS categories (
+		id   INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		slug TEXT NOT NULL UNIQUE
+	);
+
+	CREATE TABLE IF NOT EXISTS photos (
+		id          INTEGER PRIMARY KEY AUTOINCREMENT,
+		filename    TEXT NOT NULL,
+		caption     TEXT NOT NULL DEFAULT '',
+		sort_order  INTEGER NOT NULL DEFAULT 0,
+		category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
+		created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+
+	CREATE TABLE IF NOT EXISTS resume (
+		id      INTEGER PRIMARY KEY DEFAULT 1,
+		body_md   TEXT NOT NULL DEFAULT '',
+		body_html TEXT NOT NULL DEFAULT ''
+	);
+
+	CREATE TABLE IF NOT EXISTS sessions (
+		token      TEXT PRIMARY KEY,
+		expires_at TEXT NOT NULL
+	);
+
+	CREATE TABLE IF NOT EXISTS settings (
+		key   TEXT PRIMARY KEY,
+		value TEXT NOT NULL DEFAULT ''
+	);
+
+	-- Дефолтная запись резюме
+	INSERT OR IGNORE INTO resume (id, body_md, body_html) VALUES (1, '', '');
+	`)
+	return err
+}

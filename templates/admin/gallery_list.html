@@ -1,0 +1,43 @@
+{{define "gallery_list_content"}}
+{{if .Data.Photos}}
+<div id="gallery-list-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:0.75rem">
+  {{range .Data.Photos}}
+  <div data-photo-id="{{.ID}}" style="position:relative; background:#fff; border:1px solid #e0e0da; border-radius:8px; overflow:hidden; cursor:grab">
+    <img src="/uploads/{{.Filename}}" loading="lazy"
+         style="width:100%; aspect-ratio:1; object-fit:cover; display:block; pointer-events:none">
+    {{if .Caption}}
+    <div style="padding:0.3rem 0.6rem 0; font-size:0.78rem; color:#6b6b6b">{{.Caption}}</div>
+    {{end}}
+    {{if $.Data.Categories}}
+    {{$photoID := .ID}}{{$catID := .CategoryID}}
+    <div style="padding:0.3rem 0.6rem 0.5rem">
+      <select name="category_id"
+              hx-post="/admin/gallery/{{$photoID}}/category"
+              hx-trigger="change"
+              hx-swap="none"
+              style="width:100%; font-size:0.75rem; padding:0.2rem; border:1px solid #d0d0ca; border-radius:4px; background:#fff; cursor:pointer">
+        <option value="0" {{if eq $catID 0}}selected{{end}}>— без категории —</option>
+        {{range $.Data.Categories}}
+        <option value="{{.ID}}" {{if eq .ID $catID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </div>
+    {{else if .CategoryName}}
+    <div style="padding:0.2rem 0.6rem 0.4rem; font-size:0.75rem; color:#888">{{.CategoryName}}</div>
+    {{end}}
+    <form method="POST" action="/admin/gallery/{{.ID}}/delete"
+          hx-post="/admin/gallery/{{.ID}}/delete"
+          hx-target="#gallery-list"
+          hx-swap="innerHTML"
+          hx-confirm="Удалить фото?"
+          style="position:absolute; top:0.4rem; right:0.4rem">
+      <button type="submit"
+              style="background:rgba(0,0,0,0.5); color:white; border:none; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:0.9rem; line-height:1">✕</button>
+    </form>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<p style="color:#6b6b6b">Фотографий пока нет.</p>
+{{end}}
+{{end}}

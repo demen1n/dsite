@@ -1,0 +1,49 @@
+{{define "admin_content"}}
+<div class="admin-header">
+  <h1>Посты</h1>
+  <a class="btn btn-primary" href="/admin/posts/new">+ Новый пост</a>
+</div>
+
+<div class="table-wrap">
+  {{if .Data}}
+  <table>
+    <thead>
+      <tr>
+        <th>Заголовок</th>
+        <th>Slug</th>
+        <th>Статус</th>
+        <th>Дата</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Data}}
+      <tr>
+        <td><strong>{{.Title}}</strong></td>
+        <td><code style="font-size:0.82rem; color:var(--muted)">/post/{{.Slug}}</code></td>
+        <td>
+          {{if .Published}}
+          <span class="badge badge-green">Опубликован</span>
+          {{else}}
+          <span class="badge badge-gray">Черновик</span>
+          {{end}}
+        </td>
+        <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .CreatedAt}}</td>
+        <td style="white-space:nowrap; text-align:right">
+          <a class="btn btn-secondary btn-sm" href="/admin/posts/{{.ID}}/edit">Редактировать</a>
+          <form method="POST" action="/admin/posts/{{.ID}}/delete" style="display:inline"
+                onsubmit="return confirm('Удалить пост «{{.Title}}»?')">
+            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div style="padding:2.5rem; text-align:center; color:var(--muted)">
+    Постов пока нет. <a href="/admin/posts/new">Создайте первый</a>.
+  </div>
+  {{end}}
+</div>
+{{end}}

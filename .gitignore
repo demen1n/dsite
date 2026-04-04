@@ -1,0 +1,25 @@
+# Binary
+dsite
+
+# Database and uploads (runtime data)
+*.db
+*.db-shm
+*.db-wal
+uploads/
+
+# Environment
+.env
+.env.*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Go
+vendor/

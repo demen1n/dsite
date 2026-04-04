@@ -1,0 +1,68 @@
+{{define "content"}}
+<div class="feed-header">
+  <h1>{{.SiteTitle}}</h1>
+  <p>{{.SiteDesc}}</p>
+</div>
+
+{{with .Data}}
+
+{{if .Tags}}
+<div class="tag-filter">
+  <a class="tag-pill{{if eq .ActiveTag ""}} active{{end}}" href="/">Все</a>
+  {{range .Tags}}
+  <a class="tag-pill{{if eq $.Data.ActiveTag .Slug}} active{{end}}" href="/?tag={{.Slug}}">{{.Name}}</a>
+  {{end}}
+</div>
+{{end}}
+
+{{if .Posts}}
+<div class="feed">
+  {{range .Posts}}
+  <article class="feed-entry">
+    <div class="feed-meta">
+      <span>{{relDate .CreatedAt}}</span>
+      {{if .Tags}}
+      <span class="feed-meta-tags">
+        {{range .Tags}}<a href="/?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
+      </span>
+      {{end}}
+      {{if .Views}}<span class="feed-views">{{.Views}} просм.</span>{{end}}
+    </div>
+    <h2 class="feed-title"><a href="/post/{{.Slug}}">{{.Title}}</a></h2>
+    {{if .Cover}}
+    <img class="feed-cover" src="/uploads/{{.Cover}}" alt="{{.Title}}" loading="lazy">
+    {{end}}
+    {{if hasMore .BodyHTML}}
+    <div class="feed-body prose">{{beforeMore .BodyHTML}}</div>
+    <a class="read-more" href="/post/{{.Slug}}">Читать дальше →</a>
+    {{else}}
+    <div class="feed-body prose">{{safeHTML .BodyHTML}}</div>
+    {{end}}
+  </article>
+  {{end}}
+</div>
+
+{{if gt .TotalPages 1}}
+<nav class="pagination">
+  {{if .HasPrev}}
+  <a href="/?page={{sub .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">← Новее</a>
+  {{else}}
+  <span class="page-btn disabled">← Новее</span>
+  {{end}}
+
+  <span class="page-info">{{.Page}} / {{.TotalPages}}</span>
+
+  {{if .HasNext}}
+  <a href="/?page={{add .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">Старше →</a>
+  {{else}}
+  <span class="page-btn disabled">Старше →</span>
+  {{end}}
+</nav>
+{{end}}
+
+{{else}}
+<p style="color:var(--muted); margin-top:2rem">Пока нет публикаций.</p>
+{{end}}
+
+{{end}}
+{{end}}

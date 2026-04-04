@@ -1,0 +1,216 @@
+{{define "admin_content"}}
+<div class="admin-header">
+  <h1>Галерея</h1>
+</div>
+
+<!-- Категории -->
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
+  <h2 style="font-size:1rem; margin-bottom:1rem">Категории</h2>
+  {{if .Data.Categories}}
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem">
+    {{range .Data.Categories}}
+    <div style="display:flex; align-items:center; gap:0.4rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:0.25rem 0.5rem 0.25rem 0.75rem; font-size:0.88rem">
+      <span>{{.Name}}</span>
+      <form method="POST" action="/admin/categories/{{.ID}}/delete" style="margin:0"
+            onsubmit="return confirm('Удалить категорию «{{.Name}}»? Фото останутся, но потеряют категорию.')">
+        <button type="submit" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0.2rem; font-size:1rem; line-height:1">✕</button>
+      </form>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+  <form method="POST" action="/admin/categories/new" style="display:flex; gap:0.5rem; align-items:center">
+    <input type="text" name="name" placeholder="Название новой категории" style="flex:1; max-width:260px">
+    <button type="submit" class="btn btn-secondary" style="white-space:nowrap">Добавить</button>
+  </form>
+</div>
+
+<!-- Загрузка с клиентским ресайзом -->
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:2rem">
+  <h2 style="font-size:1rem; margin-bottom:1rem">Загрузить фото</h2>
+  <div class="form-group">
+    <label>Файлы (WebP/JPG/PNG, ресайз до 1920px автоматически)</label>
+    <input type="file" id="photo-input" multiple accept="image/*">
+  </div>
+  <div class="form-group">
+    <label>Подпись (одна на все загружаемые)</label>
+    <input type="text" id="photo-caption" placeholder="Необязательно">
+  </div>
+  {{if .Data.Categories}}
+  <div class="form-group">
+    <label>Категория</label>
+    <select id="photo-category">
+      <option value="0">— без категории —</option>
+      {{range .Data.Categories}}
+      <option value="{{.ID}}">{{.Name}}</option>
+      {{end}}
+    </select>
+  </div>
+  {{end}}
+  <button class="btn btn-primary" onclick="uploadPhotos()" id="upload-btn">Загрузить</button>
+  <div id="upload-progress" style="margin-top:0.75rem; font-size:0.88rem; color:var(--muted)"></div>
+</div>
+
+<!-- Список фото (HTMX-обновляемый) -->
+<div id="gallery-list">
+  {{template "gallery_list_content" .}}
+</div>
+{{end}}
+
+{{define "admin_scripts"}}
+<script>
+async function resizeImage(file, maxWidth, quality) {
+  const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const scale = Math.min(1, maxWidth / bitmap.width);
+  const w = Math.round(bitmap.width * scale);
+  const h = Math.round(bitmap.height * scale);
+  const canvas = new OffscreenCanvas(w, h);
+  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  return canvas.convertToBlob({ type: 'image/webp', quality });
+}
+
+async function uploadPhotos() {
+  const input = document.getElementById('photo-input');
+  const caption = document.getElementById('photo-caption').value;
+  const catEl = document.getElementById('photo-category');
+  const categoryId = catEl ? catEl.value : '0';
+  const progress = document.getElementById('upload-progress');
+  const btn = document.getElementById('upload-btn');
+
+  if (!input.files.length) {
+    progress.textContent = 'Выберите файлы';
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Обработка…';
+
+  const form = new FormData();
+  form.append('caption', caption);
+  form.append('category_id', categoryId);
+
+  let i = 0;
+  for (const file of input.files) {
+    i++;
+    progress.textContent = `Ресайз ${i}/${input.files.length}: ${file.name}`;
+    const blob = await resizeImage(file, 1920, 0.85);
+    const name = file.name.replace(/\.\w+$/, '.webp');
+    form.append('photos', new File([blob], name, { type: 'image/webp' }));
+  }
+
+  progress.textContent = 'Загрузка на сервер…';
+
+  const resp = await fetch('/admin/gallery/upload', {
+    method: 'POST',
+    body: form,
+  });
+
+  if (resp.ok) {
+    const html = await resp.text();
+    document.getElementById('gallery-list').innerHTML = html;
+    initDraggable();
+    input.value = '';
+    document.getElementById('photo-caption').value = '';
+    progress.textContent = `✓ Загружено ${i} фото`;
+    btn.textContent = 'Загрузить';
+    btn.disabled = false;
+  } else {
+    progress.textContent = 'Ошибка загрузки';
+    btn.disabled = false;
+    btn.textContent = 'Загрузить';
+  }
+}
+
+// Drag-to-reorder
+let dragSrc = null;
+
+function initDraggable() {
+  document.querySelectorAll('[data-photo-id]').forEach(el => {
+    el.setAttribute('draggable', 'true');
+    el.addEventListener('dragstart', e => {
+      dragSrc = el;
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    el.addEventListener('dragover', e => {
+      e.preventDefault();
+      el.style.outline = '2px dashed var(--accent)';
+    });
+    el.addEventListener('dragleave', () => {
+      el.style.outline = '';
+    });
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      el.style.outline = '';
+      if (dragSrc === el) return;
+      const grid = el.parentNode;
+      const items = [...grid.children];
+      const si = items.indexOf(dragSrc), di = items.indexOf(el);
+      if (si < di) grid.insertBefore(dragSrc, el.nextSibling);
+      else grid.insertBefore(dragSrc, el);
+      saveOrder();
+    });
+  });
+}
+
+function saveOrder() {
+  const ids = [...document.querySelectorAll('[data-photo-id]')]
+    .map(el => el.dataset.photoId);
+  fetch('/admin/gallery/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: ids.map(id => `ids=${id}`).join('&'),
+  });
+}
+
+// Re-init after HTMX swaps
+document.body.addEventListener('htmx:afterSwap', e => {
+  if (e.detail.target.id === 'gallery-list') initDraggable();
+});
+
+initDraggable();
+</script>
+{{end}}
+
+{{define "gallery_list_content"}}
+{{if .Data.Photos}}
+<div id="gallery-list-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(160px, 1fr)); gap:0.75rem">
+  {{range .Data.Photos}}
+  <div data-photo-id="{{.ID}}" style="position:relative; background:#fff; border:1px solid #e0e0da; border-radius:8px; overflow:hidden; cursor:grab">
+    <img src="/uploads/{{.Filename}}" loading="lazy"
+         style="width:100%; aspect-ratio:1; object-fit:cover; display:block; pointer-events:none">
+    {{if .Caption}}
+    <div style="padding:0.3rem 0.6rem 0; font-size:0.78rem; color:#6b6b6b">{{.Caption}}</div>
+    {{end}}
+    {{if $.Data.Categories}}
+    {{$photoID := .ID}}{{$catID := .CategoryID}}
+    <div style="padding:0.3rem 0.6rem 0.5rem">
+      <select name="category_id"
+              hx-post="/admin/gallery/{{$photoID}}/category"
+              hx-trigger="change"
+              hx-swap="none"
+              style="width:100%; font-size:0.75rem; padding:0.2rem; border:1px solid #d0d0ca; border-radius:4px; background:#fff; cursor:pointer">
+        <option value="0" {{if eq $catID 0}}selected{{end}}>— без категории —</option>
+        {{range $.Data.Categories}}
+        <option value="{{.ID}}" {{if eq .ID $catID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </div>
+    {{else if .CategoryName}}
+    <div style="padding:0.2rem 0.6rem 0.4rem; font-size:0.75rem; color:#888">{{.CategoryName}}</div>
+    {{end}}
+    <form method="POST" action="/admin/gallery/{{.ID}}/delete"
+          hx-post="/admin/gallery/{{.ID}}/delete"
+          hx-target="#gallery-list"
+          hx-swap="innerHTML"
+          hx-confirm="Удалить фото?"
+          style="position:absolute; top:0.4rem; right:0.4rem">
+      <button type="submit"
+              style="background:rgba(0,0,0,0.5); color:white; border:none; border-radius:4px; width:26px; height:26px; cursor:pointer; font-size:0.9rem; line-height:1">✕</button>
+    </form>
+  </div>
+  {{end}}
+</div>
+{{else}}
+<p style="color:#6b6b6b">Фотографий пока нет.</p>
+{{end}}
+{{end}}

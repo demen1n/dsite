@@ -1,0 +1,29 @@
+{{define "admin_content"}}
+<div class="admin-header">
+  <h1>Резюме</h1>
+  <a href="/resume" target="_blank" class="btn btn-secondary">Просмотреть ↗</a>
+</div>
+
+<form method="POST" action="/admin/resume">
+  <div class="editor-layout">
+    <div>
+      <label style="margin-bottom:0.5rem; display:block">Markdown</label>
+      <textarea name="body" id="body"
+                hx-post="/admin/posts/preview"
+                hx-trigger="input changed delay:400ms"
+                hx-target="#preview"
+                hx-include="#body"
+                placeholder="# Иван Иванов&#10;&#10;## Опыт&#10;…">{{with .Data}}{{.BodyMD}}{{end}}</textarea>
+    </div>
+    <div>
+      <div style="font-size:0.82rem; color:var(--muted); margin-bottom:0.5rem">Превью</div>
+      <div class="preview-pane" id="preview">
+        {{with .Data}}{{safeHTML .BodyHTML}}{{end}}
+      </div>
+    </div>
+  </div>
+  <div style="margin-top:1.25rem">
+    <button type="submit" class="btn btn-primary">Сохранить</button>
+  </div>
+</form>
+{{end}}
