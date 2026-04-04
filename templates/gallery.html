@@ -36,13 +36,6 @@
 {{end}}
 
 {{template "gallery_grid" .}}
-
-<div id="lightbox">
-  <button id="lightbox-close" onclick="closeLightbox()">✕</button>
-  <button id="lightbox-prev" onclick="stepLightbox(-1)">&#8592;</button>
-  <img id="lightbox-img" src="" alt="">
-  <button id="lightbox-next" onclick="stepLightbox(1)">&#8594;</button>
-</div>
 {{end}}
 
 {{define "gallery_grid"}}
@@ -50,7 +43,7 @@
 {{if .Data.Photos}}
 <div class="gallery-grid-inner">
   {{range .Data.Photos}}
-  <div class="gallery-item" onclick="openLightbox('/uploads/{{.Filename}}')">
+  <div class="gallery-item">
     <img src="/uploads/{{.Filename}}" alt="{{.Caption}}">
     {{if .Caption}}<div class="gallery-item-caption">{{.Caption}}</div>{{end}}
   </div>
@@ -64,40 +57,14 @@
 
 {{define "scripts"}}
 <script>
-let photoSrcs = [];
-let currentIndex = 0;
+function setupGalleryLightbox() {
+  const items = [...document.querySelectorAll('.gallery-item')];
+  const srcs = items.map(el => el.querySelector('img').getAttribute('src'));
+  items.forEach((item, i) => {
+    item.onclick = () => openLightbox(srcs[i], srcs);
+  });
+}
 
-function openLightbox(src) {
-  photoSrcs = [...document.querySelectorAll('.gallery-item img')].map(img => img.getAttribute('src'));
-  currentIndex = photoSrcs.indexOf(src);
-  showPhoto(currentIndex);
-  document.getElementById('lightbox').classList.add('open');
-}
-function showPhoto(idx) {
-  document.getElementById('lightbox-img').setAttribute('src', photoSrcs[idx]);
-  document.getElementById('lightbox-prev').style.visibility = idx > 0 ? 'visible' : 'hidden';
-  document.getElementById('lightbox-next').style.visibility = idx < photoSrcs.length - 1 ? 'visible' : 'hidden';
-}
-function stepLightbox(dir) {
-  const next = currentIndex + dir;
-  if (next < 0 || next >= photoSrcs.length) return;
-  currentIndex = next;
-  showPhoto(currentIndex);
-}
-function closeLightbox() {
-  document.getElementById('lightbox').classList.remove('open');
-}
-document.getElementById('lightbox').addEventListener('click', function(e) {
-  if (e.target === this) closeLightbox();
-});
-document.addEventListener('keydown', function(e) {
-  if (!document.getElementById('lightbox').classList.contains('open')) return;
-  if (e.key === 'Escape') closeLightbox();
-  if (e.key === 'ArrowLeft') stepLightbox(-1);
-  if (e.key === 'ArrowRight') stepLightbox(1);
-});
-
-// Justified gallery
 function justify() {
   const grid = document.querySelector('.gallery-grid-inner');
   if (!grid) return;
@@ -146,16 +113,20 @@ function layout(grid, items, imgs) {
   });
 }
 
+setupGalleryLightbox();
 justify();
+
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(justify, 100);
 });
 
-// Re-justify after HTMX grid swaps
 document.body.addEventListener('htmx:afterSwap', e => {
-  if (e.detail.target.id === 'gallery-grid') justify();
+  if (e.detail.target.id === 'gallery-grid') {
+    setupGalleryLightbox();
+    justify();
+  }
 });
 </script>
 {{end}}

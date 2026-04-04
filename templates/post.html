@@ -14,11 +14,26 @@
   <h1>{{.Title}}</h1>
   {{if .Cover}}
   <img src="/uploads/{{.Cover}}" alt="{{.Title}}"
-       style="width:100%; max-height:480px; object-fit:cover; border-radius:var(--radius); margin:1.5rem 0;">
+       style="width:100%; max-height:480px; object-fit:cover; margin:1.5rem 0; cursor:pointer;"
+       onclick="openLightbox(this.src, [this.src])">
   {{end}}
   <div class="prose">
     {{safeHTML .BodyHTML}}
   </div>
 </article>
 {{end}}
+{{end}}
+
+{{define "scripts"}}
+<script>
+(function() {
+  const imgs = [...document.querySelectorAll('.prose img')];
+  if (!imgs.length) return;
+  const srcs = imgs.map(i => i.src);
+  imgs.forEach((img, idx) => {
+    img.style.cursor = 'pointer';
+    img.addEventListener('click', () => openLightbox(srcs[idx], srcs));
+  });
+})();
+</script>
 {{end}}
