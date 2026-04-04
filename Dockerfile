@@ -16,12 +16,15 @@ COPY --from=builder /app/dsite .
 COPY templates ./templates
 COPY static ./static
 
-RUN mkdir -p /data/uploads
+RUN useradd -r -u 1000 -g root appuser \
+    && mkdir -p /data/uploads \
+    && chown -R appuser:root /data
 
 ENV DB_PATH=/data/data.db
 ENV UPLOADS_DIR=/data/uploads
 ENV PORT=8080
 
+USER appuser
 EXPOSE 8080
 VOLUME ["/data"]
 
