@@ -1,15 +1,15 @@
 {{define "head"}}
 <style>
   main { max-width: 100%; padding: 0; }
-  .gallery-title { max-width: var(--max-w); margin: 0 auto; padding: 2.5rem 1.5rem 1rem; font-size: 2rem; font-weight: 700; }
-  .gallery-cats  { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem 1.5rem; display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .gallery-title { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem 1rem; font-size: 1.75rem; font-weight: 700; font-family: var(--sans); }
+  .gallery-cats  { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem 1.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; font-family: var(--sans); }
   .gallery-cats a {
-    display: inline-block; padding: 0.3rem 0.9rem; border-radius: 999px;
-    font-size: 0.85rem; text-decoration: none; border: 1px solid var(--border);
-    color: var(--text); background: transparent; cursor: pointer; transition: background 0.15s, color 0.15s;
+    display: inline-block; padding: 0.2rem 0.65rem;
+    font-size: 0.8rem; text-decoration: none; border: 1px solid var(--border);
+    color: var(--muted); background: transparent; cursor: pointer; transition: border-color 0.15s, color 0.15s;
   }
-  .gallery-cats a:hover  { background: var(--border); }
-  .gallery-cats a.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .gallery-cats a:hover  { color: var(--text); border-color: var(--text); }
+  .gallery-cats a.active { color: var(--text); border-color: var(--text); }
 </style>
 {{end}}
 
