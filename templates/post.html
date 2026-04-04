@@ -23,17 +23,3 @@
 </article>
 {{end}}
 {{end}}
-
-{{define "scripts"}}
-<script>
-(function() {
-  const imgs = [...document.querySelectorAll('.prose img')];
-  if (!imgs.length) return;
-  const srcs = imgs.map(i => i.src);
-  imgs.forEach((img, idx) => {
-    img.style.cursor = 'pointer';
-    img.addEventListener('click', () => openLightbox(srcs[idx], srcs));
-  });
-})();
-</script>
-{{end}}

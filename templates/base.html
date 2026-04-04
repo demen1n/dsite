@@ -51,7 +51,7 @@
     .prose { max-width: 100%; }
     .prose p { margin-bottom: 1.1rem; }
     .prose h2 { margin-top: 2.25rem; }
-    .prose img { max-width: 100%; margin: 1.75rem 0; display: block; }
+    .prose img { max-width: 100%; margin: 1.75rem 0; display: block; cursor: pointer; }
     .prose ul, .prose ol { margin: 0.75rem 0 1rem 1.5rem; }
     .prose li { margin-bottom: 0.35rem; }
     .prose blockquote { border-left: 2px solid var(--border); padding-left: 1.1rem; color: var(--muted); margin: 1.5rem 0; font-style: italic; }
@@ -198,6 +198,12 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeLightbox();
   if (e.key === 'ArrowLeft') stepLightbox(-1);
   if (e.key === 'ArrowRight') stepLightbox(1);
+});
+document.addEventListener('click', e => {
+  const img = e.target.closest('.prose img');
+  if (!img) return;
+  const imgs = [...document.querySelectorAll('.prose img')];
+  openLightbox(img.src, imgs.map(i => i.src));
 });
 </script>
 
