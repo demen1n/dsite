@@ -30,7 +30,7 @@
     </div>
     <h2 class="feed-title"><a href="/post/{{.Slug}}">{{.Title}}</a></h2>
     {{if .Cover}}
-    <img class="feed-cover" src="/uploads/{{.Cover}}" alt="{{.Title}}" loading="lazy">
+    <a href="/post/{{.Slug}}"><img class="feed-cover" src="/uploads/{{.Cover}}" alt="{{.Title}}" loading="lazy"></a>
     {{end}}
     {{if hasMore .BodyHTML}}
     <div class="feed-body prose">{{beforeMore .BodyHTML}}</div>

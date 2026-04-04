@@ -77,6 +77,8 @@
     .feed-title a { color: var(--text); text-decoration: none; }
     .feed-title a:hover { text-decoration: underline; }
     .feed-cover { width: 100%; margin-bottom: 1rem; display: block; }
+    a:has(> .feed-cover) { display: block; margin-bottom: 1rem; text-decoration: none; }
+    a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
     .feed-body { font-size: 0.97rem; }
     .feed-excerpt { color: var(--text); font-size: 0.97rem; }
     .read-more { font-family: var(--sans); font-size: 0.85rem; color: var(--muted); text-decoration: none; display: inline-block; margin-top: 0.5rem; }
