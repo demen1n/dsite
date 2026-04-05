@@ -123,11 +123,10 @@
 
     /* ── Home ── */
     .home { padding-top: 5rem; }
-    .home-name { font-size: 2.25rem; font-weight: 700; font-family: var(--sans); margin-bottom: 0.5rem; }
-    .home-tagline { color: var(--muted); font-family: var(--sans); font-size: 1rem; margin-bottom: 3rem; }
-    .home-nav { display: flex; gap: 2.5rem; }
-    .home-nav a { font-family: var(--sans); font-size: 1rem; color: var(--text); text-decoration: none; border-bottom: 1px solid var(--border); padding-bottom: 1px; transition: border-color 0.15s; }
-    .home-nav a:hover { border-color: var(--text); }
+    .home-name { font-size: 2.25rem; font-weight: 700; font-family: var(--sans); margin-bottom: 0.75rem; }
+    .home-bio { font-family: var(--sans); font-size: 1rem; color: var(--muted); line-height: 1.7; }
+    .home-bio a { color: var(--text); }
+    @media (max-width: 520px) { .home { padding-top: 3rem; } }
 
     /* ── Mobile ── */
     @media (max-width: 520px) {
