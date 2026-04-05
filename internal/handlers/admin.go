@@ -248,7 +248,7 @@ func PreviewMD(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin/media/picker — фрагмент с галереей для вставки в пост
 func MediaPicker(w http.ResponseWriter, r *http.Request) {
-	photos, _ := db.ListPhotos("")
+	photos, _ := db.ListPhotos("", "")
 	renderFragment(w, "admin/media_picker.html", "media_picker", page("Медиа", GalleryAdminData{Photos: photos}))
 }
 
@@ -265,7 +265,7 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caption := r.FormValue("caption")
-	if err := db.AddPhoto(filename, caption, 0); err != nil {
+	if err := db.AddPhoto(filename, caption, 0, 0); err != nil {
 		http.Error(w, "DB error", 500)
 		return
 	}
@@ -277,11 +277,12 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 type GalleryAdminData struct {
 	Photos     []db.Photo
 	Categories []db.Category
+	Places     []db.Place
 }
 
 // GET /admin/gallery
 func AdminGallery(w http.ResponseWriter, r *http.Request) {
-	photos, err := db.ListPhotos("")
+	photos, err := db.ListPhotos("", "")
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
@@ -291,7 +292,12 @@ func AdminGallery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	render(w, "admin/gallery.html", page("Галерея", GalleryAdminData{Photos: photos, Categories: cats}))
+	places, err := db.ListPlaces()
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	render(w, "admin/gallery.html", page("Галерея", GalleryAdminData{Photos: photos, Categories: cats, Places: places}))
 }
 
 // POST /admin/gallery/upload
@@ -304,6 +310,7 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 	files := r.MultipartForm.File["photos"]
 	caption := r.FormValue("caption")
 	categoryID, _ := strconv.Atoi(r.FormValue("category_id"))
+	placeID, _ := strconv.Atoi(r.FormValue("place_id"))
 
 	for _, fh := range files {
 		f, err := fh.Open()
@@ -328,13 +335,14 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		db.AddPhoto(filename, caption, categoryID)
+		db.AddPhoto(filename, caption, categoryID, placeID)
 	}
 
 	// HTMX: возвращаем обновлённый список
-	photos, _ := db.ListPhotos("")
+	photos, _ := db.ListPhotos("", "")
 	cats, _ := db.ListCategories()
-	renderFragment(w, "admin/gallery_list.html", "gallery_list_content", page("Галерея", GalleryAdminData{Photos: photos, Categories: cats}))
+	places, _ := db.ListPlaces()
+	renderFragment(w, "admin/gallery_list.html", "gallery_list_content", page("Галерея", GalleryAdminData{Photos: photos, Categories: cats, Places: places}))
 }
 
 // ─────────────────────── Settings ───────────────────────
@@ -392,9 +400,60 @@ func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 		log.Printf("remove photo %s: %v", filename, err)
 	}
 
-	photos, _ := db.ListPhotos("")
+	photos, _ := db.ListPhotos("", "")
 	cats, _ := db.ListCategories()
-	renderFragment(w, "admin/gallery_list.html", "gallery_list_content", page("Галерея", GalleryAdminData{Photos: photos, Categories: cats}))
+	places, _ := db.ListPlaces()
+	renderFragment(w, "admin/gallery_list.html", "gallery_list_content", page("Галерея", GalleryAdminData{Photos: photos, Categories: cats, Places: places}))
+}
+
+// ─────────────────────── Places ───────────────────────
+
+// POST /admin/places/new
+func CreatePlace(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "name required", 400)
+		return
+	}
+	slug := slugify(name)
+	if slug == "" {
+		http.Error(w, "invalid name", 400)
+		return
+	}
+	if err := db.CreatePlace(name, slug); err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	http.Redirect(w, r, "/admin/gallery", http.StatusFound)
+}
+
+// POST /admin/places/{id}/delete
+func DeletePlace(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	if err := db.DeletePlace(id); err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	http.Redirect(w, r, "/admin/gallery", http.StatusFound)
+}
+
+// POST /admin/gallery/{id}/place  — HTMX: update a photo's place inline
+func UpdatePhotoPlace(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	placeID, _ := strconv.Atoi(r.FormValue("place_id"))
+	if err := db.UpdatePhotoPlace(id, placeID); err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ─────────────────────── Resume ───────────────────────

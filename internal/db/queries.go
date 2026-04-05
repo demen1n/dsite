@@ -267,21 +267,33 @@ type Photo struct {
 	SortOrder    int
 	CategoryID   int
 	CategoryName string
+	PlaceID      int
+	PlaceName    string
 	CreatedAt    time.Time
 }
 
-// ListPhotos returns photos optionally filtered by category slug.
-// Pass an empty string to return all photos.
-func ListPhotos(categorySlug string) ([]Photo, error) {
+// ListPhotos returns photos optionally filtered by category slug and/or place slug.
+// Pass empty strings to return all photos.
+func ListPhotos(categorySlug, placeSlug string) ([]Photo, error) {
 	q := `SELECT p.id, p.filename, p.caption, p.sort_order,
 	             COALESCE(p.category_id, 0), COALESCE(c.name, ''),
+	             COALESCE(p.place_id, 0), COALESCE(pl.name, ''),
 	             p.created_at
 	      FROM photos p
-	      LEFT JOIN categories c ON c.id = p.category_id`
+	      LEFT JOIN categories c ON c.id = p.category_id
+	      LEFT JOIN places pl ON pl.id = p.place_id`
 	args := []any{}
+	var conds []string
 	if categorySlug != "" {
-		q += ` WHERE c.slug = ?`
+		conds = append(conds, `c.slug = ?`)
 		args = append(args, categorySlug)
+	}
+	if placeSlug != "" {
+		conds = append(conds, `pl.slug = ?`)
+		args = append(args, placeSlug)
+	}
+	if len(conds) > 0 {
+		q += ` WHERE ` + strings.Join(conds, ` AND `)
 	}
 	q += ` ORDER BY p.sort_order, p.id`
 
@@ -295,7 +307,7 @@ func ListPhotos(categorySlug string) ([]Photo, error) {
 		var p Photo
 		var ca string
 		if err := rows.Scan(&p.ID, &p.Filename, &p.Caption, &p.SortOrder,
-			&p.CategoryID, &p.CategoryName, &ca); err != nil {
+			&p.CategoryID, &p.CategoryName, &p.PlaceID, &p.PlaceName, &ca); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
@@ -327,14 +339,26 @@ func UpdatePhotoOrder(ids []int) error {
 	return tx.Commit()
 }
 
-func AddPhoto(filename, caption string, categoryID int) error {
-	var catArg any
+func AddPhoto(filename, caption string, categoryID, placeID int) error {
+	var catArg, placeArg any
 	if categoryID != 0 {
 		catArg = categoryID
 	}
-	_, err := DB.Exec(`INSERT INTO photos (filename, caption, category_id, sort_order)
-	                   VALUES (?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM photos))`,
-		filename, caption, catArg)
+	if placeID != 0 {
+		placeArg = placeID
+	}
+	_, err := DB.Exec(`INSERT INTO photos (filename, caption, category_id, place_id, sort_order)
+	                   VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM photos))`,
+		filename, caption, catArg, placeArg)
+	return err
+}
+
+func UpdatePhotoPlace(id, placeID int) error {
+	if placeID == 0 {
+		_, err := DB.Exec(`UPDATE photos SET place_id=NULL WHERE id=?`, id)
+		return err
+	}
+	_, err := DB.Exec(`UPDATE photos SET place_id=? WHERE id=?`, placeID, id)
 	return err
 }
 
@@ -346,6 +370,41 @@ func DeletePhoto(id int) (string, error) {
 	}
 	_, err = DB.Exec(`DELETE FROM photos WHERE id=?`, id)
 	return filename, err
+}
+
+// ───────────────────────── Places ─────────────────────────
+
+type Place struct {
+	ID   int
+	Name string
+	Slug string
+}
+
+func ListPlaces() ([]Place, error) {
+	rows, err := DB.Query(`SELECT id, name, slug FROM places ORDER BY name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var places []Place
+	for rows.Next() {
+		var p Place
+		if err := rows.Scan(&p.ID, &p.Name, &p.Slug); err != nil {
+			return nil, err
+		}
+		places = append(places, p)
+	}
+	return places, rows.Err()
+}
+
+func CreatePlace(name, slug string) error {
+	_, err := DB.Exec(`INSERT INTO places (name, slug) VALUES (?, ?)`, name, slug)
+	return err
+}
+
+func DeletePlace(id int) error {
+	_, err := DB.Exec(`DELETE FROM places WHERE id=?`, id)
+	return err
 }
 
 // ───────────────────────── Resume ─────────────────────────

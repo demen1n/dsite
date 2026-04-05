@@ -85,6 +85,10 @@ func main() {
 	mux.HandleFunc("POST /admin/categories/new", handlers.RequireAuth(handlers.CreateCategory))
 	mux.HandleFunc("POST /admin/categories/{id}/delete", handlers.RequireAuth(handlers.DeleteCategory))
 
+	mux.HandleFunc("POST /admin/places/new", handlers.RequireAuth(handlers.CreatePlace))
+	mux.HandleFunc("POST /admin/places/{id}/delete", handlers.RequireAuth(handlers.DeletePlace))
+	mux.HandleFunc("POST /admin/gallery/{id}/place", handlers.RequireAuth(handlers.UpdatePhotoPlace))
+
 	mux.HandleFunc("GET /admin/resume", handlers.RequireAuth(handlers.AdminResume))
 	mux.HandleFunc("POST /admin/resume", handlers.RequireAuth(handlers.SaveResume))
 

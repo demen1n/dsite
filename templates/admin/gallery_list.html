@@ -8,9 +8,9 @@
     {{if .Caption}}
     <div style="padding:0.3rem 0.6rem 0; font-size:0.78rem; color:#6b6b6b">{{.Caption}}</div>
     {{end}}
+    {{$photoID := .ID}}{{$catID := .CategoryID}}{{$placeID := .PlaceID}}
     {{if $.Data.Categories}}
-    {{$photoID := .ID}}{{$catID := .CategoryID}}
-    <div style="padding:0.3rem 0.6rem 0.5rem">
+    <div style="padding:0.3rem 0.6rem 0">
       <select name="category_id"
               hx-post="/admin/gallery/{{$photoID}}/category"
               hx-trigger="change"
@@ -23,7 +23,23 @@
       </select>
     </div>
     {{else if .CategoryName}}
-    <div style="padding:0.2rem 0.6rem 0.4rem; font-size:0.75rem; color:#888">{{.CategoryName}}</div>
+    <div style="padding:0.2rem 0.6rem 0; font-size:0.75rem; color:#888">{{.CategoryName}}</div>
+    {{end}}
+    {{if $.Data.Places}}
+    <div style="padding:0.2rem 0.6rem 0.5rem">
+      <select name="place_id"
+              hx-post="/admin/gallery/{{$photoID}}/place"
+              hx-trigger="change"
+              hx-swap="none"
+              style="width:100%; font-size:0.75rem; padding:0.2rem; border:1px solid #d0d0ca; border-radius:4px; background:#fff; cursor:pointer">
+        <option value="0" {{if eq $placeID 0}}selected{{end}}>— без места —</option>
+        {{range $.Data.Places}}
+        <option value="{{.ID}}" {{if eq .ID $placeID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </div>
+    {{else if .PlaceName}}
+    <div style="padding:0.2rem 0.6rem 0.4rem; font-size:0.75rem; color:#888">{{.PlaceName}}</div>
     {{end}}
     <form method="POST" action="/admin/gallery/{{.ID}}/delete"
           hx-post="/admin/gallery/{{.ID}}/delete"

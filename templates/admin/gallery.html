@@ -3,8 +3,10 @@
   <h1>Галерея</h1>
 </div>
 
-<!-- Категории -->
-<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
+<!-- Категории и места -->
+<div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem">
+
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem">
   <h2 style="font-size:1rem; margin-bottom:1rem">Категории</h2>
   {{if .Data.Categories}}
   <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem">
@@ -20,9 +22,32 @@
   </div>
   {{end}}
   <form method="POST" action="/admin/categories/new" style="display:flex; gap:0.5rem; align-items:center">
-    <input type="text" name="name" placeholder="Название новой категории" style="flex:1; max-width:260px">
+    <input type="text" name="name" placeholder="Новая категория" style="flex:1; min-width:0">
     <button type="submit" class="btn btn-secondary" style="white-space:nowrap">Добавить</button>
   </form>
+</div>
+
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem">
+  <h2 style="font-size:1rem; margin-bottom:1rem">Места</h2>
+  {{if .Data.Places}}
+  <div style="display:flex; flex-wrap:wrap; gap:0.5rem; margin-bottom:1rem">
+    {{range .Data.Places}}
+    <div style="display:flex; align-items:center; gap:0.4rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:0.25rem 0.5rem 0.25rem 0.75rem; font-size:0.88rem">
+      <span>{{.Name}}</span>
+      <form method="POST" action="/admin/places/{{.ID}}/delete" style="margin:0"
+            onsubmit="return confirm('Удалить место «{{.Name}}»? Фото останутся, но потеряют место.')">
+        <button type="submit" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0.2rem; font-size:1rem; line-height:1">✕</button>
+      </form>
+    </div>
+    {{end}}
+  </div>
+  {{end}}
+  <form method="POST" action="/admin/places/new" style="display:flex; gap:0.5rem; align-items:center">
+    <input type="text" name="name" placeholder="Новое место" style="flex:1; min-width:0">
+    <button type="submit" class="btn btn-secondary" style="white-space:nowrap">Добавить</button>
+  </form>
+</div>
+
 </div>
 
 <!-- Загрузка с клиентским ресайзом -->
@@ -42,6 +67,17 @@
     <select id="photo-category">
       <option value="0">— без категории —</option>
       {{range .Data.Categories}}
+      <option value="{{.ID}}">{{.Name}}</option>
+      {{end}}
+    </select>
+  </div>
+  {{end}}
+  {{if .Data.Places}}
+  <div class="form-group">
+    <label>Место</label>
+    <select id="photo-place">
+      <option value="0">— без места —</option>
+      {{range .Data.Places}}
       <option value="{{.ID}}">{{.Name}}</option>
       {{end}}
     </select>
@@ -74,6 +110,8 @@ async function uploadPhotos() {
   const caption = document.getElementById('photo-caption').value;
   const catEl = document.getElementById('photo-category');
   const categoryId = catEl ? catEl.value : '0';
+  const placeEl = document.getElementById('photo-place');
+  const placeId = placeEl ? placeEl.value : '0';
   const progress = document.getElementById('upload-progress');
   const btn = document.getElementById('upload-btn');
 
@@ -88,6 +126,7 @@ async function uploadPhotos() {
   const form = new FormData();
   form.append('caption', caption);
   form.append('category_id', categoryId);
+  form.append('place_id', placeId);
 
   let i = 0;
   for (const file of input.files) {
@@ -181,9 +220,9 @@ initDraggable();
     {{if .Caption}}
     <div style="padding:0.3rem 0.6rem 0; font-size:0.78rem; color:#6b6b6b">{{.Caption}}</div>
     {{end}}
+    {{$photoID := .ID}}{{$catID := .CategoryID}}{{$placeID := .PlaceID}}
     {{if $.Data.Categories}}
-    {{$photoID := .ID}}{{$catID := .CategoryID}}
-    <div style="padding:0.3rem 0.6rem 0.5rem">
+    <div style="padding:0.3rem 0.6rem 0">
       <select name="category_id"
               hx-post="/admin/gallery/{{$photoID}}/category"
               hx-trigger="change"
@@ -196,7 +235,23 @@ initDraggable();
       </select>
     </div>
     {{else if .CategoryName}}
-    <div style="padding:0.2rem 0.6rem 0.4rem; font-size:0.75rem; color:#888">{{.CategoryName}}</div>
+    <div style="padding:0.2rem 0.6rem 0; font-size:0.75rem; color:#888">{{.CategoryName}}</div>
+    {{end}}
+    {{if $.Data.Places}}
+    <div style="padding:0.2rem 0.6rem 0.5rem">
+      <select name="place_id"
+              hx-post="/admin/gallery/{{$photoID}}/place"
+              hx-trigger="change"
+              hx-swap="none"
+              style="width:100%; font-size:0.75rem; padding:0.2rem; border:1px solid #d0d0ca; border-radius:4px; background:#fff; cursor:pointer">
+        <option value="0" {{if eq $placeID 0}}selected{{end}}>— без места —</option>
+        {{range $.Data.Places}}
+        <option value="{{.ID}}" {{if eq .ID $placeID}}selected{{end}}>{{.Name}}</option>
+        {{end}}
+      </select>
+    </div>
+    {{else if .PlaceName}}
+    <div style="padding:0.2rem 0.6rem 0.4rem; font-size:0.75rem; color:#888">{{.PlaceName}}</div>
     {{end}}
     <form method="POST" action="/admin/gallery/{{.ID}}/delete"
           hx-post="/admin/gallery/{{.ID}}/delete"

@@ -34,6 +34,9 @@ func Init(path string) error {
 	if err = migrateTagsTables(); err != nil {
 		return fmt.Errorf("migrate tags tables: %w", err)
 	}
+	if err = migratePlaces(); err != nil {
+		return fmt.Errorf("migrate places: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -54,6 +57,21 @@ func migrateCategoryColumn() error {
 
 func migratePostsViews() error {
 	DB.Exec(`ALTER TABLE posts ADD COLUMN views INTEGER NOT NULL DEFAULT 0`)
+	return nil
+}
+
+func migratePlaces() error {
+	_, err := DB.Exec(`
+	CREATE TABLE IF NOT EXISTS places (
+		id   INTEGER PRIMARY KEY AUTOINCREMENT,
+		name TEXT NOT NULL UNIQUE,
+		slug TEXT NOT NULL UNIQUE
+	);
+	`)
+	if err != nil {
+		return err
+	}
+	DB.Exec(`ALTER TABLE photos ADD COLUMN place_id INTEGER REFERENCES places(id) ON DELETE SET NULL`)
 	return nil
 }
 

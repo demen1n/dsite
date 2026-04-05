@@ -2,35 +2,61 @@
 <style>
   main { max-width: 100%; padding: 0; }
   .gallery-title { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem 1rem; font-size: 1.75rem; font-weight: 700; font-family: var(--sans); }
-  .gallery-cats  { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem 1.5rem; display: flex; flex-wrap: wrap; gap: 0.4rem; font-family: var(--sans); }
-  .gallery-cats a {
+  .gallery-filters { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; font-family: var(--sans); }
+  .gallery-filter-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
+  .gallery-filter-label { font-size: 0.75rem; color: var(--muted); margin-right: 0.2rem; }
+  .gallery-cats a, .gallery-places a {
     display: inline-block; padding: 0.2rem 0.65rem;
     font-size: 0.8rem; text-decoration: none; border: 1px solid var(--border);
     color: var(--muted); background: transparent; cursor: pointer; transition: border-color 0.15s, color 0.15s;
   }
-  .gallery-cats a:hover  { color: var(--text); border-color: var(--text); }
-  .gallery-cats a.active { color: var(--text); border-color: var(--text); }
+  .gallery-cats a:hover, .gallery-places a:hover { color: var(--text); border-color: var(--text); }
+  .gallery-cats a.active, .gallery-places a.active { color: var(--text); border-color: var(--text); }
 </style>
 {{end}}
 
 {{define "content"}}
 <div class="gallery-title">Галерея</div>
 
-{{if .Data.Categories}}
-<div class="gallery-cats">
-  <a href="/gallery"
-     hx-get="/gallery/filter"
-     hx-target="#gallery-grid"
-     hx-swap="outerHTML"
-     hx-push-url="/gallery"
-     class="{{if eq .Data.ActiveCat ""}}active{{end}}">Все</a>
-  {{range .Data.Categories}}
-  <a href="/gallery?cat={{.Slug}}"
-     hx-get="/gallery/filter?cat={{.Slug}}"
-     hx-target="#gallery-grid"
-     hx-swap="outerHTML"
-     hx-push-url="/gallery?cat={{.Slug}}"
-     class="{{if eq $.Data.ActiveCat .Slug}}active{{end}}">{{.Name}}</a>
+{{if or .Data.Categories .Data.Places}}
+<div class="gallery-filters">
+  {{if .Data.Categories}}
+  <div class="gallery-filter-row gallery-cats">
+    <span class="gallery-filter-label">Тема:</span>
+    <a href="/gallery{{if .Data.ActivePlace}}?place={{.Data.ActivePlace}}{{end}}"
+       hx-get="/gallery/filter{{if .Data.ActivePlace}}?place={{.Data.ActivePlace}}{{end}}"
+       hx-target="#gallery-grid"
+       hx-swap="outerHTML"
+       hx-push-url="/gallery{{if .Data.ActivePlace}}?place={{.Data.ActivePlace}}{{end}}"
+       class="{{if eq .Data.ActiveCat ""}}active{{end}}">Все</a>
+    {{range .Data.Categories}}
+    <a href="/gallery?cat={{.Slug}}{{if $.Data.ActivePlace}}&place={{$.Data.ActivePlace}}{{end}}"
+       hx-get="/gallery/filter?cat={{.Slug}}{{if $.Data.ActivePlace}}&place={{$.Data.ActivePlace}}{{end}}"
+       hx-target="#gallery-grid"
+       hx-swap="outerHTML"
+       hx-push-url="/gallery?cat={{.Slug}}{{if $.Data.ActivePlace}}&place={{$.Data.ActivePlace}}{{end}}"
+       class="{{if eq $.Data.ActiveCat .Slug}}active{{end}}">{{.Name}}</a>
+    {{end}}
+  </div>
+  {{end}}
+  {{if .Data.Places}}
+  <div class="gallery-filter-row gallery-places">
+    <span class="gallery-filter-label">Место:</span>
+    <a href="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
+       hx-get="/gallery/filter{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
+       hx-target="#gallery-grid"
+       hx-swap="outerHTML"
+       hx-push-url="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
+       class="{{if eq .Data.ActivePlace ""}}active{{end}}">Везде</a>
+    {{range .Data.Places}}
+    <a href="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
+       hx-get="/gallery/filter?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
+       hx-target="#gallery-grid"
+       hx-swap="outerHTML"
+       hx-push-url="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
+       class="{{if eq $.Data.ActivePlace .Slug}}active{{end}}">{{.Name}}</a>
+    {{end}}
+  </div>
   {{end}}
 </div>
 {{end}}

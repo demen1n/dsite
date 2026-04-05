@@ -89,15 +89,18 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────── Gallery ───────────────────────
 
 type GalleryData struct {
-	Photos     []db.Photo
-	Categories []db.Category
-	ActiveCat  string
+	Photos      []db.Photo
+	Categories  []db.Category
+	Places      []db.Place
+	ActiveCat   string
+	ActivePlace string
 }
 
 // GET /gallery
 func Gallery(w http.ResponseWriter, r *http.Request) {
 	cat := r.URL.Query().Get("cat")
-	photos, err := db.ListPhotos(cat)
+	place := r.URL.Query().Get("place")
+	photos, err := db.ListPhotos(cat, place)
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
@@ -107,14 +110,20 @@ func Gallery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	data := GalleryData{Photos: photos, Categories: cats, ActiveCat: cat}
+	places, err := db.ListPlaces()
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	data := GalleryData{Photos: photos, Categories: cats, Places: places, ActiveCat: cat, ActivePlace: place}
 	render(w, "gallery.html", page("Галерея", data))
 }
 
 // GET /gallery/filter  — HTMX: returns only the photo grid fragment
 func GalleryFilter(w http.ResponseWriter, r *http.Request) {
 	cat := r.URL.Query().Get("cat")
-	photos, err := db.ListPhotos(cat)
+	place := r.URL.Query().Get("place")
+	photos, err := db.ListPhotos(cat, place)
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
@@ -124,7 +133,12 @@ func GalleryFilter(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	data := GalleryData{Photos: photos, Categories: cats, ActiveCat: cat}
+	places, err := db.ListPlaces()
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	data := GalleryData{Photos: photos, Categories: cats, Places: places, ActiveCat: cat, ActivePlace: place}
 	renderFragment(w, "gallery.html", "gallery_grid", page("Галерея", data))
 }
 
