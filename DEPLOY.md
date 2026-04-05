@@ -54,19 +54,19 @@ GitHub Actions будет использовать этот ключ, чтобы
 На **локальной машине** (не на сервере):
 
 ```bash
-ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/id_ed25519_deploy
+ssh-keygen -t ed25519 -C "github-actions" -f ~/.ssh/beget_ubuntu
 ```
 
 Нажми Enter два раза (пустой пароль — нужно для автоматизации).
 
 Получишь два файла:
-- `~/.ssh/id_ed25519_deploy` — приватный (никому не давать)
-- `~/.ssh/id_ed25519_deploy.pub` — публичный
+- `~/.ssh/beget_ubuntu` — приватный (никому не давать)
+- `~/.ssh/beget_ubuntu.pub` — публичный
 
 ### Добавить публичный ключ на сервер
 
 ```bash
-ssh-copy-id -i ~/.ssh/id_ed25519_deploy.pub root@<IP_СЕРВЕРА>
+ssh-copy-id -i ~/.ssh/beget_ubuntu.pub root@<IP_СЕРВЕРА>
 ```
 
 Теперь можно подключаться без пароля:
@@ -194,7 +194,7 @@ root
 
 **`VPS_SSH_KEY`** — содержимое приватного ключа. На локальной машине:
 ```bash
-cat ~/.ssh/id_ed25519_deploy
+cat ~/.ssh/beget_ubuntu
 ```
 Скопируй весь вывод (включая строки `-----BEGIN...` и `-----END...`) и вставь в секрет.
 
