@@ -1,6 +1,6 @@
 services:
   dsite:
-    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    image: ghcr.io/demen1n/dsite:latest
     restart: unless-stopped
     ports:
       - "127.0.0.1:8080:8080"
@@ -8,7 +8,7 @@ services:
       - /data:/data
     environment:
       - SECURE_COOKIES=true
-      - SITE_TITLE=${SITE_TITLE:-My Blog}
-      - SITE_DESC=${SITE_DESC:-Фото и заметки}
+      - SITE_TITLE=Дмитрий Деменин
+      - SITE_DESC=Программист и фотограф
     mem_limit: 256m
     cpus: "0.5"
