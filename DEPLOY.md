@@ -419,3 +419,46 @@ cd /opt/mattermost && docker compose restart
 > # Добавить строку:
 > 0 3 * * 0 tar -czf /root/backup-$(date +\%Y\%m\%d).tar.gz /data /opt/mattermost/db /opt/mattermost/data 2>/dev/null
 > ```
+
+---
+
+## Частые проблемы
+
+### GitHub Actions: `go.mod requires go >= X (running go Y)`
+
+`go mod tidy` на локальной машине обновил версию Go в `go.mod`, а образ в Dockerfile использует старую версию.
+
+Исправить — поменять версию образа в `Dockerfile`:
+
+```dockerfile
+FROM golang:1.26-bookworm AS builder
+```
+
+Версия должна совпадать с тем, что написано в первой строке `go.mod`.
+
+---
+
+### `docker compose up`: `error from registry: denied`
+
+Образ в ghcr.io приватный, сервер не авторизован его скачивать.
+
+Создай Personal Access Token на GitHub: **Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token**, галочка `read:packages`.
+
+На сервере:
+
+```bash
+echo "ВАШ_ТОКЕН" | docker login ghcr.io -u ВАШ_GITHUB_LOGIN --password-stdin
+```
+
+После этого повтори `docker compose up -d`. Авторизация сохраняется навсегда, повторять не нужно.
+
+---
+
+### Контейнер падает: `unable to open database file: out of memory (14)`
+
+Несмотря на текст ошибки, памяти тут достаточно — это SQLite не может создать файл БД. Причина: папка `/data` принадлежит root, а контейнер работает от пользователя с uid 1000.
+
+```bash
+chown -R 1000:0 /data
+cd /opt/dsite && docker compose restart
+```
