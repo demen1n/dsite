@@ -92,6 +92,34 @@
   #cover-input { display: none; }
   #cover-thumb { height: 28px; width: auto; border-radius: 4px; object-fit: cover; display: none; cursor: pointer; }
 
+  /* Media picker panel */
+  .editor-picker { border-bottom: 1px solid var(--border); background: var(--surface); padding: 0.6rem 1.5rem; flex-shrink: 0; display: none; }
+  .editor-picker.open { display: block; }
+  .picker-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem; font-size: 0.78rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .picker-header button { border: none; background: none; cursor: pointer; color: var(--muted); font-size: 1.1rem; line-height: 1; padding: 0; }
+  .picker-grid { display: flex; flex-wrap: wrap; gap: 5px; max-height: 150px; overflow-y: auto; }
+  .picker-photo { width: 80px; height: 60px; object-fit: cover; cursor: pointer; border-radius: 3px; border: 2px solid transparent; transition: border-color 0.15s; }
+  .picker-photo:hover { border-color: var(--accent); }
+  .picker-empty { font-size: 0.85rem; color: var(--muted); }
+
+  /* To-gallery form (cover) */
+  .to-gallery-wrap { display: none; align-items: center; gap: 0.4rem; }
+  .to-gallery-wrap.open { display: inline-flex; }
+  .to-gallery-wrap input[type="text"] { border: 1px solid var(--border); border-radius: 4px; padding: 0.2rem 0.45rem; font-size: 0.8rem; font-family: inherit; background: var(--bg); color: var(--text); width: 130px; }
+  .to-gallery-wrap input[type="text"]::placeholder { color: #bbb; }
+  #to-gallery-msg { font-size: 0.8rem; color: #16a34a; }
+
+  /* To-gallery popup (preview images) */
+  .img-popup { position: fixed; z-index: 200; background: var(--surface); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem 1rem; box-shadow: 0 4px 20px rgba(0,0,0,.12); min-width: 260px; }
+  .img-popup-title { font-size: 0.78rem; color: var(--muted); margin-bottom: 0.5rem; text-transform: uppercase; letter-spacing: .04em; }
+  .img-popup form { display: flex; gap: 0.4rem; align-items: center; }
+  .img-popup input[type="text"] { flex: 1; border: 1px solid var(--border); border-radius: 4px; padding: 0.25rem 0.5rem; font-size: 0.82rem; font-family: inherit; background: var(--bg); color: var(--text); }
+  .img-popup input[type="text"]::placeholder { color: #bbb; }
+  .img-popup-close { position: absolute; top: 0.4rem; right: 0.6rem; background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; }
+  .img-popup-result { font-size: 0.8rem; color: #16a34a; margin-top: 0.4rem; }
+  .editor-preview img { cursor: pointer; }
+  .editor-preview img:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
+
   /* Split editor */
   .editor-body { display: grid; grid-template-columns: 1fr 1fr; flex: 1; overflow: hidden; }
   .editor-pane { display: flex; flex-direction: column; overflow: hidden; }
@@ -186,6 +214,31 @@
     <img id="cover-thumb" onclick="removeCover()" title="Нажмите чтобы убрать"
          {{with .Data}}{{if .Cover}}src="/uploads/{{.Cover}}" style="display:block"{{end}}{{end}}>
     <input type="hidden" id="remove-cover-flag" name="remove_cover" value="0" form="post-form">
+    <div class="editor-toolbar-sep"></div>
+    <button type="button" class="cover-btn" onclick="togglePicker()">📷 Из галереи</button>
+    <!-- To-gallery: только для уже сохранённой обложки -->
+    {{with .Data}}{{if .Cover}}
+    <div class="to-gallery-wrap" id="to-gallery-wrap">
+      <form hx-post="/admin/media/to-gallery"
+            hx-target="#to-gallery-msg"
+            hx-swap="innerHTML"
+            style="display:inline-flex; align-items:center; gap:0.4rem">
+        <input type="hidden" name="filename" value="{{.Cover}}">
+        <input type="text" name="caption" placeholder="Подпись…">
+        <button type="submit" class="cover-btn">→ В галерею</button>
+      </form>
+      <span id="to-gallery-msg"></span>
+    </div>
+    {{end}}{{end}}
+  </div>
+
+  <!-- Media picker panel -->
+  <div class="editor-picker" id="picker-panel">
+    <div class="picker-header">
+      <span>Кликните по фото чтобы вставить в текст</span>
+      <button type="button" onclick="togglePicker()">✕</button>
+    </div>
+    <div id="picker-content">Загрузка…</div>
   </div>
 
   <!-- Split editor -->
@@ -207,6 +260,21 @@
     </div>
   </div>
 
+</div>
+
+<!-- Popup: добавить картинку из превью в галерею -->
+<div class="img-popup" id="img-popup" style="display:none">
+  <button class="img-popup-close" type="button" onclick="closeImgPopup()">✕</button>
+  <div class="img-popup-title">Добавить в галерею</div>
+  <form hx-post="/admin/media/to-gallery"
+        hx-target="#img-popup-result"
+        hx-swap="innerHTML"
+        hx-on::after-request="afterImgToGallery()">
+    <input type="hidden" name="filename" id="itg-filename">
+    <input type="text" name="caption" id="itg-caption" placeholder="Подпись…">
+    <button type="submit" class="btn btn-primary btn-sm">Добавить</button>
+  </form>
+  <div class="img-popup-result" id="img-popup-result"></div>
 </div>
 
 <form id="post-form" method="POST" enctype="multipart/form-data"
@@ -307,5 +375,52 @@ function insertMD(before, after) {
   ta.focus();
   htmx.trigger(ta, 'input');
 }
+
+// Клик по картинке в превью → показываем попап "в галерею"
+document.getElementById('preview').addEventListener('click', e => {
+  const img = e.target.closest('img');
+  if (!img || !img.src.includes('/uploads/')) return;
+  const filename = img.src.split('/uploads/').pop();
+  document.getElementById('itg-filename').value = filename;
+  document.getElementById('itg-caption').value = img.alt || '';
+  document.getElementById('img-popup-result').textContent = '';
+  const popup = document.getElementById('img-popup');
+  popup.style.display = 'block';
+  popup.style.left = Math.min(e.clientX, window.innerWidth - 280) + 'px';
+  popup.style.top = Math.min(e.clientY + 12, window.innerHeight - 120) + 'px';
+});
+
+function closeImgPopup() {
+  document.getElementById('img-popup').style.display = 'none';
+}
+
+function afterImgToGallery() {
+  setTimeout(closeImgPopup, 1500);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeImgPopup();
+});
+
+// Media picker
+let pickerLoaded = false;
+function togglePicker() {
+  const panel = document.getElementById('picker-panel');
+  panel.classList.toggle('open');
+  if (panel.classList.contains('open') && !pickerLoaded) {
+    pickerLoaded = true;
+    htmx.ajax('GET', '/admin/media/picker', { target: '#picker-content', swap: 'innerHTML' });
+  }
+}
+
+// Клик по фото в пикере — вставляем markdown
+document.addEventListener('click', e => {
+  const photo = e.target.closest('.picker-photo');
+  if (!photo) return;
+  const caption = photo.dataset.caption || '';
+  const url = photo.dataset.url;
+  insertMD(`![${caption}](${url})`, '');
+  document.getElementById('picker-panel').classList.remove('open');
+});
 </script>
 {{end}}

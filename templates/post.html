@@ -13,8 +13,8 @@
   </div>
   <h1>{{.Title}}</h1>
   {{if .Cover}}
-  <img src="/uploads/{{.Cover}}" alt="{{.Title}}"
-       style="width:100%; max-height:480px; object-fit:cover; border-radius:var(--radius); margin:1.5rem 0;">
+  <img src="/uploads/{{.Cover}}" alt="{{.Title}}" data-lightbox
+       style="width:100%; max-height:480px; object-fit:cover; margin:1.5rem 0; cursor:pointer;">
   {{end}}
   <div class="prose">
     {{safeHTML .BodyHTML}}

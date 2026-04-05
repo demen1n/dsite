@@ -10,3 +10,5 @@ services:
       - SECURE_COOKIES=true
       - SITE_TITLE=${SITE_TITLE:-My Blog}
       - SITE_DESC=${SITE_DESC:-Фото и заметки}
+    mem_limit: 256m
+    cpus: "0.5"

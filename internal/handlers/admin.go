@@ -244,6 +244,34 @@ func PreviewMD(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(html))
 }
 
+// ─────────────────────── Media ───────────────────────
+
+// GET /admin/media/picker — фрагмент с галереей для вставки в пост
+func MediaPicker(w http.ResponseWriter, r *http.Request) {
+	photos, _ := db.ListPhotos("")
+	renderFragment(w, "admin/media_picker.html", "media_picker", page("Медиа", GalleryAdminData{Photos: photos}))
+}
+
+// POST /admin/media/to-gallery — добавить существующий файл в галерею
+func AddToGallery(w http.ResponseWriter, r *http.Request) {
+	filename := filepath.Base(r.FormValue("filename"))
+	if filename == "" || filename == "." {
+		http.Error(w, "invalid filename", 400)
+		return
+	}
+	// Проверяем что файл реально существует в uploads
+	if _, err := os.Stat(filepath.Join(uploadsDir, filename)); err != nil {
+		http.Error(w, "file not found", 404)
+		return
+	}
+	caption := r.FormValue("caption")
+	if err := db.AddPhoto(filename, caption, 0); err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	fmt.Fprint(w, "✓ Добавлено в галерею")
+}
+
 // ─────────────────────── Gallery ───────────────────────
 
 type GalleryAdminData struct {

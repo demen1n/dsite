@@ -5,85 +5,133 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>{{.Title}} — {{.SiteTitle}}</title>
   <script src="/static/htmx.min.js"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #fafaf8; --surface: #fff; --text: #1a1a1a; --muted: #6b6b6b;
-      --border: #e5e5e0; --accent: #2563eb; --accent-h: #1d4ed8;
-      --danger: #dc2626; --radius: 8px; --max-w: 1100px;
+      --bg: #fff;
+      --text: #1c1c1e;
+      --muted: #8a8a8e;
+      --border: #e5e5ea;
+      --max-w: 700px;
+      --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --serif: 'PT Serif', Georgia, serif;
+      --radius: 4px;
+      --accent: #1c1c1e;
+      --danger: #dc2626;
     }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.65; min-height: 100vh; }
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
-    nav { border-bottom: 1px solid var(--border); background: var(--surface); position: sticky; top: 0; z-index: 100; }
-    .nav-inner { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem; display: flex; align-items: center; height: 56px; gap: 2rem; }
-    .nav-logo { font-weight: 700; font-size: 1.1rem; color: var(--text); }
-    .nav-logo:hover { text-decoration: none; }
-    .nav-links { display: flex; gap: 1.5rem; }
-    .nav-links a { color: var(--muted); font-size: 0.95rem; }
-    .nav-links a:hover { color: var(--text); text-decoration: none; }
-    .nav-socials { margin-left: auto; display: flex; align-items: center; gap: 0.75rem; }
-    .nav-socials a { color: var(--muted); display: flex; align-items: center; transition: color 0.15s; }
-    .nav-socials a:hover { color: var(--text); }
-    .nav-socials svg { width: 18px; height: 18px; fill: currentColor; }
-    main { max-width: var(--max-w); margin: 0 auto; padding: 2.5rem 1.5rem; }
-    h1 { font-size: 2rem; font-weight: 700; margin-bottom: 1rem; }
-    h2 { font-size: 1.4rem; font-weight: 600; margin: 1.5rem 0 0.75rem; }
+
+    body { font-family: var(--serif); font-size: 1.0625rem; background: var(--bg); color: var(--text); line-height: 1.7; min-height: 100vh; }
+
+    a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: var(--muted); }
+
+    /* ── Header ── */
+    .site-header { max-width: var(--max-w); margin: 0 auto; padding: 1.75rem 1.5rem 1.5rem; display: flex; align-items: baseline; gap: 2rem; font-family: var(--sans); }
+    .site-name { font-size: 1rem; font-weight: 600; color: var(--text); text-decoration: none; flex-shrink: 0; }
+    .site-name:hover { color: var(--muted); }
+    .site-nav { display: flex; gap: 1.25rem; }
+    .site-nav a { font-size: 0.9rem; color: var(--muted); text-decoration: none; }
+    .site-nav a:hover { color: var(--text); }
+    .site-socials { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; }
+    .site-socials a { color: var(--muted); display: flex; text-decoration: none; }
+    .site-socials a:hover { color: var(--text); }
+    .site-socials svg { width: 17px; height: 17px; fill: currentColor; }
+
+    /* ── Main ── */
+    main { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem 4rem; }
+
+    h1 { font-family: var(--sans); font-size: 1.75rem; font-weight: 700; margin-bottom: 1rem; line-height: 1.3; }
+    h2 { font-family: var(--sans); font-size: 1.2rem; font-weight: 600; margin: 1.75rem 0 0.6rem; }
     p { margin-bottom: 1rem; }
-    .prose { max-width: 680px; }
-    .prose p { margin-bottom: 1rem; }
-    .prose h2 { margin-top: 2rem; }
-    .prose img { max-width: 100%; border-radius: var(--radius); margin: 1.5rem 0; }
+
+    /* ── Prose ── */
+    .prose { max-width: 100%; }
+    .prose p { margin-bottom: 1.1rem; }
+    .prose h2 { margin-top: 2.25rem; }
+    .prose img, [data-lightbox] { cursor: pointer; }
+    .prose img { max-width: 100%; margin: 1.75rem 0; display: block; }
     .prose ul, .prose ol { margin: 0.75rem 0 1rem 1.5rem; }
-    .prose li { margin-bottom: 0.3rem; }
-    .prose blockquote { border-left: 3px solid var(--border); padding-left: 1rem; color: var(--muted); margin: 1.25rem 0; }
-    .prose code { background: #f0f0ee; padding: 0.15em 0.4em; border-radius: 4px; font-size: 0.88em; font-family: 'Menlo', monospace; }
-    .prose pre { background: #1e1e2e; color: #cdd6f4; padding: 1.25rem; border-radius: var(--radius); overflow-x: auto; margin: 1.25rem 0; }
+    .prose li { margin-bottom: 0.35rem; }
+    .prose blockquote { border-left: 2px solid var(--border); padding-left: 1.1rem; color: var(--muted); margin: 1.5rem 0; font-style: italic; }
+    .prose code { font-family: 'Menlo', 'Monaco', monospace; font-size: 0.85em; background: #f5f5f5; padding: 0.15em 0.4em; border-radius: 3px; }
+    .prose pre { background: #1e1e2e; color: #cdd6f4; padding: 1.25rem; overflow-x: auto; margin: 1.5rem 0; border-radius: var(--radius); }
     .prose pre code { background: none; color: inherit; padding: 0; }
-    .feed-header { margin-bottom: 3rem; }
-    .feed-header h1 { font-size: 2rem; font-weight: 700; margin-bottom: 0.4rem; }
-    .feed-header p { color: var(--muted); }
+    .prose a { color: var(--text); text-decoration: underline; text-underline-offset: 2px; }
+    .prose a:hover { color: var(--muted); }
+
+    /* ── Feed header ── */
+    .feed-header { margin-bottom: 2.5rem; }
+    .feed-header h1 { font-size: 1.75rem; margin-bottom: 0.3rem; }
+    .feed-header p { color: var(--muted); font-family: var(--sans); font-size: 0.95rem; }
+
+    /* ── Feed ── */
     .feed { display: flex; flex-direction: column; }
-    .feed-entry { padding: 2.5rem 0; border-top: 1px solid var(--border); }
+    .feed-entry { padding: 1.75rem 0; border-top: 1px solid var(--border); }
     .feed-entry:last-child { border-bottom: 1px solid var(--border); }
-    .feed-meta { font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
-    .feed-title { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.25rem; }
-    .feed-title a { color: var(--text); }
-    .feed-title a:hover { text-decoration: none; color: var(--accent); }
-    .feed-cover { width: 100%; border-radius: var(--radius); margin-bottom: 1.25rem; display: block; }
-    .feed-body { max-width: 100%; }
+    .feed-meta { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
+    .feed-views { margin-left: auto; }
+    .feed-title { font-family: var(--sans); font-size: 1.2rem; font-weight: 600; margin-bottom: 0.6rem; line-height: 1.35; }
+    .feed-title a { color: var(--text); text-decoration: none; }
+    .feed-title a:hover { text-decoration: underline; }
+    .feed-cover { width: 100%; margin-bottom: 1rem; display: block; }
+    a:has(> .feed-cover) { display: block; margin-bottom: 1rem; text-decoration: none; }
+    a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
+    .feed-body { font-size: 0.97rem; }
+    .feed-excerpt { color: var(--text); font-size: 0.97rem; }
+    .read-more { font-family: var(--sans); font-size: 0.85rem; color: var(--muted); text-decoration: none; display: inline-block; margin-top: 0.5rem; }
+    .read-more:hover { color: var(--text); text-decoration: underline; }
+
+    /* ── Tags ── */
+    .tag-filter { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-bottom: 2rem; font-family: var(--sans); }
+    .tag-pill { padding: 0.2rem 0.65rem; border: 1px solid var(--border); font-size: 0.8rem; color: var(--muted); text-decoration: none; transition: border-color 0.15s, color 0.15s; }
+    .tag-pill:hover { color: var(--text); border-color: var(--text); }
+    .tag-pill.active { color: var(--text); border-color: var(--text); }
+    .tag-inline { font-family: var(--sans); font-size: 0.75rem; color: var(--muted); background: none; border: none; padding: 0; text-decoration: none; }
+    .tag-inline:hover { color: var(--text); }
+
+    /* ── Pagination ── */
+    .pagination { display: flex; align-items: center; justify-content: center; gap: 1.5rem; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); font-family: var(--sans); }
+    .page-btn { font-size: 0.9rem; color: var(--muted); text-decoration: none; }
+    .page-btn:hover { color: var(--text); text-decoration: none; }
+    .page-btn.disabled { color: var(--border); pointer-events: none; }
+    .page-info { font-size: 0.85rem; color: var(--muted); }
+
+    /* ── Gallery ── */
     .gallery-grid-inner { display: flex; flex-wrap: wrap; gap: 3px; }
     .gallery-item { overflow: hidden; cursor: pointer; }
     .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity 0.15s; }
     .gallery-item:hover img { opacity: 0.88; }
-    .gallery-item-caption { font-size: 0.8rem; color: var(--muted); padding: 0.3rem 0; }
-    #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.9); z-index: 999; align-items: center; justify-content: center; }
+    .gallery-item-caption { font-family: var(--sans); font-size: 0.78rem; color: var(--muted); padding: 0.25rem 0; }
+
+    /* ── Lightbox ── */
+    #lightbox { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92); z-index: 999; align-items: center; justify-content: center; }
     #lightbox.open { display: flex; }
-    #lightbox img { max-width: 92vw; max-height: 92vh; border-radius: var(--radius); }
-    #lightbox-close { position: absolute; top: 1rem; right: 1.5rem; color: white; font-size: 2rem; cursor: pointer; background: none; border: none; }
-    #lightbox-prev, #lightbox-next { position: absolute; top: 50%; transform: translateY(-50%); color: white; font-size: 2rem; cursor: pointer; background: none; border: none; padding: 1rem; opacity: 0.7; transition: opacity 0.15s; user-select: none; }
+    #lightbox img { max-width: 92vw; max-height: 92vh; }
+    #lightbox-close { position: absolute; top: 1rem; right: 1.5rem; color: white; font-size: 2rem; cursor: pointer; background: none; border: none; font-family: var(--sans); }
+    #lightbox-prev, #lightbox-next { position: absolute; top: 50%; transform: translateY(-50%); color: white; font-size: 2rem; cursor: pointer; background: none; border: none; padding: 1rem; opacity: 0.6; transition: opacity 0.15s; user-select: none; }
     #lightbox-prev:hover, #lightbox-next:hover { opacity: 1; }
     #lightbox-prev { left: 1rem; }
     #lightbox-next { right: 1rem; }
-    footer { text-align: center; padding: 2rem; color: var(--muted); font-size: 0.85rem; border-top: 1px solid var(--border); margin-top: 4rem; }
-    footer a { color: var(--muted); }
+
+    /* ── Footer ── */
+    footer { text-align: center; padding: 2rem 1.5rem; color: var(--muted); font-family: var(--sans); font-size: 0.82rem; border-top: 1px solid var(--border); margin-top: 2rem; }
+    footer a { color: var(--muted); text-decoration: none; }
     footer a:hover { color: var(--text); }
-    .feed-excerpt { color: var(--text); max-width: 680px; font-size: 0.97rem; }
-    .read-more { display: inline-block; margin-top: 0.75rem; font-size: 0.9rem; color: var(--accent); }
-    .read-more:hover { text-decoration: underline; }
-    .feed-meta { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; font-size: 0.82rem; color: var(--muted); margin-bottom: 0.5rem; }
-    .feed-views { margin-left: auto; }
-    .tag-filter { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 2rem; }
-    .tag-pill { padding: 0.3rem 0.8rem; border-radius: 999px; border: 1px solid var(--border); font-size: 0.83rem; color: var(--muted); background: var(--surface); transition: border-color 0.15s, color 0.15s; }
-    .tag-pill:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-    .tag-pill.active { background: var(--accent); border-color: var(--accent); color: #fff; }
-    .tag-inline { display: inline-block; font-size: 0.78rem; color: var(--muted); background: var(--bg); border: 1px solid var(--border); border-radius: 4px; padding: 0.1em 0.45em; margin-right: 0.25rem; transition: color 0.15s; }
-    .tag-inline:hover { color: var(--accent); text-decoration: none; border-color: var(--accent); }
-    .pagination { display: flex; align-items: center; justify-content: center; gap: 1rem; margin-top: 3rem; padding-top: 2rem; border-top: 1px solid var(--border); }
-    .page-btn { padding: 0.45rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); font-size: 0.9rem; color: var(--text); background: var(--surface); transition: border-color 0.15s; }
-    .page-btn:hover { border-color: var(--accent); color: var(--accent); text-decoration: none; }
-    .page-btn.disabled { color: var(--muted); pointer-events: none; }
-    .page-info { font-size: 0.85rem; color: var(--muted); }
+
+    /* ── Mobile ── */
+    @media (max-width: 520px) {
+      .site-header { flex-wrap: wrap; gap: 0.75rem; padding: 1.25rem 1rem 1rem; row-gap: 0.5rem; }
+      .site-socials { margin-left: 0; }
+      main { padding: 1.5rem 1rem 3rem; }
+      h1 { font-size: 1.5rem; }
+      .feed-title { font-size: 1.1rem; }
+      .gallery-title { padding: 1.5rem 1rem 0.75rem !important; font-size: 1.5rem !important; }
+      .gallery-cats { padding: 0 1rem 1rem !important; }
+      .prose pre { font-size: 0.8rem; padding: 1rem; }
+    }
   </style>
   <link rel="alternate" type="application/atom+xml" title="{{.SiteTitle}}" href="/feed.xml">
   {{block "head" .}}{{end}}
@@ -100,35 +148,84 @@
   <symbol id="si-linkedin" viewBox="0 0 24 24"><path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/></symbol>
   <symbol id="si-email" viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></symbol>
 </svg>
-  <nav>
-    <div class="nav-inner">
-      <a class="nav-logo" href="/">{{.SiteTitle}}</a>
-      <div class="nav-links">
-        <a href="/gallery">Галерея</a>
-        <a href="/resume">Резюме</a>
-      </div>
-      {{with .Socials}}
-      <div class="nav-socials">
-        {{if .github}}<a href="{{.github}}" target="_blank" rel="noopener" title="GitHub"><svg><use href="#si-github"/></svg></a>{{end}}
-        {{if .telegram}}<a href="{{.telegram}}" target="_blank" rel="noopener" title="Telegram"><svg><use href="#si-telegram"/></svg></a>{{end}}
-        {{if .instagram}}<a href="{{.instagram}}" target="_blank" rel="noopener" title="Instagram"><svg><use href="#si-instagram"/></svg></a>{{end}}
-        {{if .twitter}}<a href="{{.twitter}}" target="_blank" rel="noopener" title="Twitter / X"><svg><use href="#si-twitter"/></svg></a>{{end}}
-        {{if .bluesky}}<a href="{{.bluesky}}" target="_blank" rel="noopener" title="Bluesky"><svg><use href="#si-bluesky"/></svg></a>{{end}}
-        {{if .mastodon}}<a href="{{.mastodon}}" target="_blank" rel="noopener" title="Mastodon"><svg><use href="#si-mastodon"/></svg></a>{{end}}
-        {{if .vk}}<a href="{{.vk}}" target="_blank" rel="noopener" title="ВКонтакте"><svg><use href="#si-vk"/></svg></a>{{end}}
-        {{if .linkedin}}<a href="{{.linkedin}}" target="_blank" rel="noopener" title="LinkedIn"><svg><use href="#si-linkedin"/></svg></a>{{end}}
-        {{if .email}}<a href="mailto:{{.email}}" title="Email"><svg><use href="#si-email"/></svg></a>{{end}}
-      </div>
-      {{end}}
+<header>
+  <div class="site-header">
+    <a class="site-name" href="/">{{.SiteTitle}}</a>
+    <nav class="site-nav">
+      <a href="/gallery">Галерея</a>
+      <a href="/resume">Резюме</a>
+    </nav>
+    {{with .Socials}}
+    <div class="site-socials">
+      {{if .github}}<a href="{{.github}}" target="_blank" rel="noopener" title="GitHub"><svg><use href="#si-github"/></svg></a>{{end}}
+      {{if .telegram}}<a href="{{.telegram}}" target="_blank" rel="noopener" title="Telegram"><svg><use href="#si-telegram"/></svg></a>{{end}}
+      {{if .instagram}}<a href="{{.instagram}}" target="_blank" rel="noopener" title="Instagram"><svg><use href="#si-instagram"/></svg></a>{{end}}
+      {{if .twitter}}<a href="{{.twitter}}" target="_blank" rel="noopener" title="Twitter / X"><svg><use href="#si-twitter"/></svg></a>{{end}}
+      {{if .bluesky}}<a href="{{.bluesky}}" target="_blank" rel="noopener" title="Bluesky"><svg><use href="#si-bluesky"/></svg></a>{{end}}
+      {{if .mastodon}}<a href="{{.mastodon}}" target="_blank" rel="noopener" title="Mastodon"><svg><use href="#si-mastodon"/></svg></a>{{end}}
+      {{if .vk}}<a href="{{.vk}}" target="_blank" rel="noopener" title="ВКонтакте"><svg><use href="#si-vk"/></svg></a>{{end}}
+      {{if .linkedin}}<a href="{{.linkedin}}" target="_blank" rel="noopener" title="LinkedIn"><svg><use href="#si-linkedin"/></svg></a>{{end}}
+      {{if .email}}<a href="mailto:{{.email}}" title="Email"><svg><use href="#si-email"/></svg></a>{{end}}
     </div>
-  </nav>
-  <main>
-    {{block "content" .}}{{end}}
-  </main>
-  <footer>
-    <div>{{.SiteTitle}} · <a href="/admin" style="color:var(--muted)">{{.SiteDesc}}</a> · <a href="/feed.xml">RSS</a></div>
-  </footer>
-  {{block "scripts" .}}{{end}}
+    {{end}}
+  </div>
+</header>
+<main>
+  {{block "content" .}}{{end}}
+</main>
+<footer>
+  <div>{{.SiteTitle}} · <a href="/admin">{{.SiteDesc}}</a> · <a href="/feed.xml">RSS</a></div>
+</footer>
+
+<div id="lightbox">
+  <button id="lightbox-close" onclick="closeLightbox()">✕</button>
+  <button id="lightbox-prev" onclick="stepLightbox(-1)">&#8592;</button>
+  <img id="lightbox-img" src="" alt="">
+  <button id="lightbox-next" onclick="stepLightbox(1)">&#8594;</button>
+</div>
+<script>
+let _lbSrcs = [], _lbIdx = 0;
+function openLightbox(src, srcs) {
+  if (srcs) _lbSrcs = srcs;
+  _lbIdx = _lbSrcs.indexOf(src);
+  if (_lbIdx === -1) { _lbSrcs = [src]; _lbIdx = 0; }
+  _lbShow(_lbIdx);
+  document.getElementById('lightbox').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+function _lbShow(idx) {
+  document.getElementById('lightbox-img').src = _lbSrcs[idx];
+  document.getElementById('lightbox-prev').style.visibility = idx > 0 ? 'visible' : 'hidden';
+  document.getElementById('lightbox-next').style.visibility = idx < _lbSrcs.length - 1 ? 'visible' : 'hidden';
+}
+function stepLightbox(dir) {
+  const n = _lbIdx + dir;
+  if (n < 0 || n >= _lbSrcs.length) return;
+  _lbIdx = n; _lbShow(_lbIdx);
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+  document.body.style.overflow = '';
+}
+document.getElementById('lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) closeLightbox(); });
+document.addEventListener('keydown', e => {
+  if (!document.getElementById('lightbox').classList.contains('open')) return;
+  if (e.key === 'Escape') closeLightbox();
+  if (e.key === 'ArrowLeft') stepLightbox(-1);
+  if (e.key === 'ArrowRight') stepLightbox(1);
+});
+document.addEventListener('click', e => {
+  const img = e.target.closest('.prose img, [data-lightbox]');
+  if (!img) return;
+  const imgs = [
+    ...document.querySelectorAll('[data-lightbox]'),
+    ...document.querySelectorAll('.prose img'),
+  ];
+  openLightbox(img.src, imgs.map(i => i.src));
+});
+</script>
+
+{{block "scripts" .}}{{end}}
 </body>
 </html>
 {{end}}
