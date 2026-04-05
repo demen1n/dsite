@@ -90,6 +90,13 @@ services:
     volumes:
       - /opt/matrix/data:/data
     mem_limit: 512m
+
+  synapse-admin:
+    image: awesometechnologies/synapse-admin:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8009:80"
+    mem_limit: 64m
 EOF
 ```
 
@@ -114,6 +121,10 @@ nano /etc/caddy/Caddyfile
 ```
 chat.yourdomain.ru {
     reverse_proxy 127.0.0.1:8008
+}
+
+admin.chat.yourdomain.ru {
+    reverse_proxy 127.0.0.1:8009
 }
 ```
 
@@ -143,7 +154,7 @@ docker compose logs -f synapse
 
 ## 8. Создать пользователей
 
-Первый пользователь — администратор (`-a`):
+### Первый пользователь (администратор) — через консоль
 
 ```bash
 docker exec -it matrix-synapse-1 register_new_matrix_user \
@@ -152,7 +163,11 @@ docker exec -it matrix-synapse-1 register_new_matrix_user \
   http://localhost:8008
 ```
 
-Остальные пользователи:
+### Остальные пользователи — через веб-интерфейс
+
+Открой `https://admin.chat.yourdomain.ru`, войди своим логином/паролем и укажи URL сервера `https://chat.yourdomain.ru`. Дальше создавай пользователей через обычный UI — без консоли.
+
+Или через консоль, если удобнее:
 
 ```bash
 docker exec -it matrix-synapse-1 register_new_matrix_user \
