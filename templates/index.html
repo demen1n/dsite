@@ -1,16 +1,15 @@
 {{define "content"}}
 <div class="feed-header">
-  <h1>{{.SiteTitle}}</h1>
-  <p>{{.SiteDesc}}</p>
+  <h1>Блог</h1>
 </div>
 
 {{with .Data}}
 
 {{if .Tags}}
 <div class="tag-filter">
-  <a class="tag-pill{{if eq .ActiveTag ""}} active{{end}}" href="/">Все</a>
+  <a class="tag-pill{{if eq .ActiveTag ""}} active{{end}}" href="/blog">Все</a>
   {{range .Tags}}
-  <a class="tag-pill{{if eq $.Data.ActiveTag .Slug}} active{{end}}" href="/?tag={{.Slug}}">{{.Name}}</a>
+  <a class="tag-pill{{if eq $.Data.ActiveTag .Slug}} active{{end}}" href="/blog?tag={{.Slug}}">{{.Name}}</a>
   {{end}}
 </div>
 {{end}}
@@ -23,7 +22,7 @@
       <span>{{relDate .CreatedAt}}</span>
       {{if .Tags}}
       <span class="feed-meta-tags">
-        {{range .Tags}}<a href="/?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
+        {{range .Tags}}<a href="/blog?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
       </span>
       {{end}}
       {{if .Views}}<span class="feed-views">{{.Views}} просм.</span>{{end}}
@@ -45,7 +44,7 @@
 {{if gt .TotalPages 1}}
 <nav class="pagination">
   {{if .HasPrev}}
-  <a href="/?page={{sub .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">← Новее</a>
+  <a href="/blog?page={{sub .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">← Новее</a>
   {{else}}
   <span class="page-btn disabled">← Новее</span>
   {{end}}
@@ -53,7 +52,7 @@
   <span class="page-info">{{.Page}} / {{.TotalPages}}</span>
 
   {{if .HasNext}}
-  <a href="/?page={{add .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">Старше →</a>
+  <a href="/blog?page={{add .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">Старше →</a>
   {{else}}
   <span class="page-btn disabled">Старше →</span>
   {{end}}

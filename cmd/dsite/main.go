@@ -46,7 +46,8 @@ func main() {
 	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadsDir))))
 
 	// ── Публичные ──
-	mux.HandleFunc("GET /{$}", handlers.Index)
+	mux.HandleFunc("GET /{$}", handlers.Home)
+	mux.HandleFunc("GET /blog", handlers.Index)
 	mux.HandleFunc("GET /post/{slug}", handlers.ViewPost)
 	mux.HandleFunc("GET /gallery", handlers.Gallery)
 	mux.HandleFunc("GET /gallery/filter", handlers.GalleryFilter)

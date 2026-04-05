@@ -2,12 +2,12 @@
 {{with .Data}}
 <article>
   <div style="margin-bottom:0.5rem; font-size:0.85rem; color:var(--muted); display:flex; align-items:center; gap:1rem; flex-wrap:wrap">
-    <a href="/" style="color:var(--muted)">← Назад</a>
+    <a href="/blog" style="color:var(--muted)">← Блог</a>
     <span>{{relDate .CreatedAt}}</span>
     {{if .Views}}<span>{{.Views}} просм.</span>{{end}}
     {{if .Tags}}
     <span class="post-tags">
-      {{range .Tags}}<a href="/?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
+      {{range .Tags}}<a href="/blog?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
     </span>
     {{end}}
   </div>

@@ -9,32 +9,38 @@ import (
 	"strconv"
 )
 
-// ─────────────────────── Index ───────────────────────
-
-type IndexData struct {
-	Posts     []db.Post
-	Tags      []db.Tag
-	ActiveTag string
-	Page      int
-	TotalPages int
-	HasPrev   bool
-	HasNext   bool
-}
+// ─────────────────────── Home ───────────────────────
 
 // GET /
-func Index(w http.ResponseWriter, r *http.Request) {
+func Home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
 		http.NotFound(w, r)
 		return
 	}
+	render(w, "home.html", page("", nil))
+}
 
+// ─────────────────────── Blog ───────────────────────
+
+type IndexData struct {
+	Posts      []db.Post
+	Tags       []db.Tag
+	ActiveTag  string
+	Page       int
+	TotalPages int
+	HasPrev    bool
+	HasNext    bool
+}
+
+// GET /blog
+func Index(w http.ResponseWriter, r *http.Request) {
 	tag := r.URL.Query().Get("tag")
-	page, _ := strconv.Atoi(r.URL.Query().Get("page"))
-	if page < 1 {
-		page = 1
+	pageNum, _ := strconv.Atoi(r.URL.Query().Get("page"))
+	if pageNum < 1 {
+		pageNum = 1
 	}
 
-	posts, total, err := db.ListPostsPaginated(tag, page, db.PostsPerPage)
+	posts, total, err := db.ListPostsPaginated(tag, pageNum, db.PostsPerPage)
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
@@ -54,17 +60,12 @@ func Index(w http.ResponseWriter, r *http.Request) {
 		Posts:      posts,
 		Tags:       tags,
 		ActiveTag:  tag,
-		Page:       page,
+		Page:       pageNum,
 		TotalPages: totalPages,
-		HasPrev:    page > 1,
-		HasNext:    page < totalPages,
+		HasPrev:    pageNum > 1,
+		HasNext:    pageNum < totalPages,
 	}
-	render(w, "index.html", page_(r, data))
-}
-
-// page_ — обёртка над page() с нужным заголовком.
-func page_(r *http.Request, data any) PageData {
-	return page("Главная", data)
+	render(w, "index.html", page("Блог", data))
 }
 
 // ─────────────────────── Post ───────────────────────
