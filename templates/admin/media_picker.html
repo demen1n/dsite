@@ -1,0 +1,18 @@
+{{define "media_picker"}}
+{{with .Data}}
+{{if .Photos}}
+<div class="picker-grid">
+  {{range .Photos}}
+  <img class="picker-photo"
+       src="/uploads/{{.Filename}}"
+       alt="{{.Caption}}"
+       data-url="/uploads/{{.Filename}}"
+       data-caption="{{.Caption}}"
+       title="{{if .Caption}}{{.Caption}}{{else}}{{.Filename}}{{end}}">
+  {{end}}
+</div>
+{{else}}
+<p class="picker-empty">Галерея пуста — сначала загрузите фото в <a href="/admin/gallery" target="_blank">галерею</a>.</p>
+{{end}}
+{{end}}
+{{end}}

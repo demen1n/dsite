@@ -72,6 +72,9 @@ func main() {
 	mux.HandleFunc("POST /admin/posts/preview", handlers.RequireAuth(handlers.PreviewMD))
 	mux.HandleFunc("POST /admin/upload", handlers.RequireAuth(handlers.UploadImage))
 
+	mux.HandleFunc("GET /admin/media/picker", handlers.RequireAuth(handlers.MediaPicker))
+	mux.HandleFunc("POST /admin/media/to-gallery", handlers.RequireAuth(handlers.AddToGallery))
+
 	mux.HandleFunc("GET /admin/gallery", handlers.RequireAuth(handlers.AdminGallery))
 	mux.HandleFunc("POST /admin/gallery/upload", handlers.RequireAuth(handlers.UploadPhoto))
 	mux.HandleFunc("POST /admin/gallery/reorder", handlers.RequireAuth(handlers.ReorderPhotos))
