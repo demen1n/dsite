@@ -114,7 +114,7 @@ func NewPost(w http.ResponseWriter, r *http.Request) {
 
 // POST /admin/posts/new
 func CreatePost(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "parse form", 400)
 		return
 	}
@@ -178,7 +178,7 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "parse form", 400)
 		return
 	}
@@ -482,7 +482,7 @@ func SaveResume(w http.ResponseWriter, r *http.Request) {
 
 // POST /admin/upload — uploads an image and returns its URL (for post editor)
 func UploadImage(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(10 << 20); err != nil {
+	if err := r.ParseMultipartForm(32 << 20); err != nil {
 		http.Error(w, "parse form", 400)
 		return
 	}
