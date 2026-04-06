@@ -52,7 +52,7 @@
     .prose p { margin-bottom: 1.1rem; }
     .prose h2 { margin-top: 2.25rem; }
     .prose img, [data-lightbox] { cursor: pointer; }
-    .prose img { max-width: 100%; margin: 1.75rem 0; display: block; }
+    .prose img { width: calc(100% + 140px); max-width: calc(100% + 140px); margin: 1.75rem -70px; display: block; }
     .prose ul, .prose ol { margin: 0.75rem 0 1rem 1.5rem; }
     .prose li { margin-bottom: 0.35rem; }
     .prose blockquote { border-left: 2px solid var(--border); padding-left: 1.1rem; color: var(--muted); margin: 1.5rem 0; font-style: italic; }
@@ -138,6 +138,7 @@
       .gallery-title { padding: 1.5rem 1rem 0.75rem !important; font-size: 1.5rem !important; }
       .gallery-cats { padding: 0 1rem 1rem !important; }
       .prose pre { font-size: 0.8rem; padding: 1rem; }
+      .prose img { width: 100%; max-width: 100%; margin-left: 0; margin-right: 0; }
     }
   </style>
   <link rel="alternate" type="application/atom+xml" title="{{.SiteTitle}}" href="/feed.xml">
