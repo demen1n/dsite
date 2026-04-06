@@ -120,6 +120,14 @@ nano /etc/caddy/Caddyfile
 
 ```
 chat.yourdomain.ru {
+    handle /.well-known/matrix/client {
+        header Content-Type application/json
+        respond `{"m.homeserver":{"base_url":"https://chat.yourdomain.ru"}}` 200
+    }
+    handle /.well-known/matrix/server {
+        header Content-Type application/json
+        respond `{"m.server":"chat.yourdomain.ru:443"}` 200
+    }
     reverse_proxy 127.0.0.1:8008
 }
 
