@@ -368,13 +368,23 @@ bodyTA.addEventListener('drop', async e => {
 
   const fd = new FormData();
   fd.append('image', new File([resized], file.name.replace(/\.\w+$/, '.webp'), { type: 'image/webp' }));
-  const res = await fetch('/admin/upload', { method: 'POST', body: fd });
-  if (!res.ok) {
+  const url = await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/admin/upload');
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        console.log(`Загрузка: ${Math.round(e.loaded / e.total * 100)}%`);
+      }
+    };
+    xhr.onload = () => xhr.status === 200 ? resolve(xhr.responseText) : reject(xhr.status);
+    xhr.onerror = () => reject('network error');
+    xhr.send(fd);
+  }).catch(err => {
     bodyTA.value = bodyTA.value.replace(placeholder, '');
-    alert('Ошибка загрузки на сервер: ' + res.status);
-    return;
-  }
-  const url = await res.text();
+    alert('Ошибка загрузки на сервер: ' + err);
+    return null;
+  });
+  if (!url) return;
   const md = `![](${url})`;
   bodyTA.value = bodyTA.value.replace(placeholder, md);
   bodyTA.selectionStart = bodyTA.selectionEnd = bodyTA.value.indexOf(md) + md.length;
