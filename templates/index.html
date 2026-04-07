@@ -44,17 +44,15 @@
 {{if gt .TotalPages 1}}
 <nav class="pagination">
   {{if .HasPrev}}
-  <a href="/blog?page={{sub .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">← Новее</a>
+  <a href="/blog?page={{sub .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">← Позднее</a>
   {{else}}
-  <span class="page-btn disabled">← Новее</span>
+  <span class="page-btn page-btn--off"></span>
   {{end}}
 
-  <span class="page-info">{{.Page}} / {{.TotalPages}}</span>
-
   {{if .HasNext}}
-  <a href="/blog?page={{add .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">Старше →</a>
+  <a href="/blog?page={{add .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">Ранее →</a>
   {{else}}
-  <span class="page-btn disabled">Старше →</span>
+  <span class="page-btn page-btn--off"></span>
   {{end}}
 </nav>
 {{end}}
