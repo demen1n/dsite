@@ -406,6 +406,15 @@ func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 	renderFragment(w, "admin/gallery_list.html", "gallery_list_content", page("Галерея", GalleryAdminData{Photos: photos, Categories: cats, Places: places}))
 }
 
+// renderGalleryMain рендерит фрагмент gallery_main_content для HTMX-ответов.
+func renderGalleryMain(w http.ResponseWriter, r *http.Request) {
+	photos, _ := db.ListPhotos("", "")
+	cats, _ := db.ListCategories()
+	places, _ := db.ListPlaces()
+	renderFragment(w, "admin/gallery.html", "gallery_main_content",
+		page("Галерея", GalleryAdminData{Photos: photos, Categories: cats, Places: places}))
+}
+
 // ─────────────────────── Places ───────────────────────
 
 // POST /admin/places/new
@@ -424,6 +433,10 @@ func CreatePlace(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", 500)
 		return
 	}
+	if r.Header.Get("HX-Request") == "true" {
+		renderGalleryMain(w, r)
+		return
+	}
 	http.Redirect(w, r, "/admin/gallery", http.StatusFound)
 }
 
@@ -436,6 +449,10 @@ func DeletePlace(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := db.DeletePlace(id); err != nil {
 		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		renderGalleryMain(w, r)
 		return
 	}
 	http.Redirect(w, r, "/admin/gallery", http.StatusFound)
@@ -575,6 +592,10 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", 500)
 		return
 	}
+	if r.Header.Get("HX-Request") == "true" {
+		renderGalleryMain(w, r)
+		return
+	}
 	http.Redirect(w, r, "/admin/gallery", http.StatusFound)
 }
 
@@ -587,6 +608,10 @@ func DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := db.DeleteCategory(id); err != nil {
 		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		renderGalleryMain(w, r)
 		return
 	}
 	http.Redirect(w, r, "/admin/gallery", http.StatusFound)

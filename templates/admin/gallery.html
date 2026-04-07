@@ -3,6 +3,12 @@
   <h1>Галерея</h1>
 </div>
 
+<div id="gallery-main">
+{{template "gallery_main_content" .}}
+</div>
+{{end}}
+
+{{define "gallery_main_content"}}
 <!-- Категории и места -->
 <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin-bottom:1.5rem">
 
@@ -13,15 +19,20 @@
     {{range .Data.Categories}}
     <div style="display:flex; align-items:center; gap:0.4rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:0.25rem 0.5rem 0.25rem 0.75rem; font-size:0.88rem">
       <span>{{.Name}}</span>
-      <form method="POST" action="/admin/categories/{{.ID}}/delete" style="margin:0"
-            onsubmit="return confirm('Удалить категорию «{{.Name}}»? Фото останутся, но потеряют категорию.')">
-        <button type="submit" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0.2rem; font-size:1rem; line-height:1">✕</button>
-      </form>
+      <button type="button"
+              hx-post="/admin/categories/{{.ID}}/delete"
+              hx-target="#gallery-main"
+              hx-swap="innerHTML"
+              hx-confirm="Удалить категорию «{{.Name}}»? Фото останутся, но потеряют категорию."
+              style="background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0.2rem; font-size:1rem; line-height:1">✕</button>
     </div>
     {{end}}
   </div>
   {{end}}
-  <form method="POST" action="/admin/categories/new" style="display:flex; gap:0.5rem; align-items:center">
+  <form hx-post="/admin/categories/new"
+        hx-target="#gallery-main"
+        hx-swap="innerHTML"
+        style="display:flex; gap:0.5rem; align-items:center">
     <input type="text" name="name" placeholder="Новая категория" style="flex:1; min-width:0">
     <button type="submit" class="btn btn-secondary" style="white-space:nowrap">Добавить</button>
   </form>
@@ -34,15 +45,20 @@
     {{range .Data.Places}}
     <div style="display:flex; align-items:center; gap:0.4rem; background:var(--bg); border:1px solid var(--border); border-radius:var(--radius); padding:0.25rem 0.5rem 0.25rem 0.75rem; font-size:0.88rem">
       <span>{{.Name}}</span>
-      <form method="POST" action="/admin/places/{{.ID}}/delete" style="margin:0"
-            onsubmit="return confirm('Удалить место «{{.Name}}»? Фото останутся, но потеряют место.')">
-        <button type="submit" style="background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0.2rem; font-size:1rem; line-height:1">✕</button>
-      </form>
+      <button type="button"
+              hx-post="/admin/places/{{.ID}}/delete"
+              hx-target="#gallery-main"
+              hx-swap="innerHTML"
+              hx-confirm="Удалить место «{{.Name}}»? Фото останутся, но потеряют место."
+              style="background:none; border:none; color:var(--muted); cursor:pointer; padding:0 0.2rem; font-size:1rem; line-height:1">✕</button>
     </div>
     {{end}}
   </div>
   {{end}}
-  <form method="POST" action="/admin/places/new" style="display:flex; gap:0.5rem; align-items:center">
+  <form hx-post="/admin/places/new"
+        hx-target="#gallery-main"
+        hx-swap="innerHTML"
+        style="display:flex; gap:0.5rem; align-items:center">
     <input type="text" name="name" placeholder="Новое место" style="flex:1; min-width:0">
     <button type="submit" class="btn btn-secondary" style="white-space:nowrap">Добавить</button>
   </form>
@@ -333,7 +349,8 @@ function saveOrder() {
 
 // Re-init after HTMX swaps
 document.body.addEventListener('htmx:afterSwap', e => {
-  if (e.detail.target.id === 'gallery-list') initDraggable();
+  const id = e.detail.target.id;
+  if (id === 'gallery-list' || id === 'gallery-main') initDraggable();
 });
 
 initDraggable();
