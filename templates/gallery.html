@@ -127,6 +127,16 @@ function layout(grid, items, imgs) {
     img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1.5
   );
 
+  if (W < 600) {
+    items.forEach((item, i) => {
+      const h = Math.round(W / ratios[i]);
+      item.style.cssText = `width:${W}px; height:${h}px; flex:none; overflow:hidden; cursor:pointer;`;
+      imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
+    });
+    setupFadeIn();
+    return;
+  }
+
   const rows = [];
   let row = [], rowRatio = 0;
   ratios.forEach((r, i) => {
