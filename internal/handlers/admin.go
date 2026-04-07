@@ -89,7 +89,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie("session"); err == nil {
 		DeleteSession(c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/"})
+	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/", SameSite: http.SameSiteLaxMode})
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 

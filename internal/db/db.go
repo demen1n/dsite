@@ -37,6 +37,9 @@ func Init(path string) error {
 	if err = migratePlaces(); err != nil {
 		return fmt.Errorf("migrate places: %w", err)
 	}
+	if err = migrateIndexes(); err != nil {
+		return fmt.Errorf("migrate indexes: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -73,6 +76,19 @@ func migratePlaces() error {
 	}
 	DB.Exec(`ALTER TABLE photos ADD COLUMN place_id INTEGER REFERENCES places(id) ON DELETE SET NULL`)
 	return nil
+}
+
+func migrateIndexes() error {
+	_, err := DB.Exec(`
+	CREATE INDEX IF NOT EXISTS idx_posts_created_at ON posts(created_at DESC);
+	CREATE INDEX IF NOT EXISTS idx_posts_published ON posts(published);
+	CREATE INDEX IF NOT EXISTS idx_photos_sort_order ON photos(sort_order);
+	CREATE INDEX IF NOT EXISTS idx_categories_slug ON categories(slug);
+	CREATE INDEX IF NOT EXISTS idx_places_slug ON places(slug);
+	CREATE INDEX IF NOT EXISTS idx_tags_slug ON tags(slug);
+	CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+	`)
+	return err
 }
 
 func migrateTagsTables() error {

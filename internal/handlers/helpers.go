@@ -44,7 +44,6 @@ var allowedImageExts = map[string]bool{
 	".png":  true,
 	".gif":  true,
 	".webp": true,
-	".avif": true,
 }
 
 func isAllowedImageExt(ext string) bool {
