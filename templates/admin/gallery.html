@@ -123,41 +123,62 @@ async function uploadPhotos() {
   btn.disabled = true;
   btn.textContent = 'Обработка…';
 
+  const files = [...input.files];
+  const total = files.length;
+  let resizeDone = 0;
+
+  // Ресайз всех файлов параллельно
+  progress.textContent = `Ресайз 0/${total}…`;
+  const blobs = await Promise.all(files.map(async (file) => {
+    const blob = await resizeImage(file, 1920, 0.85);
+    resizeDone++;
+    progress.textContent = `Ресайз ${resizeDone}/${total}…`;
+    return blob;
+  }));
+
   const form = new FormData();
   form.append('caption', caption);
   form.append('category_id', categoryId);
   form.append('place_id', placeId);
-
-  let i = 0;
-  for (const file of input.files) {
-    i++;
-    progress.textContent = `Ресайз ${i}/${input.files.length}: ${file.name}`;
-    const blob = await resizeImage(file, 1920, 0.85);
-    const name = file.name.replace(/\.\w+$/, '.webp');
-    form.append('photos', new File([blob], name, { type: 'image/webp' }));
-  }
-
-  progress.textContent = 'Загрузка на сервер…';
-
-  const resp = await fetch('/admin/gallery/upload', {
-    method: 'POST',
-    body: form,
+  blobs.forEach((blob, i) => {
+    form.append('photos', new File([blob], files[i].name.replace(/\.\w+$/, '.webp'), { type: 'image/webp' }));
   });
 
-  if (resp.ok) {
-    const html = await resp.text();
-    document.getElementById('gallery-list').innerHTML = html;
-    initDraggable();
-    input.value = '';
-    document.getElementById('photo-caption').value = '';
-    progress.textContent = `✓ Загружено ${i} фото`;
-    btn.textContent = 'Загрузить';
-    btn.disabled = false;
-  } else {
-    progress.textContent = 'Ошибка загрузки';
-    btn.disabled = false;
-    btn.textContent = 'Загрузить';
-  }
+  // Загрузка с прогрессом через XHR
+  await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/admin/gallery/upload');
+    xhr.upload.onprogress = e => {
+      if (e.lengthComputable) {
+        const pct = Math.round(e.loaded / e.total * 100);
+        progress.textContent = `Загрузка ${pct}%…`;
+      }
+    };
+    xhr.onload = () => {
+      if (xhr.status === 200) {
+        document.getElementById('gallery-list').innerHTML = xhr.responseText;
+        initDraggable();
+        input.value = '';
+        document.getElementById('photo-caption').value = '';
+        progress.textContent = `✓ Загружено ${total} фото`;
+        btn.textContent = 'Загрузить';
+        btn.disabled = false;
+        resolve();
+      } else {
+        progress.textContent = 'Ошибка загрузки';
+        btn.disabled = false;
+        btn.textContent = 'Загрузить';
+        reject();
+      }
+    };
+    xhr.onerror = () => {
+      progress.textContent = 'Ошибка загрузки';
+      btn.disabled = false;
+      btn.textContent = 'Загрузить';
+      reject();
+    };
+    xhr.send(form);
+  });
 }
 
 // Drag-to-reorder
