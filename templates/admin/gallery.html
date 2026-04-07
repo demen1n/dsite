@@ -94,6 +94,11 @@
 {{end}}
 
 {{define "admin_scripts"}}
+<style>
+[data-photo-id] { user-select: none; }
+[data-photo-id].photo-sel { box-shadow: inset 0 0 0 3px var(--accent, #555); }
+[data-photo-id].photo-sel .photo-check { display: flex !important; }
+</style>
 <script>
 async function resizeImage(file, maxWidth, quality) {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
@@ -181,36 +186,140 @@ async function uploadPhotos() {
   });
 }
 
-// Drag-to-reorder
-let dragSrc = null;
+// ── Выделение и групповое перетаскивание ──
+const selected = new Set();
+
+function getSelectionBar() {
+  let bar = document.getElementById('selection-bar');
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'selection-bar';
+    bar.style.cssText = 'display:none; align-items:center; gap:0.75rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.5rem 1rem; margin-bottom:0.75rem; font-size:0.88rem;';
+    bar.innerHTML = '<span id="sel-count"></span><button onclick="clearSelection()" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0;font-size:0.82rem;">Снять выделение</button>';
+    const grid = document.getElementById('gallery-list-grid');
+    if (grid) grid.parentNode.insertBefore(bar, grid);
+  }
+  return bar;
+}
+
+function updateSelectionBar() {
+  const bar = getSelectionBar();
+  if (selected.size > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('sel-count').textContent = `Выбрано: ${selected.size}`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearSelection() {
+  selected.clear();
+  document.querySelectorAll('[data-photo-id].photo-sel').forEach(el => el.classList.remove('photo-sel'));
+  updateSelectionBar();
+}
+
+function toggleSelect(el) {
+  const id = el.dataset.photoId;
+  if (selected.has(id)) {
+    selected.delete(id);
+    el.classList.remove('photo-sel');
+  } else {
+    selected.add(id);
+    el.classList.add('photo-sel');
+  }
+  updateSelectionBar();
+}
 
 function initDraggable() {
+  clearSelection();
   document.querySelectorAll('[data-photo-id]').forEach(el => {
+    // Добавляем галочку если нет
+    if (!el.querySelector('.photo-check')) {
+      const chk = document.createElement('div');
+      chk.className = 'photo-check';
+      chk.textContent = '✓';
+      chk.style.cssText = 'position:absolute;top:6px;left:6px;width:20px;height:20px;border-radius:50%;background:var(--accent,#555);color:#fff;font-size:11px;display:none;align-items:center;justify-content:center;pointer-events:none;z-index:2;';
+      el.appendChild(chk);
+    }
+
     el.setAttribute('draggable', 'true');
-    el.addEventListener('dragstart', e => {
-      dragSrc = el;
-      e.dataTransfer.effectAllowed = 'move';
+
+    el.addEventListener('click', e => {
+      if (e.target.closest('button, select, form')) return;
+      toggleSelect(el);
     });
+
+    el.addEventListener('dragstart', e => {
+      // Если тащим невыделенную — выделяем только её
+      if (!selected.has(el.dataset.photoId)) {
+        clearSelection();
+        selected.add(el.dataset.photoId);
+        el.classList.add('photo-sel');
+        updateSelectionBar();
+      }
+      e.dataTransfer.effectAllowed = 'move';
+      // Кастомный ghost с количеством
+      if (selected.size > 1) {
+        const badge = document.createElement('div');
+        badge.style.cssText = 'position:fixed;top:-100px;padding:4px 12px;background:var(--accent,#555);color:#fff;border-radius:20px;font-size:13px;font-family:sans-serif;white-space:nowrap;';
+        badge.textContent = `${selected.size} фото`;
+        document.body.appendChild(badge);
+        e.dataTransfer.setDragImage(badge, 40, 16);
+        setTimeout(() => badge.remove(), 0);
+      }
+    });
+
     el.addEventListener('dragover', e => {
       e.preventDefault();
-      el.style.outline = '2px dashed var(--accent)';
+      if (!selected.has(el.dataset.photoId)) {
+        el.style.outline = '2px dashed var(--accent,#555)';
+        el.style.outlineOffset = '-2px';
+      }
     });
+
     el.addEventListener('dragleave', () => {
       el.style.outline = '';
+      el.style.outlineOffset = '';
     });
+
     el.addEventListener('drop', e => {
       e.preventDefault();
       el.style.outline = '';
-      if (dragSrc === el) return;
+      el.style.outlineOffset = '';
+      if (selected.has(el.dataset.photoId)) return;
+
       const grid = el.parentNode;
-      const items = [...grid.children];
-      const si = items.indexOf(dragSrc), di = items.indexOf(el);
-      if (si < di) grid.insertBefore(dragSrc, el.nextSibling);
-      else grid.insertBefore(dragSrc, el);
+      const allItems = [...grid.children];
+      const selectedEls = allItems.filter(item => item.dataset?.photoId && selected.has(item.dataset.photoId));
+      if (!selectedEls.length) return;
+
+      const movingForward = allItems.indexOf(selectedEls[0]) < allItems.indexOf(el);
+
+      // Убираем из DOM, вставляем в новую позицию
+      selectedEls.forEach(s => s.remove());
+      if (movingForward) {
+        let anchor = el;
+        selectedEls.forEach(s => { anchor.after(s); anchor = s; });
+      } else {
+        selectedEls.forEach(s => grid.insertBefore(s, el));
+      }
+
+      clearSelection();
       saveOrder();
     });
   });
+
+  // Снять выделение по клику на фон
+  const grid = document.getElementById('gallery-list-grid');
+  if (grid) {
+    grid.addEventListener('click', e => {
+      if (!e.target.closest('[data-photo-id]')) clearSelection();
+    });
+  }
 }
+
+// Снять выделение по ESC
+document.addEventListener('keydown', e => { if (e.key === 'Escape') clearSelection(); });
 
 function saveOrder() {
   const ids = [...document.querySelectorAll('[data-photo-id]')]
