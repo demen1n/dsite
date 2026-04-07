@@ -99,8 +99,9 @@
     /* ── Gallery ── */
     .gallery-grid-inner { display: flex; flex-wrap: wrap; gap: 3px; }
     .gallery-item { overflow: hidden; cursor: pointer; }
-    .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; transition: opacity 0.15s; }
-    .gallery-item:hover img { opacity: 0.88; }
+    .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.35s ease; }
+    .gallery-item img.gfade { opacity: 1; }
+    .gallery-item:hover img.gfade { opacity: 0.88; }
     .gallery-item-caption { font-family: var(--sans); font-size: 0.78rem; color: var(--muted); padding: 0.25rem 0; }
 
     /* ── Lightbox ── */
