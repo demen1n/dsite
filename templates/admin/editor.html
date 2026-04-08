@@ -429,6 +429,71 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeImgPopup();
 });
 
+// ── Auto-save to localStorage ──
+const DRAFT_KEY = 'dsite_editor_{{if .Data}}{{.Data.ID}}{{else}}new{{end}}';
+let autoSaveTimer;
+
+(function draftLoad() {
+  const saved = localStorage.getItem(DRAFT_KEY);
+  if (!saved) return;
+  let draft;
+  try { draft = JSON.parse(saved); } catch(e) { return; }
+
+  const titleEl = document.getElementById('title');
+  const bodyEl  = document.getElementById('body');
+  const tagsEl  = document.getElementById('tags');
+
+  if (draft.title === titleEl.value && draft.body === bodyEl.value && draft.tags === tagsEl.value) return;
+
+  const bar = document.createElement('div');
+  bar.id = 'autosave-bar';
+  bar.style.cssText = 'background:#fef9c3;border-bottom:1px solid #fde047;padding:0.45rem 1.5rem;font-size:0.83rem;font-family:var(--sans);display:flex;align-items:center;gap:0.75rem;flex-shrink:0;';
+  bar.innerHTML = `<span>Несохранённый черновик от ${new Date(draft.ts).toLocaleString('ru')}</span>`
+    + `<button type="button" onclick="draftRestore()" style="border:1px solid #ca8a04;background:none;padding:0.15rem 0.55rem;border-radius:3px;cursor:pointer;font-size:0.8rem;">Восстановить</button>`
+    + `<button type="button" onclick="draftDiscard()" style="border:none;background:none;color:#92400e;cursor:pointer;font-size:0.8rem;">Удалить</button>`;
+
+  const wrap = document.querySelector('.editor-wrap');
+  const meta = document.querySelector('.editor-meta');
+  wrap.insertBefore(bar, meta);
+  window._pendingDraft = draft;
+})();
+
+function draftRestore() {
+  const draft = window._pendingDraft;
+  if (!draft) return;
+  document.getElementById('title').value = draft.title;
+  document.getElementById('body').value  = draft.body;
+  document.getElementById('tags').value  = draft.tags;
+  autoResize(document.getElementById('title'));
+  htmx.trigger(document.getElementById('body'), 'input');
+  document.getElementById('autosave-bar')?.remove();
+}
+
+function draftDiscard() {
+  localStorage.removeItem(DRAFT_KEY);
+  document.getElementById('autosave-bar')?.remove();
+}
+
+function draftSave() {
+  localStorage.setItem(DRAFT_KEY, JSON.stringify({
+    title: document.getElementById('title').value,
+    body:  document.getElementById('body').value,
+    tags:  document.getElementById('tags').value,
+    ts:    Date.now(),
+  }));
+}
+
+['title', 'body', 'tags'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', () => {
+    clearTimeout(autoSaveTimer);
+    autoSaveTimer = setTimeout(draftSave, 2000);
+  });
+});
+
+document.getElementById('post-form').addEventListener('submit', () => {
+  localStorage.removeItem(DRAFT_KEY);
+});
+
 // Media picker
 let pickerLoaded = false;
 function togglePicker() {

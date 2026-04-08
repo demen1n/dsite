@@ -1,6 +1,11 @@
 {{define "content"}}
-<div class="feed-header">
+<div class="feed-header" style="display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
   <h1>Блог</h1>
+  <form action="/search" method="GET" style="display:flex; gap:0.4rem;">
+    <input type="search" name="q" placeholder="Поиск…"
+           style="border:1px solid var(--border); border-radius:4px; padding:0.3rem 0.6rem; font-size:0.85rem; font-family:var(--sans); background:var(--bg); color:var(--text); outline:none; width:140px;">
+    <button type="submit" style="padding:0.3rem 0.7rem; border:1px solid var(--border); border-radius:4px; background:transparent; color:var(--muted); font-family:var(--sans); font-size:0.85rem; cursor:pointer;">→</button>
+  </form>
 </div>
 
 {{with .Data}}

@@ -319,6 +319,49 @@ func ListPhotos(categorySlug, placeSlug string) ([]Photo, error) {
 	return photos, rows.Err()
 }
 
+func SearchPosts(q string) ([]Post, error) {
+	var terms []string
+	for _, w := range strings.Fields(q) {
+		// Strip FTS5 special chars to prevent query syntax errors
+		clean := strings.Map(func(r rune) rune {
+			switch r {
+			case '"', '\'', '(', ')', '*', '^', '-', '+', ':', '.':
+				return -1
+			}
+			return r
+		}, w)
+		if clean != "" {
+			terms = append(terms, clean+"*")
+		}
+	}
+	if len(terms) == 0 {
+		return nil, nil
+	}
+	rows, err := DB.Query(`
+		SELECT p.id, p.slug, p.title, p.body_html, p.cover, p.created_at
+		FROM posts_fts f
+		JOIN posts p ON p.id = f.rowid
+		WHERE posts_fts MATCH ? AND p.published = 1
+		ORDER BY rank
+		LIMIT 20
+	`, strings.Join(terms, " "))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var posts []Post
+	for rows.Next() {
+		var p Post
+		var ca string
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.BodyHTML, &p.Cover, &ca); err != nil {
+			return nil, err
+		}
+		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
 func UpdatePhotoDimensions(id, width, height int) error {
 	_, err := DB.Exec(`UPDATE photos SET width=?, height=? WHERE id=?`, width, height, id)
 	return err

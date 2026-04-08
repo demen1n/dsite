@@ -1,0 +1,36 @@
+{{define "content"}}
+<div class="feed-header">
+  <h1>Поиск</h1>
+</div>
+
+<form action="/search" method="GET" style="margin-bottom:2rem; display:flex; gap:0.5rem;">
+  <input type="search" name="q" value="{{with .Data}}{{.Query}}{{end}}"
+         placeholder="Поиск по постам…"
+         autofocus
+         style="flex:1; border:1px solid var(--border); border-radius:4px; padding:0.5rem 0.75rem; font-size:1rem; font-family:var(--sans); background:var(--bg); color:var(--text); outline:none;">
+  <button type="submit" style="padding:0.5rem 1.1rem; border:1px solid var(--border); border-radius:4px; background:var(--text); color:var(--bg); font-family:var(--sans); font-size:0.9rem; cursor:pointer;">Найти</button>
+</form>
+
+{{with .Data}}
+{{if .Done}}
+  {{if .Results}}
+  <div class="feed">
+    {{range .Results}}
+    <article class="feed-entry">
+      <div class="feed-meta">
+        <span>{{relDate .CreatedAt}}</span>
+      </div>
+      <h2 class="feed-title"><a href="/post/{{.Slug}}">{{.Title}}</a></h2>
+      {{if .Cover}}
+      <a href="/post/{{.Slug}}"><img class="feed-cover" src="/uploads/{{.Cover}}" alt="{{.Title}}" loading="lazy"></a>
+      {{end}}
+      <p class="feed-excerpt">{{excerpt .BodyHTML}}</p>
+    </article>
+    {{end}}
+  </div>
+  {{else}}
+  <p style="color:var(--muted)">По запросу «{{.Query}}» ничего не найдено.</p>
+  {{end}}
+{{end}}
+{{end}}
+{{end}}

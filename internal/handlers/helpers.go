@@ -251,11 +251,13 @@ func RenderMD(src string) (string, error) {
 }
 
 type PageData struct {
-	Title     string
-	SiteTitle string
-	SiteDesc  string
-	Socials   map[string]string
-	Data      any
+	Title         string
+	SiteTitle     string
+	SiteDesc      string
+	Socials       map[string]string
+	Data          any
+	OGDescription string
+	OGImage       string // absolute URL
 }
 
 var socials map[string]string

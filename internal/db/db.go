@@ -43,6 +43,9 @@ func Init(path string) error {
 	if err = migratePhotoDimensions(); err != nil {
 		return fmt.Errorf("migrate photo dimensions: %w", err)
 	}
+	if err = migrateFTS(); err != nil {
+		return fmt.Errorf("migrate fts: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -78,6 +81,28 @@ func migratePlaces() error {
 		return err
 	}
 	DB.Exec(`ALTER TABLE photos ADD COLUMN place_id INTEGER REFERENCES places(id) ON DELETE SET NULL`)
+	return nil
+}
+
+func migrateFTS() error {
+	_, err := DB.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
+		title, body_md,
+		content=posts, content_rowid=id
+	)`)
+	if err != nil {
+		return err
+	}
+	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_ai AFTER INSERT ON posts BEGIN
+		INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
+	END`)
+	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_au AFTER UPDATE ON posts BEGIN
+		UPDATE posts_fts SET title=new.title, body_md=new.body_md WHERE rowid=old.id;
+	END`)
+	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_ad AFTER DELETE ON posts BEGIN
+		DELETE FROM posts_fts WHERE rowid=old.id;
+	END`)
+	// Populate index from existing posts (idempotent)
+	DB.Exec(`INSERT INTO posts_fts(posts_fts) VALUES('rebuild')`)
 	return nil
 }
 

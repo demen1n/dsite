@@ -145,6 +145,11 @@
       .prose img { width: 100%; max-width: 100%; margin-left: 0; margin-right: 0; }
     }
   </style>
+  <meta property="og:title" content="{{if .Title}}{{.Title}} — {{.SiteTitle}}{{else}}{{.SiteTitle}}{{end}}">
+  <meta property="og:description" content="{{if .OGDescription}}{{.OGDescription}}{{else}}{{.SiteDesc}}{{end}}">
+  <meta property="og:type" content="{{if .OGDescription}}article{{else}}website{{end}}">
+  {{if .OGImage}}<meta property="og:image" content="{{.OGImage}}">{{end}}
+  <meta name="twitter:card" content="{{if .OGImage}}summary_large_image{{else}}summary{{end}}">
   <link rel="alternate" type="application/atom+xml" title="{{.SiteTitle}}" href="/feed.xml">
   {{block "head" .}}{{end}}
 </head>

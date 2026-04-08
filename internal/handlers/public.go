@@ -7,6 +7,7 @@ import (
 	"math"
 	"net/http"
 	"strconv"
+	"strings"
 )
 
 // ─────────────────────── Home ───────────────────────
@@ -83,7 +84,16 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.IncrementViews(post.ID)
-	render(w, "post.html", page(post.Title, post))
+	pd := page(post.Title, post)
+	pd.OGDescription = excerpt(post.BodyHTML)
+	if post.Cover != "" {
+		scheme := "https"
+		if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+			scheme = "http"
+		}
+		pd.OGImage = fmt.Sprintf("%s://%s/uploads/%s", scheme, r.Host, post.Cover)
+	}
+	render(w, "post.html", pd)
 }
 
 // ─────────────────────── Gallery ───────────────────────
@@ -154,6 +164,30 @@ func Resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	render(w, "resume.html", page("Резюме", resume))
+}
+
+// ─────────────────────── Search ───────────────────────
+
+type SearchData struct {
+	Query   string
+	Results []db.Post
+	Done    bool
+}
+
+// GET /search
+func Search(w http.ResponseWriter, r *http.Request) {
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	data := SearchData{Query: q}
+	if q != "" {
+		results, err := db.SearchPosts(q)
+		if err != nil {
+			http.Error(w, "DB error", 500)
+			return
+		}
+		data.Results = results
+		data.Done = true
+	}
+	render(w, "search.html", page("Поиск", data))
 }
 
 // ─────────────────────── RSS/Atom feed ───────────────────────
