@@ -105,6 +105,7 @@ func Gallery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
+	BackfillPhotoDimensions(photos)
 	cats, err := db.ListCategories()
 	if err != nil {
 		http.Error(w, "DB error", 500)
@@ -128,6 +129,7 @@ func GalleryFilter(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
+	BackfillPhotoDimensions(photos)
 	cats, err := db.ListCategories()
 	if err != nil {
 		http.Error(w, "DB error", 500)

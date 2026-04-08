@@ -265,7 +265,7 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	caption := r.FormValue("caption")
-	if err := db.AddPhoto(filename, caption, 0, 0); err != nil {
+	if err := db.AddPhoto(filename, caption, 0, 0, 0, 0); err != nil {
 		http.Error(w, "DB error", 500)
 		return
 	}
@@ -311,8 +311,10 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 	caption := r.FormValue("caption")
 	categoryID, _ := strconv.Atoi(r.FormValue("category_id"))
 	placeID, _ := strconv.Atoi(r.FormValue("place_id"))
+	widths := r.Form["widths[]"]
+	heights := r.Form["heights[]"]
 
-	for _, fh := range files {
+	for i, fh := range files {
 		f, err := fh.Open()
 		if err != nil {
 			continue
@@ -335,7 +337,14 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			continue
 		}
-		db.AddPhoto(filename, caption, categoryID, placeID)
+		var w, h int
+		if i < len(widths) {
+			w, _ = strconv.Atoi(widths[i])
+		}
+		if i < len(heights) {
+			h, _ = strconv.Atoi(heights[i])
+		}
+		db.AddPhoto(filename, caption, categoryID, placeID, w, h)
 	}
 
 	// HTMX: возвращаем обновлённый список

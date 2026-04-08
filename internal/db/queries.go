@@ -269,6 +269,8 @@ type Photo struct {
 	CategoryName string
 	PlaceID      int
 	PlaceName    string
+	Width        int
+	Height       int
 	CreatedAt    time.Time
 }
 
@@ -278,7 +280,7 @@ func ListPhotos(categorySlug, placeSlug string) ([]Photo, error) {
 	q := `SELECT p.id, p.filename, p.caption, p.sort_order,
 	             COALESCE(p.category_id, 0), COALESCE(c.name, ''),
 	             COALESCE(p.place_id, 0), COALESCE(pl.name, ''),
-	             p.created_at
+	             p.width, p.height, p.created_at
 	      FROM photos p
 	      LEFT JOIN categories c ON c.id = p.category_id
 	      LEFT JOIN places pl ON pl.id = p.place_id`
@@ -307,13 +309,19 @@ func ListPhotos(categorySlug, placeSlug string) ([]Photo, error) {
 		var p Photo
 		var ca string
 		if err := rows.Scan(&p.ID, &p.Filename, &p.Caption, &p.SortOrder,
-			&p.CategoryID, &p.CategoryName, &p.PlaceID, &p.PlaceName, &ca); err != nil {
+			&p.CategoryID, &p.CategoryName, &p.PlaceID, &p.PlaceName,
+			&p.Width, &p.Height, &ca); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		photos = append(photos, p)
 	}
 	return photos, rows.Err()
+}
+
+func UpdatePhotoDimensions(id, width, height int) error {
+	_, err := DB.Exec(`UPDATE photos SET width=?, height=? WHERE id=?`, width, height, id)
+	return err
 }
 
 func UpdatePhotoCategory(id, categoryID int) error {
@@ -339,7 +347,7 @@ func UpdatePhotoOrder(ids []int) error {
 	return tx.Commit()
 }
 
-func AddPhoto(filename, caption string, categoryID, placeID int) error {
+func AddPhoto(filename, caption string, categoryID, placeID, width, height int) error {
 	var catArg, placeArg any
 	if categoryID != 0 {
 		catArg = categoryID
@@ -347,9 +355,9 @@ func AddPhoto(filename, caption string, categoryID, placeID int) error {
 	if placeID != 0 {
 		placeArg = placeID
 	}
-	_, err := DB.Exec(`INSERT INTO photos (filename, caption, category_id, place_id, sort_order)
-	                   VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM photos))`,
-		filename, caption, catArg, placeArg)
+	_, err := DB.Exec(`INSERT INTO photos (filename, caption, category_id, place_id, width, height, sort_order)
+	                   VALUES (?, ?, ?, ?, ?, ?, (SELECT COALESCE(MAX(sort_order), 0) + 1 FROM photos))`,
+		filename, caption, catArg, placeArg, width, height)
 	return err
 }
 

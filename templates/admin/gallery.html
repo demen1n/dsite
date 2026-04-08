@@ -123,7 +123,8 @@ async function resizeImage(file, maxWidth, quality) {
   const h = Math.round(bitmap.height * scale);
   const canvas = new OffscreenCanvas(w, h);
   canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
-  return canvas.convertToBlob({ type: 'image/webp', quality });
+  const blob = await canvas.convertToBlob({ type: 'image/webp', quality });
+  return { blob, w, h };
 }
 
 async function uploadPhotos() {
@@ -150,19 +151,21 @@ async function uploadPhotos() {
 
   // Ресайз всех файлов параллельно
   progress.textContent = `Ресайз 0/${total}…`;
-  const blobs = await Promise.all(files.map(async (file) => {
-    const blob = await resizeImage(file, 1920, 0.85);
+  const results = await Promise.all(files.map(async (file) => {
+    const result = await resizeImage(file, 1920, 0.85);
     resizeDone++;
     progress.textContent = `Ресайз ${resizeDone}/${total}…`;
-    return blob;
+    return result;
   }));
 
   const form = new FormData();
   form.append('caption', caption);
   form.append('category_id', categoryId);
   form.append('place_id', placeId);
-  blobs.forEach((blob, i) => {
+  results.forEach(({ blob, w, h }, i) => {
     form.append('photos', new File([blob], files[i].name.replace(/\.\w+$/, '.webp'), { type: 'image/webp' }));
+    form.append('widths[]', w);
+    form.append('heights[]', h);
   });
 
   // Загрузка с прогрессом через XHR

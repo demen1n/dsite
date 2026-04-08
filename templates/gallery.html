@@ -69,8 +69,8 @@
 {{if .Data.Photos}}
 <div class="gallery-grid-inner">
   {{range .Data.Photos}}
-  <div class="gallery-item">
-    <img src="/uploads/{{.Filename}}" alt="{{.Caption}}">
+  <div class="gallery-item"{{if and .Width .Height}} data-ratio="{{.Width}}/{{.Height}}"{{end}}>
+    <img src="/uploads/{{.Filename}}" alt="{{.Caption}}" loading="lazy">
     {{if .Caption}}<div class="gallery-item-caption">{{.Caption}}</div>{{end}}
   </div>
   {{end}}
@@ -98,6 +98,14 @@ function justify() {
   if (!items.length) return;
   const imgs = items.map(el => el.querySelector('img'));
 
+  // Если у всех элементов есть data-ratio — раскладываем сразу, без ожидания загрузки
+  const allHaveRatio = items.every(el => el.dataset.ratio);
+  if (allHaveRatio) {
+    layout(grid, items, imgs);
+    return;
+  }
+
+  // Fallback: ждём загрузки (для старых фото без размеров)
   Promise.all(imgs.map(img =>
     img.complete && img.naturalWidth
       ? Promise.resolve()
@@ -123,9 +131,14 @@ function layout(grid, items, imgs) {
   const GAP = 3;
   const TARGET_H = Math.max(160, Math.round(W / 3.5));
 
-  const ratios = imgs.map(img =>
-    img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1.5
-  );
+  const ratios = items.map((el, i) => {
+    if (el.dataset.ratio) {
+      const [w, h] = el.dataset.ratio.split('/').map(Number);
+      return w && h ? w / h : 1.5;
+    }
+    const img = imgs[i];
+    return img.naturalWidth && img.naturalHeight ? img.naturalWidth / img.naturalHeight : 1.5;
+  });
 
   if (W < 600) {
     items.forEach((item, i) => {

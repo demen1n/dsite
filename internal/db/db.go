@@ -40,6 +40,9 @@ func Init(path string) error {
 	if err = migrateIndexes(); err != nil {
 		return fmt.Errorf("migrate indexes: %w", err)
 	}
+	if err = migratePhotoDimensions(); err != nil {
+		return fmt.Errorf("migrate photo dimensions: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -75,6 +78,12 @@ func migratePlaces() error {
 		return err
 	}
 	DB.Exec(`ALTER TABLE photos ADD COLUMN place_id INTEGER REFERENCES places(id) ON DELETE SET NULL`)
+	return nil
+}
+
+func migratePhotoDimensions() error {
+	DB.Exec(`ALTER TABLE photos ADD COLUMN width INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`ALTER TABLE photos ADD COLUMN height INTEGER NOT NULL DEFAULT 0`)
 	return nil
 }
 
