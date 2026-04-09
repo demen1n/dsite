@@ -189,8 +189,27 @@ document.body.addEventListener('htmx:afterSwap', e => {
   if (e.detail.target.id === 'gallery-grid') {
     setupGalleryLightbox();
     justify();
+    updateFilterActive();
   }
 });
+
+function updateFilterActive() {
+  const params = new URLSearchParams(window.location.search);
+  const cat = params.get('cat') || '';
+  const place = params.get('place') || '';
+
+  document.querySelectorAll('.gallery-cats a').forEach(a => {
+    const aParams = new URLSearchParams(new URL(a.href).search);
+    const aCat = aParams.get('cat') || '';
+    a.classList.toggle('active', aCat === cat);
+  });
+
+  document.querySelectorAll('.gallery-places a').forEach(a => {
+    const aParams = new URLSearchParams(new URL(a.href).search);
+    const aPlace = aParams.get('place') || '';
+    a.classList.toggle('active', aPlace === place);
+  });
+}
 
 </script>
 {{end}}
