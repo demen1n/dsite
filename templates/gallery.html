@@ -98,19 +98,16 @@ function justify() {
   if (!items.length) return;
   const imgs = items.map(el => el.querySelector('img'));
 
-  // Если у всех элементов есть data-ratio — раскладываем сразу, без ожидания загрузки
-  const allHaveRatio = items.every(el => el.dataset.ratio);
-  if (allHaveRatio) {
-    layout(grid, items, imgs);
-    return;
-  }
+  // Раскладываем сразу — для фото без data-ratio используем дефолтное соотношение 1.5
+  layout(grid, items, imgs);
 
-  // Fallback: ждём загрузки (для старых фото без размеров)
-  Promise.all(imgs.map(img =>
-    img.complete && img.naturalWidth
-      ? Promise.resolve()
-      : new Promise(r => { img.onload = r; img.onerror = r; })
-  )).then(() => layout(grid, items, imgs));
+  // Для фото без data-ratio: перестраиваем layout когда подгрузятся реальные размеры
+  items.forEach((el, i) => {
+    if (el.dataset.ratio) return;
+    const img = imgs[i];
+    if (img.complete && img.naturalWidth) return;
+    img.addEventListener('load', () => layout(grid, items, imgs), { once: true });
+  });
 }
 
 function setupFadeIn() {
@@ -123,7 +120,18 @@ function setupFadeIn() {
       observer.unobserve(entry.target);
     });
   }, { rootMargin: '80px' });
-  imgs.forEach(img => observer.observe(img));
+  imgs.forEach(img => {
+    // Уже загруженные показываем сразу, без ожидания observer
+    if (img.complete && img.naturalWidth) {
+      img.classList.add('gfade');
+    } else {
+      observer.observe(img);
+      img.addEventListener('load', () => {
+        img.classList.add('gfade');
+        observer.unobserve(img);
+      }, { once: true });
+    }
+  });
 }
 
 function layout(grid, items, imgs) {
