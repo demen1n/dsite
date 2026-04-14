@@ -43,7 +43,7 @@ func main() {
 
 	// ── Статика ──
 	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
-	mux.Handle("GET /uploads/", http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadsDir))))
+	mux.Handle("GET /uploads/", immutableCache(http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadsDir)))))
 
 	// ── Публичные ──
 	mux.HandleFunc("GET /{$}", handlers.Home)
@@ -100,6 +100,15 @@ func main() {
 	if err := http.ListenAndServe(":"+cfg.Port, securityHeaders(csrfCheck(mux))); err != nil {
 		log.Fatal(err)
 	}
+}
+
+// immutableCache sets a 1-year Cache-Control for uploads whose filenames are
+// content-addressed random hex strings and never change.
+func immutableCache(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		next.ServeHTTP(w, r)
+	})
 }
 
 func securityHeaders(next http.Handler) http.Handler {
