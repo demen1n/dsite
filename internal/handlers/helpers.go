@@ -258,9 +258,11 @@ type PageData struct {
 	Data          any
 	OGDescription string
 	OGImage       string // absolute URL
+	ResumeHidden  bool
 }
 
 var socials map[string]string
+var resumeHidden bool
 
 func LoadSettings() {
 	s := db.GetAllSettings()
@@ -281,10 +283,13 @@ func LoadSettings() {
 		"linkedin":  s["social_linkedin"],
 		"email":     s["social_email"],
 	}
+	resumeHidden = s["resume_hidden"] == "1"
 }
 
+func ResumeHidden() bool { return resumeHidden }
+
 func page(title string, data any) PageData {
-	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, Socials: socials, Data: data}
+	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, Socials: socials, Data: data, ResumeHidden: resumeHidden}
 }
 
 // ───── Session ─────

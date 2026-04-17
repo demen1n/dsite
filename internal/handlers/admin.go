@@ -373,6 +373,11 @@ func SaveSettings(w http.ResponseWriter, r *http.Request) {
 	for _, key := range fields {
 		db.SetSetting(key, r.FormValue(key))
 	}
+	if r.FormValue("resume_hidden") == "1" {
+		db.SetSetting("resume_hidden", "1")
+	} else {
+		db.SetSetting("resume_hidden", "0")
+	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
 }

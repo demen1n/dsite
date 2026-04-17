@@ -171,7 +171,7 @@
     <nav class="site-nav">
       <a href="/blog">Блог</a>
       <a href="/gallery">Галерея</a>
-      <a href="/resume">Резюме</a>
+      {{if not .ResumeHidden}}<a href="/resume">Резюме</a>{{end}}
     </nav>
     {{with .Socials}}
     <div class="site-socials">

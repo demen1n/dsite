@@ -158,6 +158,10 @@ func GalleryFilter(w http.ResponseWriter, r *http.Request) {
 
 // GET /resume
 func Resume(w http.ResponseWriter, r *http.Request) {
+	if ResumeHidden() {
+		http.NotFound(w, r)
+		return
+	}
 	resume, err := db.GetResume()
 	if err != nil {
 		http.Error(w, "DB error", 500)

@@ -57,6 +57,14 @@
     </div>
   </div>
 
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:1.25rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em">Разделы сайта</h2>
+    <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-size:0.95rem; color:var(--text); font-weight:400">
+      <input type="checkbox" name="resume_hidden" value="1" {{if eq (index .Data "resume_hidden") "1"}}checked{{end}} style="width:auto; accent-color:var(--accent)">
+      Скрыть резюме с сайта
+    </label>
+  </div>
+
   <button type="submit" class="btn btn-primary">Сохранить</button>
 </form>
 {{end}}
