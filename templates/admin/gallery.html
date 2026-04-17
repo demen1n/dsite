@@ -152,7 +152,7 @@ async function uploadPhotos() {
   // Ресайз всех файлов параллельно
   progress.textContent = `Ресайз 0/${total}…`;
   const results = await Promise.all(files.map(async (file) => {
-    const result = await resizeImage(file, 1600, 0.75);
+    const result = await resizeImage(file, 1600, 0.65);
     resizeDone++;
     progress.textContent = `Ресайз ${resizeDone}/${total}…`;
     return result;
