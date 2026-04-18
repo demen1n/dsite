@@ -344,7 +344,9 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 		if i < len(heights) {
 			h, _ = strconv.Atoi(heights[i])
 		}
-		db.AddPhoto(filename, caption, categoryID, placeID, w, h)
+		if err := db.AddPhoto(filename, caption, categoryID, placeID, w, h); err != nil {
+			log.Printf("AddPhoto %s: %v", filename, err)
+		}
 	}
 
 	// HTMX: возвращаем обновлённый список
