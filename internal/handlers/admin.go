@@ -335,6 +335,7 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 
 		filename, err := saveUpload(data, ext)
 		if err != nil {
+			log.Printf("saveUpload %s: %v", fh.Filename, err)
 			continue
 		}
 		var w, h int
