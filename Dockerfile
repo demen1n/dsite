@@ -9,7 +9,7 @@ RUN CGO_ENABLED=0 go build -o dsite ./cmd/dsite
 
 # ── Runtime ──
 FROM debian:bookworm-slim
-RUN apt-get update && apt-get install -y ca-certificates su-exec && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y ca-certificates gosu && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 COPY --from=builder /app/dsite .
