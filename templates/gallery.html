@@ -69,8 +69,10 @@
 {{if .Data.Photos}}
 <div class="gallery-grid-inner">
   {{range .Data.Photos}}
-  <div class="gallery-item"{{if and .Width .Height}} data-ratio="{{.Width}}/{{.Height}}"{{end}}>
-    <img src="/uploads/{{.Filename}}" alt="{{.Caption}}" loading="lazy">
+  <div class="gallery-item"{{if and .Width .Height}} data-ratio="{{.Width}}/{{.Height}}" style="aspect-ratio: {{.Width}} / {{.Height}};"{{end}}>
+    <img src="/uploads/{{.Filename}}" alt="{{.Caption}}"
+         {{if and .Width .Height}}width="{{.Width}}" height="{{.Height}}"{{end}}
+         decoding="async">
     {{if .Caption}}<div class="gallery-item-caption">{{.Caption}}</div>{{end}}
   </div>
   {{end}}
