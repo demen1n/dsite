@@ -96,6 +96,9 @@ func main() {
 	mux.HandleFunc("GET /admin/settings", handlers.RequireAuth(handlers.AdminSettings))
 	mux.HandleFunc("POST /admin/settings", handlers.RequireAuth(handlers.SaveSettings))
 
+	mux.HandleFunc("GET /admin/uploads", handlers.RequireAuth(handlers.AdminUploads))
+	mux.HandleFunc("POST /admin/uploads/{filename}/delete", handlers.RequireAuth(handlers.DeleteUploadFile))
+
 	log.Printf("🚀 Server running at http://localhost:%s", cfg.Port)
 	if err := http.ListenAndServe(":"+cfg.Port, securityHeaders(csrfCheck(mux))); err != nil {
 		log.Fatal(err)
