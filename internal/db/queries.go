@@ -582,6 +582,37 @@ func tagSlug(s string) string {
 	return strings.Trim(res, "-")
 }
 
+// ───────────────────────── Uploads ─────────────────────────
+
+type FileUsage struct {
+	InGallery  bool
+	PostTitles []string
+}
+
+func GetFileUsage(filename string) (FileUsage, error) {
+	var u FileUsage
+	var count int
+	if err := DB.QueryRow(`SELECT COUNT(*) FROM photos WHERE filename=?`, filename).Scan(&count); err != nil {
+		return u, err
+	}
+	u.InGallery = count > 0
+
+	rows, err := DB.Query(`SELECT title FROM posts WHERE cover=? OR body_md LIKE ?`,
+		filename, "%"+filename+"%")
+	if err != nil {
+		return u, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var title string
+		if err := rows.Scan(&title); err != nil {
+			return u, err
+		}
+		u.PostTitles = append(u.PostTitles, title)
+	}
+	return u, rows.Err()
+}
+
 // ───────────────────────── Settings ─────────────────────────
 
 func GetAllSettings() map[string]string {

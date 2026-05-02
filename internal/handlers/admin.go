@@ -634,6 +634,65 @@ func DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/gallery", http.StatusFound)
 }
 
+// ─────────────────────── Uploads browser ───────────────────────
+
+type UploadFile struct {
+	Filename string
+	Usage    db.FileUsage
+	Unused   bool
+}
+
+// GET /admin/uploads
+func AdminUploads(w http.ResponseWriter, r *http.Request) {
+	entries, err := os.ReadDir(uploadsDir)
+	if err != nil {
+		http.Error(w, "read dir error", 500)
+		return
+	}
+	var files []UploadFile
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		name := entry.Name()
+		usage, err := db.GetFileUsage(name)
+		if err != nil {
+			log.Printf("GetFileUsage %s: %v", name, err)
+			continue
+		}
+		files = append(files, UploadFile{
+			Filename: name,
+			Usage:    usage,
+			Unused:   !usage.InGallery && len(usage.PostTitles) == 0,
+		})
+	}
+	render(w, "admin/uploads.html", page("Файлы", files))
+}
+
+// POST /admin/uploads/{filename}/delete
+func DeleteUploadFile(w http.ResponseWriter, r *http.Request) {
+	filename := filepath.Base(r.PathValue("filename"))
+	usage, err := db.GetFileUsage(filename)
+	if err != nil {
+		http.Error(w, "db error", 500)
+		return
+	}
+	if usage.InGallery || len(usage.PostTitles) > 0 {
+		http.Error(w, "file is in use", 409)
+		return
+	}
+	if err := os.Remove(filepath.Join(uploadsDir, filename)); err != nil {
+		log.Printf("delete upload %s: %v", filename, err)
+		http.Error(w, "remove error", 500)
+		return
+	}
+	if r.Header.Get("HX-Request") == "true" {
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+	http.Redirect(w, r, "/admin/uploads", http.StatusFound)
+}
+
 // POST /admin/gallery/{id}/category  — HTMX: update a photo's category inline
 func UpdatePhotoCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
