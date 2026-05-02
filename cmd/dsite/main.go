@@ -34,6 +34,7 @@ func main() {
 	db.SeedSettings(map[string]string{
 		"site_title": cfg.SiteTitle,
 		"site_desc":  cfg.SiteDesc,
+		"home_bio":   `Пишу в [блоге](/blog), фотографирую — смотри [галерею](/gallery).`,
 	})
 	handlers.Init("./templates", cfg.UploadsDir, cfg.SiteTitle, cfg.SiteDesc, cfg.SecureCookies, cfg.TrustedProxy)
 	handlers.LoadSettings()

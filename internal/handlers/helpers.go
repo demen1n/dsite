@@ -264,6 +264,7 @@ type PageData struct {
 	Title         string
 	SiteTitle     string
 	SiteDesc      string
+	HomeBio       template.HTML
 	Socials       map[string]string
 	Data          any
 	OGDescription string
@@ -273,6 +274,7 @@ type PageData struct {
 
 var socials map[string]string
 var resumeHidden bool
+var homeBio template.HTML
 
 func LoadSettings() {
 	s := db.GetAllSettings()
@@ -281,6 +283,17 @@ func LoadSettings() {
 	}
 	if v := s["site_desc"]; v != "" {
 		siteDesc = v
+	}
+	if v := s["home_bio"]; v != "" {
+		if rendered, err := RenderMD(v); err == nil {
+			h := strings.TrimSpace(rendered)
+			if strings.HasPrefix(h, "<p>") && strings.HasSuffix(h, "</p>") {
+				h = strings.TrimSpace(h[3 : len(h)-4])
+			}
+			homeBio = template.HTML(h)
+		}
+	} else {
+		homeBio = ""
 	}
 	socials = map[string]string{
 		"github":    s["social_github"],
@@ -299,7 +312,7 @@ func LoadSettings() {
 func ResumeHidden() bool { return resumeHidden }
 
 func page(title string, data any) PageData {
-	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, Socials: socials, Data: data, ResumeHidden: resumeHidden}
+	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, HomeBio: homeBio, Socials: socials, Data: data, ResumeHidden: resumeHidden}
 }
 
 // ───── Session ─────

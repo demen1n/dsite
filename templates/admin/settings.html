@@ -11,9 +11,13 @@
       <label>Название сайта</label>
       <input type="text" name="site_title" value="{{index .Data "site_title"}}">
     </div>
-    <div class="form-group" style="margin-bottom:0">
+    <div class="form-group">
       <label>Описание</label>
       <input type="text" name="site_desc" value="{{index .Data "site_desc"}}">
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label>Текст на главной <span style="font-weight:400; color:var(--muted)">(markdown)</span></label>
+      <textarea name="home_bio" rows="3" placeholder="Пишу в [блоге](/blog), фотографирую — смотри [галерею](/gallery).">{{index .Data "home_bio"}}</textarea>
     </div>
   </div>
 
