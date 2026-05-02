@@ -13,6 +13,8 @@
       <tr>
         <th style="width:80px">Превью</th>
         <th>Файл</th>
+        <th>Размер</th>
+        <th>Дата</th>
         <th>Использование</th>
         <th></th>
       </tr>
@@ -29,6 +31,8 @@
         <td>
           <code style="font-size:0.8rem; color:var(--muted); word-break:break-all">{{.Filename}}</code>
         </td>
+        <td style="color:var(--muted); white-space:nowrap">{{fmtSize .Size}}</td>
+        <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .ModTime}}</td>
         <td>
           {{if .Usage.InGallery}}<span class="badge badge-green">Галерея</span> {{end}}
           {{range .Usage.PostTitles}}<span class="badge badge-gray" title="Пост">{{.}}</span> {{end}}
