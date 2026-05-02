@@ -3,8 +3,7 @@
   <h1 class="home-name">{{.SiteTitle}}</h1>
   <p class="home-bio">
     {{.SiteDesc}}.<br>
-    Пишу в <a href="/blog">блоге</a>, фотографирую —
-    смотри <a href="/gallery">галерею</a>.
+    {{if .HomeBio}}{{.HomeBio}}{{else}}Пишу в <a href="/blog">блоге</a>, фотографирую — смотри <a href="/gallery">галерею</a>.{{end}}
   </p>
 </div>
 {{end}}

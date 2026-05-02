@@ -368,7 +368,7 @@ func AdminSettings(w http.ResponseWriter, r *http.Request) {
 // POST /admin/settings
 func SaveSettings(w http.ResponseWriter, r *http.Request) {
 	fields := []string{
-		"site_title", "site_desc",
+		"site_title", "site_desc", "home_bio",
 		"social_github", "social_telegram", "social_instagram",
 		"social_twitter", "social_bluesky", "social_mastodon",
 		"social_vk", "social_linkedin", "social_email",
