@@ -638,6 +638,8 @@ func DeleteCategory(w http.ResponseWriter, r *http.Request) {
 
 type UploadFile struct {
 	Filename string
+	Size     int64
+	ModTime  time.Time
 	Usage    db.FileUsage
 	Unused   bool
 }
@@ -655,6 +657,10 @@ func AdminUploads(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		name := entry.Name()
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
 		usage, err := db.GetFileUsage(name)
 		if err != nil {
 			log.Printf("GetFileUsage %s: %v", name, err)
@@ -662,6 +668,8 @@ func AdminUploads(w http.ResponseWriter, r *http.Request) {
 		}
 		files = append(files, UploadFile{
 			Filename: name,
+			Size:     info.Size(),
+			ModTime:  info.ModTime(),
 			Usage:    usage,
 			Unused:   !usage.InGallery && len(usage.PostTitles) == 0,
 		})
