@@ -315,9 +315,16 @@ async function resizeImage(file, maxWidth, quality) {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const scale = Math.min(1, maxWidth / bitmap.width);
   const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
-  const canvas = new OffscreenCanvas(w, h);
+  // Use regular canvas — Safari's OffscreenCanvas silently falls back to PNG for WebP encoding
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
   canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
-  return canvas.convertToBlob({ type: 'image/webp', quality });
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', quality));
+  if (blob.type !== 'image/webp') {
+    return new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+  }
+  return blob;
 }
 
 function previewCover(input) {
@@ -367,7 +374,8 @@ bodyTA.addEventListener('drop', async e => {
   }
 
   const fd = new FormData();
-  fd.append('image', new File([resized], file.name.replace(/\.\w+$/, '.webp'), { type: 'image/webp' }));
+  const ext = resized.type === 'image/webp' ? '.webp' : '.jpg';
+  fd.append('image', new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type }));
   const url = await new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/admin/upload');

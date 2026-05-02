@@ -121,10 +121,17 @@ async function resizeImage(file, maxWidth, quality) {
   const scale = Math.min(1, maxWidth / bitmap.width);
   const w = Math.round(bitmap.width * scale);
   const h = Math.round(bitmap.height * scale);
-  const canvas = new OffscreenCanvas(w, h);
+  // Use regular canvas — Safari's OffscreenCanvas silently falls back to PNG for WebP encoding
+  const canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
   canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
-  const blob = await canvas.convertToBlob({ type: 'image/webp', quality });
-  return { blob, w, h };
+  const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', quality));
+  if (blob.type !== 'image/webp') {
+    const fallback = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
+    return { blob: fallback, w, h, ext: '.jpg' };
+  }
+  return { blob, w, h, ext: '.webp' };
 }
 
 async function uploadPhotos() {
@@ -162,8 +169,8 @@ async function uploadPhotos() {
   form.append('caption', caption);
   form.append('category_id', categoryId);
   form.append('place_id', placeId);
-  results.forEach(({ blob, w, h }, i) => {
-    form.append('photos', new File([blob], files[i].name.replace(/\.\w+$/, '.webp'), { type: 'image/webp' }));
+  results.forEach(({ blob, w, h, ext }, i) => {
+    form.append('photos', new File([blob], files[i].name.replace(/\.\w+$/, ext), { type: blob.type }));
     form.append('widths[]', w);
     form.append('heights[]', h);
   });
