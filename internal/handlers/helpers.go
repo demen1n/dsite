@@ -269,6 +269,7 @@ type PageData struct {
 	Data          any
 	OGDescription string
 	OGImage       string // absolute URL
+	Canonical     string
 	ResumeHidden  bool
 }
 
@@ -313,6 +314,14 @@ func ResumeHidden() bool { return resumeHidden }
 
 func page(title string, data any) PageData {
 	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, HomeBio: homeBio, Socials: socials, Data: data, ResumeHidden: resumeHidden}
+}
+
+func baseURL(r *http.Request) string {
+	scheme := "https"
+	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
+		scheme = "http"
+	}
+	return scheme + "://" + r.Host
 }
 
 // ───── Session ─────
