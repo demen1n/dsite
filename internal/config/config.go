@@ -21,7 +21,7 @@ func LoadConfig() Config {
 		UploadsDir:    getEnv("UPLOADS_DIR", "./uploads"),
 		SiteTitle:     getEnv("SITE_TITLE", "My Blog"),
 		SiteDesc:      getEnv("SITE_DESC", "Фото и заметки"),
-		SecureCookies: os.Getenv("SECURE_COOKIES") == "true",
+		SecureCookies: os.Getenv("INSECURE_COOKIES") != "true",
 		TrustedProxy:  os.Getenv("TRUSTED_PROXY") == "true",
 	}
 }

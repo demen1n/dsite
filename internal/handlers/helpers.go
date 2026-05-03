@@ -142,6 +142,19 @@ func RecordLoginSuccess(r *http.Request) {
 	delete(loginAttempts, ip)
 }
 
+func cleanLoginAttempts() {
+	loginMu.Lock()
+	defer loginMu.Unlock()
+	now := time.Now()
+	for ip, a := range loginAttempts {
+		if a.lockedAt.IsZero() && now.Sub(a.firstAt) > loginWindow {
+			delete(loginAttempts, ip)
+		} else if !a.lockedAt.IsZero() && now.Sub(a.lockedAt) > lockoutDuration {
+			delete(loginAttempts, ip)
+		}
+	}
+}
+
 func Init(tmplDir, uploads, title, desc string, secure, trusted bool) {
 	templatesDir = tmplDir
 	uploadsDir = uploads
@@ -195,6 +208,12 @@ func Init(tmplDir, uploads, title, desc string, secure, trusted bool) {
 		log.Fatalf("parse admin/base.html: %v", err)
 	}
 	log.Println("Templates loaded from", templatesDir)
+
+	go func() {
+		for range time.Tick(10 * time.Minute) {
+			cleanLoginAttempts()
+		}
+	}()
 }
 
 // render рендерит страницу.

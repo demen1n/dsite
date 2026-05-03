@@ -597,8 +597,9 @@ func GetFileUsage(filename string) (FileUsage, error) {
 	}
 	u.InGallery = count > 0
 
-	rows, err := DB.Query(`SELECT title FROM posts WHERE cover=? OR body_md LIKE ?`,
-		filename, "%"+filename+"%")
+	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(filename)
+	rows, err := DB.Query(`SELECT title FROM posts WHERE cover=? OR body_md LIKE ? ESCAPE '\'`,
+		filename, "%"+escaped+"%")
 	if err != nil {
 		return u, err
 	}

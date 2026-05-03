@@ -15,6 +15,12 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+var dummyHash []byte
+
+func init() {
+	dummyHash, _ = bcrypt.GenerateFromPassword([]byte("_"), bcrypt.DefaultCost)
+}
+
 // ─────────────────────── Auth ───────────────────────
 
 // GET /admin/setup — первичная настройка, если нет юзеров
@@ -62,7 +68,10 @@ func Login(w http.ResponseWriter, r *http.Request) {
 		login := r.FormValue("login")
 		pass := r.FormValue("password")
 		_, hash, err := db.GetUserByLogin(login)
-		if err != nil || bcrypt.CompareHashAndPassword([]byte(hash), []byte(pass)) != nil {
+		if err != nil {
+			hash = string(dummyHash)
+		}
+		if bcrypt.CompareHashAndPassword([]byte(hash), []byte(pass)) != nil || err != nil {
 			RecordLoginFailure(r)
 			renderFragment(w, "admin/login.html", "login.html", page("Вход", "Неверный логин или пароль"))
 			return
@@ -114,10 +123,12 @@ func NewPost(w http.ResponseWriter, r *http.Request) {
 
 // POST /admin/posts/new
 func CreatePost(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "parse form", 400)
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 
 	title := r.FormValue("title")
 	bodyMD := r.FormValue("body")
@@ -178,10 +189,12 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "parse form", 400)
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 
 	title := r.FormValue("title")
 	bodyMD := r.FormValue("body")
@@ -302,10 +315,12 @@ func AdminGallery(w http.ResponseWriter, r *http.Request) {
 
 // POST /admin/gallery/upload
 func UploadPhoto(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "parse form", 400)
+	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
 
 	files := r.MultipartForm.File["photos"]
 	caption := r.FormValue("caption")
@@ -516,10 +531,13 @@ func SaveResume(w http.ResponseWriter, r *http.Request) {
 
 // POST /admin/upload — uploads an image and returns its URL (for post editor)
 func UploadImage(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseMultipartForm(32 << 20); err != nil {
-		http.Error(w, "parse form", 400)
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 		return
 	}
+	defer r.MultipartForm.RemoveAll()
+
 	file, header, err := r.FormFile("image")
 	if err != nil {
 		http.Error(w, "no file", 400)

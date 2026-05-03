@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"time"
 )
 
@@ -43,8 +44,8 @@ func main() {
 	mux := http.NewServeMux()
 
 	// ── Статика ──
-	mux.Handle("GET /static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
-	mux.Handle("GET /uploads/", immutableCache(http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadsDir)))))
+	mux.Handle("GET /static/", noListing(http.StripPrefix("/static/", http.FileServer(http.Dir("./static")))))
+	mux.Handle("GET /uploads/", immutableCache(noListing(http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadsDir))))))
 
 	// ── Публичные ──
 	mux.HandleFunc("GET /{$}", handlers.Home)
@@ -102,10 +103,17 @@ func main() {
 	mux.HandleFunc("GET /admin/uploads", handlers.RequireAuth(handlers.AdminUploads))
 	mux.HandleFunc("POST /admin/uploads/{filename}/delete", handlers.RequireAuth(handlers.DeleteUploadFile))
 
-	log.Printf("🚀 Server running at http://localhost:%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, securityHeaders(csrfCheck(mux))); err != nil {
-		log.Fatal(err)
+	srv := &http.Server{
+		Addr:              ":" + cfg.Port,
+		Handler:           securityHeaders(csrfCheck(mux)),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       60 * time.Second,
+		WriteTimeout:      60 * time.Second,
+		IdleTimeout:       120 * time.Second,
+		MaxHeaderBytes:    1 << 16,
 	}
+	log.Printf("🚀 Server running at http://localhost:%s", cfg.Port)
+	log.Fatal(srv.ListenAndServe())
 }
 
 // immutableCache sets a 1-year Cache-Control for uploads whose filenames are
@@ -117,12 +125,25 @@ func immutableCache(next http.Handler) http.Handler {
 	})
 }
 
+// noListing blocks directory listing for file servers.
+func noListing(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/") {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		w.Header().Set("X-Frame-Options", "SAMEORIGIN")
 		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		}
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
 				"script-src 'self' 'unsafe-inline'; "+
