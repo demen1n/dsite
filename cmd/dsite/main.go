@@ -55,6 +55,8 @@ func main() {
 	mux.HandleFunc("GET /resume", handlers.Resume)
 	mux.HandleFunc("GET /feed.xml", handlers.Feed)
 	mux.HandleFunc("GET /search", handlers.Search)
+	mux.HandleFunc("GET /sitemap.xml", handlers.Sitemap)
+	mux.HandleFunc("GET /robots.txt", handlers.RobotsTxt)
 
 	// ── Auth ──
 	mux.HandleFunc("GET /admin/setup", handlers.Setup)

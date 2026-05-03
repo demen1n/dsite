@@ -18,7 +18,9 @@ func Home(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	render(w, "home.html", page("", nil))
+	pd := page("", nil)
+	pd.Canonical = baseURL(r) + "/"
+	render(w, "home.html", pd)
 }
 
 // ─────────────────────── Blog ───────────────────────
@@ -66,7 +68,9 @@ func Index(w http.ResponseWriter, r *http.Request) {
 		HasPrev:    pageNum > 1,
 		HasNext:    pageNum < totalPages,
 	}
-	render(w, "index.html", page("Блог", data))
+	pd := page("Блог", data)
+	pd.Canonical = baseURL(r) + r.URL.RequestURI()
+	render(w, "index.html", pd)
 }
 
 // ─────────────────────── Post ───────────────────────
@@ -86,12 +90,10 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 	db.IncrementViews(post.ID)
 	pd := page(post.Title, post)
 	pd.OGDescription = excerpt(post.BodyHTML)
+	base := baseURL(r)
+	pd.Canonical = base + "/post/" + post.Slug
 	if post.Cover != "" {
-		scheme := "https"
-		if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
-			scheme = "http"
-		}
-		pd.OGImage = fmt.Sprintf("%s://%s/uploads/%s", scheme, r.Host, post.Cover)
+		pd.OGImage = base + "/uploads/" + post.Cover
 	}
 	render(w, "post.html", pd)
 }
@@ -127,7 +129,9 @@ func Gallery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	data := GalleryData{Photos: photos, Categories: cats, Places: places, ActiveCat: cat, ActivePlace: place}
-	render(w, "gallery.html", page("Галерея", data))
+	pd := page("Галерея", data)
+	pd.Canonical = baseURL(r) + r.URL.RequestURI()
+	render(w, "gallery.html", pd)
 }
 
 // GET /gallery/filter  — HTMX: returns only the photo grid fragment
@@ -167,7 +171,9 @@ func Resume(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	render(w, "resume.html", page("Резюме", resume))
+	pd := page("Резюме", resume)
+	pd.Canonical = baseURL(r) + "/resume"
+	render(w, "resume.html", pd)
 }
 
 // ─────────────────────── Search ───────────────────────
@@ -192,6 +198,59 @@ func Search(w http.ResponseWriter, r *http.Request) {
 		data.Done = true
 	}
 	render(w, "search.html", page("Поиск", data))
+}
+
+// ─────────────────────── Sitemap ───────────────────────
+
+type sitemapURL struct {
+	Loc        string `xml:"loc"`
+	LastMod    string `xml:"lastmod,omitempty"`
+	ChangeFreq string `xml:"changefreq,omitempty"`
+	Priority   string `xml:"priority,omitempty"`
+}
+
+type sitemapDoc struct {
+	XMLName xml.Name     `xml:"urlset"`
+	Xmlns   string       `xml:"xmlns,attr"`
+	URLs    []sitemapURL `xml:"url"`
+}
+
+// GET /sitemap.xml
+func Sitemap(w http.ResponseWriter, r *http.Request) {
+	base := baseURL(r)
+	sm := sitemapDoc{
+		Xmlns: "http://www.sitemaps.org/schemas/sitemap/0.9",
+		URLs: []sitemapURL{
+			{Loc: base + "/", ChangeFreq: "weekly", Priority: "1.0"},
+			{Loc: base + "/blog", ChangeFreq: "weekly", Priority: "0.9"},
+			{Loc: base + "/gallery", ChangeFreq: "weekly", Priority: "0.8"},
+		},
+	}
+	if !ResumeHidden() {
+		sm.URLs = append(sm.URLs, sitemapURL{Loc: base + "/resume", ChangeFreq: "monthly", Priority: "0.5"})
+	}
+	posts, err := db.ListPosts(true)
+	if err == nil {
+		for _, p := range posts {
+			sm.URLs = append(sm.URLs, sitemapURL{
+				Loc:        base + "/post/" + p.Slug,
+				LastMod:    p.UpdatedAt.UTC().Format("2006-01-02"),
+				ChangeFreq: "monthly",
+				Priority:   "0.8",
+			})
+		}
+	}
+	w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+	w.Write([]byte(xml.Header))
+	enc := xml.NewEncoder(w)
+	enc.Indent("", "  ")
+	enc.Encode(sm)
+}
+
+// GET /robots.txt
+func RobotsTxt(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nSitemap: %s/sitemap.xml\n", baseURL(r))
 }
 
 // ─────────────────────── RSS/Atom feed ───────────────────────
