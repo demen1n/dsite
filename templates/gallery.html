@@ -5,13 +5,35 @@
   .gallery-filters { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; font-family: var(--sans); }
   .gallery-filter-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
   .gallery-filter-label { font-size: 0.75rem; color: var(--muted); margin-right: 0.2rem; }
-  .gallery-cats a, .gallery-places a {
+  .gallery-cats a {
     display: inline-block; padding: 0.2rem 0.65rem;
     font-size: 0.8rem; text-decoration: none; border: 1px solid var(--border);
     color: var(--muted); background: transparent; cursor: pointer; transition: border-color 0.15s, color 0.15s;
   }
-  .gallery-cats a:hover, .gallery-places a:hover { color: var(--text); border-color: var(--text); }
-  .gallery-cats a.active, .gallery-places a.active { color: var(--text); border-color: var(--text); }
+  .gallery-cats a:hover { color: var(--text); border-color: var(--text); }
+  .gallery-cats a.active { color: var(--text); border-color: var(--text); }
+  .place-toggle {
+    display: inline-flex; align-items: center; gap: 0.3rem;
+    padding: 0.2rem 0.65rem; font-size: 0.8rem; font-family: var(--sans);
+    border: 1px solid var(--border); background: transparent;
+    color: var(--muted); cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .place-toggle:hover { color: var(--text); border-color: var(--text); }
+  .place-toggle.active { color: var(--text); border-color: var(--text); }
+  .place-toggle .ptarrow { font-size: 0.65rem; transition: transform 0.2s; display: inline-block; }
+  .place-toggle.open .ptarrow { transform: rotate(180deg); }
+  .gallery-places { flex-wrap: wrap; }
+  .place-options {
+    width: 100%; display: none; flex-wrap: wrap; gap: 0.4rem; padding-top: 0.15rem;
+  }
+  .place-options.open { display: flex; }
+  .place-options a {
+    display: inline-block; padding: 0.2rem 0.65rem;
+    font-size: 0.8rem; text-decoration: none; border: 1px solid var(--border);
+    color: var(--muted); background: transparent; cursor: pointer; transition: border-color 0.15s, color 0.15s;
+  }
+  .place-options a:hover { color: var(--text); border-color: var(--text); }
+  .place-options a.active { color: var(--text); border-color: var(--text); }
 </style>
 {{end}}
 
@@ -42,20 +64,26 @@
   {{if .Data.Places}}
   <div class="gallery-filter-row gallery-places">
     <span class="gallery-filter-label">Место:</span>
-    <a href="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
-       hx-get="/gallery/filter{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
-       hx-target="#gallery-grid"
-       hx-swap="outerHTML"
-       hx-push-url="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
-       class="{{if eq .Data.ActivePlace ""}}active{{end}}">Везде</a>
-    {{range .Data.Places}}
-    <a href="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
-       hx-get="/gallery/filter?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
-       hx-target="#gallery-grid"
-       hx-swap="outerHTML"
-       hx-push-url="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
-       class="{{if eq $.Data.ActivePlace .Slug}}active{{end}}">{{.Name}}</a>
-    {{end}}
+    <button class="place-toggle{{if ne .Data.ActivePlace ""}} active{{end}}" id="place-toggle" onclick="togglePlaces()">
+      <span id="place-toggle-label">{{if eq .Data.ActivePlace ""}}Везде{{else}}{{range .Data.Places}}{{if eq $.Data.ActivePlace .Slug}}{{.Name}}{{end}}{{end}}{{end}}</span>
+      <span class="ptarrow">▾</span>
+    </button>
+    <div class="place-options" id="place-options">
+      <a href="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
+         hx-get="/gallery/filter{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
+         hx-target="#gallery-grid"
+         hx-swap="outerHTML"
+         hx-push-url="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
+         class="{{if eq .Data.ActivePlace ""}}active{{end}}">Везде</a>
+      {{range .Data.Places}}
+      <a href="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
+         hx-get="/gallery/filter?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
+         hx-target="#gallery-grid"
+         hx-swap="outerHTML"
+         hx-push-url="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
+         class="{{if eq $.Data.ActivePlace .Slug}}active{{end}}">{{.Name}}</a>
+      {{end}}
+    </div>
   </div>
   {{end}}
 </div>
@@ -203,6 +231,29 @@ document.body.addEventListener('htmx:afterSwap', e => {
   }
 });
 
+function togglePlaces() {
+  const btn = document.getElementById('place-toggle');
+  const opts = document.getElementById('place-options');
+  if (!btn || !opts) return;
+  const open = opts.classList.toggle('open');
+  btn.classList.toggle('open', open);
+}
+
+function closePlaces() {
+  const btn = document.getElementById('place-toggle');
+  const opts = document.getElementById('place-options');
+  if (!btn || !opts) return;
+  opts.classList.remove('open');
+  btn.classList.remove('open');
+}
+
+document.addEventListener('click', e => {
+  const btn = document.getElementById('place-toggle');
+  const opts = document.getElementById('place-options');
+  if (!btn || !opts) return;
+  if (!btn.contains(e.target) && !opts.contains(e.target)) closePlaces();
+});
+
 function updateFilterActive() {
   const params = new URLSearchParams(window.location.search);
   const cat = params.get('cat') || '';
@@ -214,11 +265,23 @@ function updateFilterActive() {
     a.classList.toggle('active', aCat === cat);
   });
 
-  document.querySelectorAll('.gallery-places a').forEach(a => {
-    const aParams = new URLSearchParams(new URL(a.href).search);
-    const aPlace = aParams.get('place') || '';
-    a.classList.toggle('active', aPlace === place);
-  });
+  const opts = document.getElementById('place-options');
+  const toggleLabel = document.getElementById('place-toggle-label');
+  const toggleBtn = document.getElementById('place-toggle');
+  if (opts) {
+    opts.querySelectorAll('a').forEach(a => {
+      const aParams = new URLSearchParams(new URL(a.href).search);
+      const aPlace = aParams.get('place') || '';
+      a.classList.toggle('active', aPlace === place);
+    });
+    if (toggleLabel) {
+      const activeLink = opts.querySelector('a.active');
+      toggleLabel.textContent = activeLink ? activeLink.textContent : 'Везде';
+    }
+    if (toggleBtn) toggleBtn.classList.toggle('active', !!place);
+  }
+
+  closePlaces();
 }
 
 </script>
