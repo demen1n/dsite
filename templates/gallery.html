@@ -121,6 +121,7 @@ function setupGalleryLightbox() {
   });
 }
 
+let galleryRO = null;
 function justify() {
   const grid = document.querySelector('.gallery-grid-inner');
   if (!grid) return;
@@ -138,6 +139,19 @@ function justify() {
     if (img.complete && img.naturalWidth) return;
     img.addEventListener('load', () => layout(grid, items, imgs), { once: true });
   });
+
+  // Re-layout when grid width changes — covers scrollbar appearing/disappearing
+  // as the page settles (which makes rows fall short of the right edge on first paint).
+  if (galleryRO) galleryRO.disconnect();
+  let lastW = grid.clientWidth;
+  galleryRO = new ResizeObserver(() => {
+    const w = grid.clientWidth;
+    if (w !== lastW) {
+      lastW = w;
+      layout(grid, items, imgs);
+    }
+  });
+  galleryRO.observe(grid);
 }
 
 function setupFadeIn() {
@@ -216,6 +230,10 @@ function layout(grid, items, imgs) {
 
 setupGalleryLightbox();
 justify();
+
+// Re-justify once all images have loaded — by then the page height is final
+// and any layout shifts that affected the initial pass are resolved.
+window.addEventListener('load', justify);
 
 let resizeTimer;
 window.addEventListener('resize', () => {
