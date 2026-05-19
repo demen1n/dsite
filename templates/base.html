@@ -206,14 +206,17 @@
   <button id="lightbox-next" onclick="stepLightbox(1)">&#8594;</button>
 </div>
 <script>
-let _lbSrcs = [], _lbIdx = 0;
+let _lbSrcs = [], _lbIdx = 0, _lbScrollY = 0;
 function openLightbox(src, srcs) {
   if (srcs) _lbSrcs = srcs;
   _lbIdx = _lbSrcs.indexOf(src);
   if (_lbIdx === -1) { _lbSrcs = [src]; _lbIdx = 0; }
   _lbShow(_lbIdx);
+  _lbScrollY = window.scrollY;
+  const sbW = window.innerWidth - document.documentElement.clientWidth;
   document.getElementById('lightbox').classList.add('open');
   document.body.style.overflow = 'hidden';
+  if (sbW > 0) document.body.style.paddingRight = sbW + 'px';
 }
 function _lbShow(idx) {
   document.getElementById('lightbox-img').src = _lbSrcs[idx];
@@ -228,6 +231,8 @@ function stepLightbox(dir) {
 function closeLightbox() {
   document.getElementById('lightbox').classList.remove('open');
   document.body.style.overflow = '';
+  document.body.style.paddingRight = '';
+  window.scrollTo(0, _lbScrollY);
 }
 document.getElementById('lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) closeLightbox(); });
 document.addEventListener('keydown', e => {

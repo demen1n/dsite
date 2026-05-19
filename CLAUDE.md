@@ -6,6 +6,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **dsite** (myblog) is a minimalist personal website/blog: posts, photo gallery, resume. Built with Go + HTMX + SQLite. Single binary, zero runtime dependencies.
 
+## Deployment
+
+Push to `main` → GitHub Actions CI/CD автоматически собирает и деплоит на Beget (demenin.ru). Ручной деплой не нужен — просто `git push`.
+
 ## Commands
 
 ```bash
