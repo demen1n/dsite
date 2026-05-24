@@ -64,47 +64,44 @@ bodyTA.addEventListener('dragover', e => { e.preventDefault(); bodyTA.style.outl
 bodyTA.addEventListener('dragleave', () => { bodyTA.style.outline = ''; });
 bodyTA.addEventListener('drop', async e => {
   e.preventDefault(); bodyTA.style.outline = '';
-  const file = e.dataTransfer.files[0];
-  if (!file || !file.type.startsWith('image/')) return;
+  const files = [...e.dataTransfer.files].filter(f => f.type.startsWith('image/'));
+  if (!files.length) return;
 
-  const placeholder = '![загрузка…]()';
-  const start = bodyTA.selectionStart;
-  bodyTA.value = bodyTA.value.substring(0, start) + placeholder + bodyTA.value.substring(start);
-  bodyTA.selectionStart = bodyTA.selectionEnd = start + placeholder.length;
+  for (const file of files) {
+    const placeholder = `![загрузка…]()`;
+    const start = bodyTA.selectionStart;
+    bodyTA.value = bodyTA.value.substring(0, start) + placeholder + bodyTA.value.substring(start);
+    bodyTA.selectionStart = bodyTA.selectionEnd = start + placeholder.length;
 
-  let resized;
-  try {
-    resized = await resizeImage(file, 1600, 0.65);
-  } catch (err) {
-    bodyTA.value = bodyTA.value.replace(placeholder, '');
-    alert('Не удалось обработать изображение.\nВозможно, формат не поддерживается (например, HEIC).\nКонвертируйте в JPG или PNG и попробуйте снова.');
-    return;
+    let resized;
+    try {
+      resized = await resizeImage(file, 1600, 0.65);
+    } catch (err) {
+      bodyTA.value = bodyTA.value.replace(placeholder, '');
+      alert('Не удалось обработать изображение.\nВозможно, формат не поддерживается (например, HEIC).\nКонвертируйте в JPG или PNG и попробуйте снова.');
+      continue;
+    }
+
+    const fd = new FormData();
+    const ext = resized.type === 'image/webp' ? '.webp' : '.jpg';
+    fd.append('image', new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type }));
+    const url = await new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/admin/upload');
+      xhr.onload = () => xhr.status === 200 ? resolve(xhr.responseText) : reject(xhr.status);
+      xhr.onerror = () => reject('network error');
+      xhr.send(fd);
+    }).catch(err => {
+      bodyTA.value = bodyTA.value.replace(placeholder, '');
+      alert('Ошибка загрузки на сервер: ' + err);
+      return null;
+    });
+    if (!url) continue;
+    const md = `![](${url})`;
+    bodyTA.value = bodyTA.value.replace(placeholder, md);
+    htmx.trigger(bodyTA, 'input');
   }
-
-  const fd = new FormData();
-  const ext = resized.type === 'image/webp' ? '.webp' : '.jpg';
-  fd.append('image', new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type }));
-  const url = await new Promise((resolve, reject) => {
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/admin/upload');
-    xhr.upload.onprogress = e => {
-      if (e.lengthComputable) {
-        console.log(`Загрузка: ${Math.round(e.loaded / e.total * 100)}%`);
-      }
-    };
-    xhr.onload = () => xhr.status === 200 ? resolve(xhr.responseText) : reject(xhr.status);
-    xhr.onerror = () => reject('network error');
-    xhr.send(fd);
-  }).catch(err => {
-    bodyTA.value = bodyTA.value.replace(placeholder, '');
-    alert('Ошибка загрузки на сервер: ' + err);
-    return null;
-  });
-  if (!url) return;
-  const md = `![](${url})`;
-  bodyTA.value = bodyTA.value.replace(placeholder, md);
-  bodyTA.selectionStart = bodyTA.selectionEnd = bodyTA.value.indexOf(md) + md.length;
-  htmx.trigger(bodyTA, 'input');
+  bodyTA.selectionStart = bodyTA.selectionEnd = bodyTA.value.length;
 });
 
 function insertMD(before, after) {
