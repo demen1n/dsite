@@ -276,15 +276,43 @@ func FaviconSVG(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(faviconSVG))
 }
 
-// GET /favicon.ico — minimal PNG-in-ICO fallback for legacy crawlers
-func Favicon(w http.ResponseWriter, r *http.Request) {
-	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
-	bg := color.RGBA{R: 0x1c, G: 0x1c, B: 0x1e, A: 0xff}
-	for x := 0; x < 32; x++ {
-		for y := 0; y < 32; y++ {
-			img.Set(x, y, bg)
+func icoFillRect(img *image.RGBA, x0, y0, x1, y1 int, c color.RGBA) {
+	for x := x0; x < x1; x++ {
+		for y := y0; y < y1; y++ {
+			img.Set(x, y, c)
 		}
 	}
+}
+
+func icoFillCircle(img *image.RGBA, cx, cy, r float64, c color.RGBA) {
+	for x := int(cx-r) - 1; x <= int(cx+r)+1; x++ {
+		for y := int(cy-r) - 1; y <= int(cy+r)+1; y++ {
+			dx := float64(x) + 0.5 - cx
+			dy := float64(y) + 0.5 - cy
+			if dx*dx+dy*dy <= r*r {
+				img.Set(x, y, c)
+			}
+		}
+	}
+}
+
+// GET /favicon.ico — camera PNG-in-ICO, mirrors the SVG icon
+func Favicon(w http.ResponseWriter, r *http.Request) {
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+
+	dark := color.RGBA{0x1c, 0x1c, 0x1e, 0xff}
+	white := color.RGBA{0xf0, 0xf0, 0xf0, 0xff}
+	ring := color.RGBA{0x4a, 0x4a, 0x6a, 0xff}
+	hilight := color.RGBA{0xc0, 0xc0, 0xd8, 0xff}
+
+	icoFillRect(img, 0, 0, 32, 32, dark)     // background
+	icoFillRect(img, 4, 12, 28, 27, white)   // camera body
+	icoFillRect(img, 12, 7, 20, 12, white)   // viewfinder bump
+	icoFillCircle(img, 16, 19.5, 5.0, dark)  // lens outer
+	icoFillCircle(img, 16, 19.5, 3.8, ring)  // lens ring
+	icoFillCircle(img, 16, 19.5, 2.3, dark)  // lens centre
+	icoFillCircle(img, 14.6, 18.0, 0.9, hilight) // lens highlight
+
 	var pngBuf bytes.Buffer
 	if err := png.Encode(&pngBuf, img); err != nil {
 		http.Error(w, "internal error", http.StatusInternalServerError)
