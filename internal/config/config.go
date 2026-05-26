@@ -10,6 +10,7 @@ type Config struct {
 	UploadsDir    string
 	SiteTitle     string
 	SiteDesc      string
+	SiteURL       string // e.g. https://demenin.ru — overrides auto-detected base URL
 	SecureCookies bool
 	TrustedProxy  bool // если true — доверяем X-Forwarded-For (только за обратным прокси)
 }
@@ -21,6 +22,7 @@ func LoadConfig() Config {
 		UploadsDir:    getEnv("UPLOADS_DIR", "./uploads"),
 		SiteTitle:     getEnv("SITE_TITLE", "My Blog"),
 		SiteDesc:      getEnv("SITE_DESC", "Фото и заметки"),
+		SiteURL:       os.Getenv("SITE_URL"),
 		SecureCookies: os.Getenv("INSECURE_COOKIES") != "true",
 		TrustedProxy:  os.Getenv("TRUSTED_PROXY") == "true",
 	}

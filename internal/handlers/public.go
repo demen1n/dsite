@@ -1,9 +1,13 @@
 package handlers
 
 import (
+	"bytes"
 	"dsite/internal/db"
 	"encoding/xml"
 	"fmt"
+	"image"
+	"image/color"
+	"image/png"
 	"math"
 	"net/http"
 	"strconv"
@@ -251,6 +255,56 @@ func Sitemap(w http.ResponseWriter, r *http.Request) {
 func RobotsTxt(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	fmt.Fprintf(w, "User-agent: *\nDisallow: /admin/\nSitemap: %s/sitemap.xml\n", baseURL(r))
+}
+
+// camera SVG: dark rounded square with a stylised camera shape
+const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="5" fill="#1c1c1e"/>
+  <rect x="4" y="12" width="24" height="15" rx="2" fill="rgba(255,255,255,0.88)"/>
+  <path d="M12 12V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3" fill="rgba(255,255,255,0.88)"/>
+  <circle cx="16" cy="19.5" r="5" fill="#1c1c1e"/>
+  <circle cx="16" cy="19.5" r="3.8" fill="#4a4a6a"/>
+  <circle cx="16" cy="19.5" r="2.3" fill="#1c1c1e"/>
+  <circle cx="14.6" cy="18" r="0.9" fill="rgba(255,255,255,0.6)"/>
+  <circle cx="7" cy="14.5" r="1.2" fill="#1c1c1e" opacity="0.4"/>
+</svg>`
+
+// GET /favicon.svg — camera icon (primary, used by modern browsers and Yandex)
+func FaviconSVG(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/svg+xml")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Write([]byte(faviconSVG))
+}
+
+// GET /favicon.ico — minimal PNG-in-ICO fallback for legacy crawlers
+func Favicon(w http.ResponseWriter, r *http.Request) {
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	bg := color.RGBA{R: 0x1c, G: 0x1c, B: 0x1e, A: 0xff}
+	for x := 0; x < 32; x++ {
+		for y := 0; y < 32; y++ {
+			img.Set(x, y, bg)
+		}
+	}
+	var pngBuf bytes.Buffer
+	if err := png.Encode(&pngBuf, img); err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+	pngData := pngBuf.Bytes()
+
+	offset := uint32(22)
+	size := uint32(len(pngData))
+	ico := []byte{
+		0, 0, 1, 0, 1, 0,
+		32, 32, 0, 0, 1, 0, 32, 0,
+		byte(size), byte(size >> 8), byte(size >> 16), byte(size >> 24),
+		byte(offset), byte(offset >> 8), byte(offset >> 16), byte(offset >> 24),
+	}
+	ico = append(ico, pngData...)
+
+	w.Header().Set("Content-Type", "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Write(ico)
 }
 
 // ─────────────────────── RSS/Atom feed ───────────────────────

@@ -10,5 +10,6 @@ services:
       - SECURE_COOKIES=true
       - SITE_TITLE=Дмитрий Деменин
       - SITE_DESC=Программист и фотограф
+      - SITE_URL=https://demenin.ru
     mem_limit: 256m
     cpus: "0.5"

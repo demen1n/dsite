@@ -31,6 +31,7 @@ var (
 	uploadsDir    string
 	siteTitle     string
 	siteDesc      string
+	siteURL       string // canonical base URL, e.g. https://demenin.ru
 	secureCookies bool
 	trustedProxy  bool
 	md            goldmark.Markdown
@@ -155,11 +156,12 @@ func cleanLoginAttempts() {
 	}
 }
 
-func Init(tmplDir, uploads, title, desc string, secure, trusted bool) {
+func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted bool) {
 	templatesDir = tmplDir
 	uploadsDir = uploads
 	siteTitle = title
 	siteDesc = desc
+	siteURL = strings.TrimRight(siteBaseURL, "/")
 	secureCookies = secure
 	trustedProxy = trusted
 
@@ -336,6 +338,9 @@ func page(title string, data any) PageData {
 }
 
 func baseURL(r *http.Request) string {
+	if siteURL != "" {
+		return siteURL
+	}
 	scheme := "https"
 	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
 		scheme = "http"
