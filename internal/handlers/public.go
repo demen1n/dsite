@@ -259,14 +259,13 @@ func RobotsTxt(w http.ResponseWriter, r *http.Request) {
 
 // camera SVG: dark rounded square with a stylised camera shape
 const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="5" fill="#1c1c1e"/>
-  <rect x="4" y="12" width="24" height="15" rx="2" fill="rgba(255,255,255,0.88)"/>
-  <path d="M12 12V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3" fill="rgba(255,255,255,0.88)"/>
-  <circle cx="16" cy="19.5" r="5" fill="#1c1c1e"/>
-  <circle cx="16" cy="19.5" r="3.8" fill="#4a4a6a"/>
-  <circle cx="16" cy="19.5" r="2.3" fill="#1c1c1e"/>
-  <circle cx="14.6" cy="18" r="0.9" fill="rgba(255,255,255,0.6)"/>
-  <circle cx="7" cy="14.5" r="1.2" fill="#1c1c1e" opacity="0.4"/>
+  <rect width="32" height="32" rx="5" fill="#28282e"/>
+  <rect x="4" y="12" width="24" height="15" rx="2" fill="#ffffff"/>
+  <path d="M12 12V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3" fill="#ffffff"/>
+  <circle cx="16" cy="19.5" r="5" fill="#28282e"/>
+  <circle cx="16" cy="19.5" r="3.8" fill="#507090"/>
+  <circle cx="16" cy="19.5" r="2.3" fill="#28282e"/>
+  <circle cx="14.6" cy="18" r="0.9" fill="rgba(255,255,255,0.7)"/>
 </svg>`
 
 // GET /favicon.svg — camera icon (primary, used by modern browsers and Yandex)
@@ -300,10 +299,10 @@ func icoFillCircle(img *image.RGBA, cx, cy, r float64, c color.RGBA) {
 func Favicon(w http.ResponseWriter, r *http.Request) {
 	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
 
-	dark := color.RGBA{0x1c, 0x1c, 0x1e, 0xff}
-	white := color.RGBA{0xf0, 0xf0, 0xf0, 0xff}
-	ring := color.RGBA{0x4a, 0x4a, 0x6a, 0xff}
-	hilight := color.RGBA{0xc0, 0xc0, 0xd8, 0xff}
+	dark := color.RGBA{0x28, 0x28, 0x2e, 0xff}
+	white := color.RGBA{0xff, 0xff, 0xff, 0xff}
+	ring := color.RGBA{0x50, 0x70, 0x90, 0xff}
+	hilight := color.RGBA{0xe0, 0xe0, 0xf4, 0xff}
 
 	icoFillRect(img, 0, 0, 32, 32, dark)     // background
 	icoFillRect(img, 4, 12, 28, 27, white)   // camera body
