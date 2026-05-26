@@ -37,7 +37,7 @@ func main() {
 		"site_desc":  cfg.SiteDesc,
 		"home_bio":   `Пишу в [блоге](/blog), фотографирую — смотри [галерею](/gallery).`,
 	})
-	handlers.Init("./templates", cfg.UploadsDir, cfg.SiteTitle, cfg.SiteDesc, cfg.SecureCookies, cfg.TrustedProxy)
+	handlers.Init("./templates", cfg.UploadsDir, cfg.SiteTitle, cfg.SiteDesc, cfg.SiteURL, cfg.SecureCookies, cfg.TrustedProxy)
 	handlers.LoadSettings()
 	handlers.EnsureAdminExists()
 
@@ -58,6 +58,8 @@ func main() {
 	mux.HandleFunc("GET /search", handlers.Search)
 	mux.HandleFunc("GET /sitemap.xml", handlers.Sitemap)
 	mux.HandleFunc("GET /robots.txt", handlers.RobotsTxt)
+	mux.HandleFunc("GET /favicon.svg", handlers.FaviconSVG)
+	mux.HandleFunc("GET /favicon.ico", handlers.Favicon)
 
 	// ── Auth ──
 	mux.HandleFunc("GET /admin/setup", handlers.Setup)

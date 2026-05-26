@@ -39,6 +39,7 @@ First run: visit `/admin/setup` to create the admin account.
 | `UPLOADS_DIR` | `./uploads`      | Photo uploads directory|
 | `SITE_TITLE`  | `My Blog`        | Site title             |
 | `SITE_DESC`   | `Фото и заметки` | Site subtitle          |
+| `SITE_URL`    | _(auto-detect)_  | Canonical base URL (e.g. `https://demenin.ru`), used in sitemap/robots/feeds |
 
 ## Architecture
 
