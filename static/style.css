@@ -118,8 +118,8 @@ footer a:hover { color: var(--text); }
 .home-name { font-size: 2.25rem; font-weight: 700; font-family: var(--sans); margin-bottom: 0.75rem; }
 .home-bio { font-family: var(--sans); font-size: 1rem; color: var(--muted); line-height: 1.7; }
 .home-bio a { color: var(--text); }
-.home-avatar { width: 160px; height: 160px; object-fit: cover; border-radius: 8px; flex-shrink: 0; margin-left: auto; }
-@media (max-width: 520px) { .home { padding-top: 3rem; } .home-hero { gap: 1.5rem; } .home-avatar { width: 100px; height: 100px; } }
+.home-avatar { width: 200px; height: 200px; object-fit: cover; border-radius: 8px; flex-shrink: 0; margin-left: auto; }
+@media (max-width: 520px) { .home { padding-top: 3rem; } .home-hero { flex-direction: column-reverse; align-items: flex-start; gap: 1.25rem; } .home-avatar { width: 120px; height: 120px; margin-left: 0; } }
 
 /* ── Mobile ── */
 @media (max-width: 520px) {
