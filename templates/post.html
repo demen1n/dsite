@@ -1,3 +1,19 @@
+{{define "head"}}
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "{{.Title}}",
+  "description": "{{.OGDescription}}",
+  "url": "{{.Canonical}}"{{with .Data}},
+  "datePublished": "{{.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}",
+  "dateModified": "{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}"{{end}}{{if .OGImage}},
+  "image": "{{.OGImage}}"{{end}},
+  "author": {"@type": "Person", "name": "{{.SiteTitle}}"},
+  "publisher": {"@type": "Person", "name": "{{.SiteTitle}}"}
+}
+</script>
+{{end}}
 {{define "content"}}
 {{with .Data}}
 <article>
