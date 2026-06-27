@@ -12,6 +12,7 @@
         <th>Заголовок</th>
         <th>Slug</th>
         <th>Статус</th>
+        <th>Просмотры</th>
         <th>Дата</th>
         <th></th>
       </tr>
@@ -28,6 +29,7 @@
           <span class="badge badge-gray">Черновик</span>
           {{end}}
         </td>
+        <td style="color:var(--muted); text-align:right">{{if .Views}}{{.Views}}{{else}}—{{end}}</td>
         <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .CreatedAt}}</td>
         <td style="white-space:nowrap; text-align:right">
           <a class="btn btn-secondary btn-sm" href="/admin/posts/{{.ID}}/edit">Редактировать</a>
