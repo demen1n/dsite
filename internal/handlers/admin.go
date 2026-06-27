@@ -442,6 +442,13 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
 }
 
+// POST /admin/settings/avatar/delete
+func DeleteAvatar(w http.ResponseWriter, r *http.Request) {
+	db.SetSetting("home_avatar", "")
+	LoadSettings()
+	http.Redirect(w, r, "/admin/settings", http.StatusFound)
+}
+
 // POST /admin/gallery/reorder
 func ReorderPhotos(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
