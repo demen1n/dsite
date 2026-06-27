@@ -258,7 +258,8 @@ func RobotsTxt(w http.ResponseWriter, r *http.Request) {
 }
 
 // camera SVG: dark rounded square with a stylised camera shape
-const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+// faviconCameraSVG — старый фавикон с фотоаппаратом (бэкап)
+const faviconCameraSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="5" fill="#28282e"/>
   <rect x="4" y="12" width="24" height="15" rx="2" fill="#ffffff"/>
   <path d="M12 12V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3" fill="#ffffff"/>
@@ -266,6 +267,13 @@ const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <circle cx="16" cy="19.5" r="3.8" fill="#507090"/>
   <circle cx="16" cy="19.5" r="2.3" fill="#28282e"/>
   <circle cx="14.6" cy="18" r="0.9" fill="rgba(255,255,255,0.7)"/>
+</svg>`
+
+const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <circle cx="16" cy="16" r="16" fill="#1c1c1c"/>
+  <ellipse cx="16" cy="14" rx="5.5" ry="7.5" fill="#e8a800"/>
+  <rect x="15.2" y="21.5" width="1.6" height="4.5" rx="0.8" fill="#b07800"/>
+  <line x1="16" y1="7.5" x2="16" y2="21.5" stroke="#b07800" stroke-width="0.7" opacity="0.45"/>
 </svg>`
 
 // GET /favicon.svg — camera icon (primary, used by modern browsers and Yandex)
@@ -295,22 +303,44 @@ func icoFillCircle(img *image.RGBA, cx, cy, r float64, c color.RGBA) {
 	}
 }
 
-// GET /favicon.ico — camera PNG-in-ICO, mirrors the SVG icon
-func Favicon(w http.ResponseWriter, r *http.Request) {
-	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+func icoFillEllipse(img *image.RGBA, cx, cy, rx, ry float64, c color.RGBA) {
+	for x := int(cx-rx) - 1; x <= int(cx+rx)+1; x++ {
+		for y := int(cy-ry) - 1; y <= int(cy+ry)+1; y++ {
+			dx := float64(x) + 0.5 - cx
+			dy := float64(y) + 0.5 - cy
+			if (dx*dx)/(rx*rx)+(dy*dy)/(ry*ry) <= 1.0 {
+				img.Set(x, y, c)
+			}
+		}
+	}
+}
 
+// drawCameraFavicon — старый фавикон с фотоаппаратом (бэкап)
+func drawCameraFavicon(img *image.RGBA) {
 	dark := color.RGBA{0x28, 0x28, 0x2e, 0xff}
 	white := color.RGBA{0xff, 0xff, 0xff, 0xff}
 	ring := color.RGBA{0x50, 0x70, 0x90, 0xff}
 	hilight := color.RGBA{0xe0, 0xe0, 0xf4, 0xff}
+	icoFillRect(img, 0, 0, 32, 32, dark)
+	icoFillRect(img, 4, 12, 28, 27, white)
+	icoFillRect(img, 12, 7, 20, 12, white)
+	icoFillCircle(img, 16, 19.5, 5.0, dark)
+	icoFillCircle(img, 16, 19.5, 3.8, ring)
+	icoFillCircle(img, 16, 19.5, 2.3, dark)
+	icoFillCircle(img, 14.6, 18.0, 0.9, hilight)
+}
 
-	icoFillRect(img, 0, 0, 32, 32, dark)     // background
-	icoFillRect(img, 4, 12, 28, 27, white)   // camera body
-	icoFillRect(img, 12, 7, 20, 12, white)   // viewfinder bump
-	icoFillCircle(img, 16, 19.5, 5.0, dark)  // lens outer
-	icoFillCircle(img, 16, 19.5, 3.8, ring)  // lens ring
-	icoFillCircle(img, 16, 19.5, 2.3, dark)  // lens centre
-	icoFillCircle(img, 14.6, 18.0, 0.9, hilight) // lens highlight
+// GET /favicon.ico — leaf PNG-in-ICO, mirrors the SVG icon
+func Favicon(w http.ResponseWriter, r *http.Request) {
+	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+
+	asphalt := color.RGBA{0x1c, 0x1c, 0x1c, 0xff}
+	yellow := color.RGBA{0xe8, 0xa8, 0x00, 0xff}
+	stem := color.RGBA{0xb0, 0x78, 0x00, 0xff}
+
+	icoFillCircle(img, 16, 16, 16, asphalt)    // background circle
+	icoFillEllipse(img, 16, 14, 5.5, 7.5, yellow) // leaf body
+	icoFillRect(img, 15, 22, 17, 26, stem)      // stem
 
 	var pngBuf bytes.Buffer
 	if err := png.Encode(&pngBuf, img); err != nil {
