@@ -101,6 +101,7 @@ func main() {
 
 	mux.HandleFunc("GET /admin/settings", handlers.RequireAuth(handlers.AdminSettings))
 	mux.HandleFunc("POST /admin/settings", handlers.RequireAuth(handlers.SaveSettings))
+	mux.HandleFunc("POST /admin/settings/avatar", handlers.RequireAuth(handlers.UploadAvatar))
 
 	mux.HandleFunc("GET /admin/uploads", handlers.RequireAuth(handlers.AdminUploads))
 	mux.HandleFunc("POST /admin/uploads/{filename}/delete", handlers.RequireAuth(handlers.DeleteUploadFile))

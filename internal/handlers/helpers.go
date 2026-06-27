@@ -32,6 +32,7 @@ var (
 	siteTitle     string
 	siteDesc      string
 	siteURL       string // canonical base URL, e.g. https://demenin.ru
+	homeAvatar    string // filename of profile photo, served from /uploads/
 	secureCookies bool
 	trustedProxy  bool
 	md            goldmark.Markdown
@@ -286,6 +287,7 @@ type PageData struct {
 	SiteTitle     string
 	SiteDesc      string
 	HomeBio       template.HTML
+	HomeAvatar    string // filename, served from /uploads/
 	Socials       map[string]string
 	Data          any
 	OGDescription string
@@ -329,12 +331,13 @@ func LoadSettings() {
 		"email":     s["social_email"],
 	}
 	resumeHidden = s["resume_hidden"] == "1"
+	homeAvatar = s["home_avatar"]
 }
 
 func ResumeHidden() bool { return resumeHidden }
 
 func page(title string, data any) PageData {
-	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, HomeBio: homeBio, Socials: socials, Data: data, ResumeHidden: resumeHidden}
+	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, HomeBio: homeBio, HomeAvatar: homeAvatar, Socials: socials, Data: data, ResumeHidden: resumeHidden}
 }
 
 func baseURL(r *http.Request) string {

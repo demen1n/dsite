@@ -1,9 +1,16 @@
 {{define "content"}}
 <div class="home">
-  <h1 class="home-name">{{.SiteTitle}}</h1>
-  <p class="home-bio">
-    {{.SiteDesc}}.<br>
-    {{if .HomeBio}}{{.HomeBio}}{{else}}Пишу в <a href="/blog">блоге</a>, фотографирую — смотри <a href="/gallery">галерею</a>.{{end}}
-  </p>
+  <div class="home-hero">
+    <div>
+      <h1 class="home-name">{{.SiteTitle}}</h1>
+      <p class="home-bio">
+        {{.SiteDesc}}.<br>
+        {{if .HomeBio}}{{.HomeBio}}{{else}}Пишу в <a href="/blog">блоге</a>, фотографирую — смотри <a href="/gallery">галерею</a>.{{end}}
+      </p>
+    </div>
+    {{if .HomeAvatar}}
+    <img src="/uploads/{{.HomeAvatar}}" alt="{{.SiteTitle}}" class="home-avatar">
+    {{end}}
+  </div>
 </div>
 {{end}}

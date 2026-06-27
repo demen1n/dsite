@@ -114,10 +114,12 @@ footer a:hover { color: var(--text); }
 
 /* ── Home ── */
 .home { padding-top: 5rem; }
+.home-hero { display: flex; align-items: center; gap: 2.5rem; }
 .home-name { font-size: 2.25rem; font-weight: 700; font-family: var(--sans); margin-bottom: 0.75rem; }
 .home-bio { font-family: var(--sans); font-size: 1rem; color: var(--muted); line-height: 1.7; }
 .home-bio a { color: var(--text); }
-@media (max-width: 520px) { .home { padding-top: 3rem; } }
+.home-avatar { width: 120px; height: 120px; object-fit: cover; border-radius: 8px; flex-shrink: 0; margin-left: auto; }
+@media (max-width: 520px) { .home { padding-top: 3rem; } .home-hero { gap: 1.5rem; } .home-avatar { width: 80px; height: 80px; } }
 
 /* ── Mobile ── */
 @media (max-width: 520px) {

@@ -400,6 +400,48 @@ func SaveSettings(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
 }
 
+// POST /admin/settings/avatar
+func UploadAvatar(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 10<<20)
+	if err := r.ParseMultipartForm(5 << 20); err != nil {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	file, header, err := r.FormFile("avatar")
+	if err != nil {
+		http.Error(w, "no file", http.StatusBadRequest)
+		return
+	}
+	defer file.Close()
+
+	data, err := io.ReadAll(file)
+	if err != nil {
+		http.Error(w, "read error", http.StatusInternalServerError)
+		return
+	}
+
+	ext := strings.ToLower(filepath.Ext(header.Filename))
+	if ext == "" {
+		ext = ".webp"
+	}
+	if !isAllowedImageExt(ext) || !isAllowedImageContent(data) {
+		http.Error(w, "invalid image", http.StatusBadRequest)
+		return
+	}
+
+	filename, err := saveUpload(data, ext)
+	if err != nil {
+		http.Error(w, "save error", http.StatusInternalServerError)
+		return
+	}
+
+	db.SetSetting("home_avatar", filename)
+	LoadSettings()
+	http.Redirect(w, r, "/admin/settings", http.StatusFound)
+}
+
 // POST /admin/gallery/reorder
 func ReorderPhotos(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
