@@ -3,6 +3,22 @@
   <h1>Настройки</h1>
 </div>
 
+<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
+  <h2 style="font-size:1rem; font-weight:600; margin-bottom:1.25rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em">Фото на главной</h2>
+  {{if index .Data "home_avatar"}}
+  <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem">
+    <img src="/uploads/{{index .Data "home_avatar"}}" alt="Аватар" style="width:100px; height:100px; object-fit:cover; border-radius:var(--radius); border:1px solid var(--border)">
+    <form method="POST" action="/admin/settings/avatar/delete">
+      <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить фото?')">Удалить</button>
+    </form>
+  </div>
+  {{end}}
+  <form method="POST" action="/admin/settings/avatar" enctype="multipart/form-data" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap">
+    <input type="file" name="avatar" accept="image/*" required style="font-size:0.9rem">
+    <button type="submit" class="btn btn-secondary btn-sm">{{if index .Data "home_avatar"}}Заменить{{else}}Загрузить{{end}}</button>
+  </form>
+</div>
+
 <form method="POST" action="/admin/settings">
 
   <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
@@ -71,20 +87,4 @@
 
   <button type="submit" class="btn btn-primary">Сохранить</button>
 </form>
-
-<div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-top:1.5rem">
-  <h2 style="font-size:1rem; font-weight:600; margin-bottom:1.25rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em">Фото на главной</h2>
-  {{if index .Data "home_avatar"}}
-  <div style="display:flex; align-items:center; gap:1rem; margin-bottom:1rem">
-    <img src="/uploads/{{index .Data "home_avatar"}}" alt="Аватар" style="width:100px; height:100px; object-fit:cover; border-radius:var(--radius); border:1px solid var(--border)">
-    <form method="POST" action="/admin/settings/avatar/delete">
-      <button type="submit" class="btn btn-danger btn-sm" onclick="return confirm('Удалить фото?')">Удалить</button>
-    </form>
-  </div>
-  {{end}}
-  <form method="POST" action="/admin/settings/avatar" enctype="multipart/form-data" style="display:flex; align-items:center; gap:0.75rem; flex-wrap:wrap">
-    <input type="file" name="avatar" accept="image/*" required style="font-size:0.9rem">
-    <button type="submit" class="btn btn-secondary btn-sm">{{if index .Data "home_avatar"}}Заменить{{else}}Загрузить{{end}}</button>
-  </form>
-</div>
 {{end}}
