@@ -258,6 +258,18 @@ func RobotsTxt(w http.ResponseWriter, r *http.Request) {
 }
 
 // camera SVG: dark rounded square with a stylised camera shape
+var faviconPNGData []byte
+
+// SetFaviconPNG загружает PNG-фавикон, который будет отдаваться по /favicon.png и /favicon.ico.
+func SetFaviconPNG(data []byte) { faviconPNGData = data }
+
+// GET /favicon.png
+func FaviconPNG(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "image/png")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Write(faviconPNGData)
+}
+
 // faviconCameraSVG — старый фавикон с фотоаппаратом (бэкап)
 const faviconCameraSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <rect width="32" height="32" rx="5" fill="#28282e"/>
@@ -330,24 +342,24 @@ func drawCameraFavicon(img *image.RGBA) {
 	icoFillCircle(img, 14.6, 18.0, 0.9, hilight)
 }
 
-// GET /favicon.ico — leaf PNG-in-ICO, mirrors the SVG icon
+// GET /favicon.ico
 func Favicon(w http.ResponseWriter, r *http.Request) {
-	img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+	w.Header().Set("Content-Type", "image/x-icon")
+	w.Header().Set("Cache-Control", "public, max-age=604800")
 
-	asphalt := color.RGBA{0x1c, 0x1c, 0x1c, 0xff}
-	yellow := color.RGBA{0xe8, 0xa8, 0x00, 0xff}
-	stem := color.RGBA{0xb0, 0x78, 0x00, 0xff}
-
-	icoFillCircle(img, 16, 16, 16, asphalt)    // background circle
-	icoFillEllipse(img, 16, 14, 5.5, 7.5, yellow) // leaf body
-	icoFillRect(img, 15, 22, 17, 26, stem)      // stem
-
-	var pngBuf bytes.Buffer
-	if err := png.Encode(&pngBuf, img); err != nil {
-		http.Error(w, "internal error", http.StatusInternalServerError)
-		return
+	var pngData []byte
+	if len(faviconPNGData) > 0 {
+		pngData = faviconPNGData
+	} else {
+		// fallback: рисуем листик программно
+		img := image.NewRGBA(image.Rect(0, 0, 32, 32))
+		icoFillCircle(img, 16, 16, 16, color.RGBA{0x1c, 0x1c, 0x1c, 0xff})
+		icoFillEllipse(img, 16, 14, 5.5, 7.5, color.RGBA{0xe8, 0xa8, 0x00, 0xff})
+		icoFillRect(img, 15, 22, 17, 26, color.RGBA{0xb0, 0x78, 0x00, 0xff})
+		var buf bytes.Buffer
+		png.Encode(&buf, img)
+		pngData = buf.Bytes()
 	}
-	pngData := pngBuf.Bytes()
 
 	offset := uint32(22)
 	size := uint32(len(pngData))
@@ -358,9 +370,6 @@ func Favicon(w http.ResponseWriter, r *http.Request) {
 		byte(offset), byte(offset >> 8), byte(offset >> 16), byte(offset >> 24),
 	}
 	ico = append(ico, pngData...)
-
-	w.Header().Set("Content-Type", "image/x-icon")
-	w.Header().Set("Cache-Control", "public, max-age=604800")
 	w.Write(ico)
 }
 

@@ -39,6 +39,9 @@ func main() {
 	})
 	handlers.Init("./templates", cfg.UploadsDir, cfg.SiteTitle, cfg.SiteDesc, cfg.SiteURL, cfg.SecureCookies, cfg.TrustedProxy)
 	handlers.LoadSettings()
+	if data, err := os.ReadFile("./static/favicon.png"); err == nil {
+		handlers.SetFaviconPNG(data)
+	}
 	handlers.EnsureAdminExists()
 
 	mux := http.NewServeMux()
@@ -59,6 +62,7 @@ func main() {
 	mux.HandleFunc("GET /sitemap.xml", handlers.Sitemap)
 	mux.HandleFunc("GET /robots.txt", handlers.RobotsTxt)
 	mux.HandleFunc("GET /favicon.svg", handlers.FaviconSVG)
+	mux.HandleFunc("GET /favicon.png", handlers.FaviconPNG)
 	mux.HandleFunc("GET /favicon.ico", handlers.Favicon)
 
 	// ── Auth ──
