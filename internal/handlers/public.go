@@ -266,7 +266,7 @@ func SetFaviconPNG(data []byte) { faviconPNGData = data }
 // GET /favicon.png
 func FaviconPNG(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/png")
-	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Write(faviconPNGData)
 }
 
@@ -291,7 +291,7 @@ const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
 // GET /favicon.svg — camera icon (primary, used by modern browsers and Yandex)
 func FaviconSVG(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/svg+xml")
-	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Header().Set("Cache-Control", "no-cache")
 	w.Write([]byte(faviconSVG))
 }
 
@@ -345,7 +345,7 @@ func drawCameraFavicon(img *image.RGBA) {
 // GET /favicon.ico
 func Favicon(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "image/x-icon")
-	w.Header().Set("Cache-Control", "public, max-age=604800")
+	w.Header().Set("Cache-Control", "no-cache")
 
 	var pngData []byte
 	if len(faviconPNGData) > 0 {
