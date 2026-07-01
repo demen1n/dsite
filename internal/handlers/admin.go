@@ -118,7 +118,9 @@ func AdminIndex(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin/posts/new
 func NewPost(w http.ResponseWriter, r *http.Request) {
-	render(w, "admin/editor.html", page("Новый пост", nil))
+	pd := page("Новый пост", nil)
+	pd.AllTags = loadAllTagNames()
+	render(w, "admin/editor.html", pd)
 }
 
 // POST /admin/posts/new
@@ -179,7 +181,9 @@ func EditPostForm(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	render(w, "admin/editor.html", page("Редактировать пост", post))
+	pd := page("Редактировать пост", post)
+	pd.AllTags = loadAllTagNames()
+	render(w, "admin/editor.html", pd)
 }
 
 // POST /admin/posts/{id}/edit
@@ -621,6 +625,15 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 // ─────────────────────── Helpers ───────────────────────
 
 // parseTags разбирает строку вида "тег1, тег2, тег3" в слайс имён.
+func loadAllTagNames() []string {
+	tags, _ := db.ListAllTags()
+	names := make([]string, 0, len(tags))
+	for _, t := range tags {
+		names = append(names, t.Name)
+	}
+	return names
+}
+
 func parseTags(s string) []string {
 	parts := strings.Split(s, ",")
 	var out []string

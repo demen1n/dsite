@@ -57,15 +57,41 @@
   .editor-tags {
     display: flex; align-items: center; gap: 0.5rem;
     padding: 0.4rem 1.5rem 0; font-size: 0.85rem; flex-shrink: 0;
+    flex-wrap: wrap;
   }
   .editor-tags-label { color: var(--muted); white-space: nowrap; }
-  .editor-tags input {
-    flex: 1; border: none; background: transparent; color: var(--text);
-    font-size: 0.85rem; outline: none; font-family: inherit;
-    border-bottom: 1px dashed transparent; padding: 0;
+  .tag-chips { display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; flex: 1; position: relative; }
+  .tag-chip {
+    display: inline-flex; align-items: center; gap: 0.2rem;
+    background: var(--border); color: var(--text);
+    border-radius: 4px; padding: 0.1rem 0.35rem; font-size: 0.8rem; line-height: 1.4;
   }
-  .editor-tags input:focus { border-bottom-color: var(--accent); }
-  .editor-tags input::placeholder { color: #ccc; }
+  .tag-chip-remove {
+    cursor: pointer; color: var(--muted); font-size: 0.9rem; line-height: 1;
+    border: none; background: none; padding: 0; margin: 0;
+  }
+  .tag-chip-remove:hover { color: var(--text); }
+  .tag-input-wrap { position: relative; display: inline-flex; }
+  .tag-input-wrap input {
+    border: none; background: transparent; color: var(--text);
+    font-size: 0.85rem; outline: none; font-family: inherit;
+    border-bottom: 1px dashed transparent; padding: 0; min-width: 8ch; width: 8ch;
+  }
+  .tag-input-wrap input:focus { border-bottom-color: var(--accent); }
+  .tag-input-wrap input::placeholder { color: #ccc; }
+  .tag-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,.15);
+    z-index: 100; min-width: 140px; overflow: hidden;
+    display: none;
+  }
+  .tag-dropdown.open { display: block; }
+  .tag-dropdown-item {
+    padding: 0.35rem 0.7rem; cursor: pointer; font-size: 0.85rem;
+    color: var(--text); white-space: nowrap;
+  }
+  .tag-dropdown-item:hover, .tag-dropdown-item.active { background: var(--border); }
 
   /* Toolbar */
   .editor-toolbar {
@@ -194,10 +220,114 @@
   <!-- Tags -->
   <div class="editor-tags">
     <span class="editor-tags-label">Теги:</span>
-    <input type="text" name="tags" id="tags" form="post-form"
-           placeholder="go, программирование, заметки"
-           value="{{with .Data}}{{join .Tags ", "}}{{end}}">
+    <div class="tag-chips" id="tag-chips">
+      <div class="tag-input-wrap">
+        <input type="text" id="tag-input" placeholder="добавить тег" autocomplete="off">
+        <div class="tag-dropdown" id="tag-dropdown"></div>
+      </div>
+    </div>
+    <input type="hidden" name="tags" id="tags-hidden" form="post-form">
   </div>
+  <script>
+  (function(){
+    const allTags = {{if .AllTags}}{{json .AllTags}}{{else}}[]{{end}};
+    const initialTags = [{{with .Data}}{{range $i,$t := .Tags}}{{if $i}},{{end}}{{json $t}}{{end}}{{end}}];
+    const chips = document.getElementById('tag-chips');
+    const input = document.getElementById('tag-input');
+    const dropdown = document.getElementById('tag-dropdown');
+    const hidden = document.getElementById('tags-hidden');
+    let activeIdx = -1;
+
+    let tags = [...initialTags];
+    renderChips();
+
+    function renderChips() {
+      // remove old chips (keep input wrap)
+      chips.querySelectorAll('.tag-chip').forEach(el => el.remove());
+      const wrap = chips.querySelector('.tag-input-wrap');
+      tags.forEach((t, i) => {
+        const chip = document.createElement('span');
+        chip.className = 'tag-chip';
+        chip.textContent = t;
+        const btn = document.createElement('button');
+        btn.className = 'tag-chip-remove';
+        btn.type = 'button';
+        btn.textContent = '×';
+        btn.onclick = () => { tags.splice(i, 1); renderChips(); };
+        chip.appendChild(btn);
+        chips.insertBefore(chip, wrap);
+      });
+      hidden.value = tags.join(', ');
+    }
+
+    function addTag(name) {
+      name = name.trim();
+      if (!name || tags.includes(name)) { input.value = ''; closeDropdown(); return; }
+      tags.push(name);
+      input.value = '';
+      renderChips();
+      closeDropdown();
+    }
+
+    function openDropdown(items) {
+      activeIdx = -1;
+      dropdown.innerHTML = '';
+      items.forEach((t, i) => {
+        const d = document.createElement('div');
+        d.className = 'tag-dropdown-item';
+        d.textContent = t;
+        d.onmousedown = (e) => { e.preventDefault(); addTag(t); };
+        dropdown.appendChild(d);
+      });
+      dropdown.classList.toggle('open', items.length > 0);
+    }
+
+    function closeDropdown() { dropdown.classList.remove('open'); activeIdx = -1; }
+
+    input.addEventListener('input', () => {
+      const q = input.value.trim().toLowerCase();
+      if (!q) { closeDropdown(); return; }
+      const matches = allTags.filter(t => t.toLowerCase().includes(q) && !tags.includes(t));
+      openDropdown(matches);
+      // auto-grow input width
+      input.style.width = Math.max(8, input.value.length + 2) + 'ch';
+    });
+
+    input.addEventListener('keydown', (e) => {
+      const items = dropdown.querySelectorAll('.tag-dropdown-item');
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        activeIdx = Math.min(activeIdx + 1, items.length - 1);
+        items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        activeIdx = Math.max(activeIdx - 1, -1);
+        items.forEach((el, i) => el.classList.toggle('active', i === activeIdx));
+      } else if (e.key === 'Enter' || e.key === 'Tab' || e.key === ',') {
+        if (activeIdx >= 0 && items[activeIdx]) {
+          e.preventDefault();
+          addTag(items[activeIdx].textContent);
+        } else if (e.key !== 'Tab') {
+          e.preventDefault();
+          addTag(input.value);
+        }
+      } else if (e.key === 'Escape') {
+        closeDropdown();
+      } else if (e.key === 'Backspace' && input.value === '' && tags.length) {
+        tags.pop(); renderChips();
+      }
+    });
+
+    input.addEventListener('blur', () => {
+      setTimeout(() => {
+        if (input.value.trim()) addTag(input.value);
+        closeDropdown();
+      }, 150);
+    });
+
+    chips.addEventListener('click', () => input.focus());
+  })();
+  </script>
 
   <!-- Toolbar -->
   <div class="editor-toolbar">
