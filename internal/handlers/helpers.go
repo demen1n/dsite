@@ -6,6 +6,7 @@ import (
 	"dsite/internal/db"
 	"encoding/binary"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"html/template"
 	"log"
@@ -197,6 +198,10 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 		"add":  func(a, b int) int { return a + b },
 		"sub":  func(a, b int) int { return a - b },
 		"join": strings.Join,
+		"json": func(v any) (template.JS, error) {
+			b, err := json.Marshal(v)
+			return template.JS(b), err
+		},
 	}
 
 	var err error
@@ -290,6 +295,7 @@ type PageData struct {
 	HomeAvatar    string // filename, served from /uploads/
 	Socials       map[string]string
 	Data          any
+	AllTags       []string
 	OGDescription string
 	OGImage       string // absolute URL
 	Canonical     string
