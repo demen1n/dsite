@@ -7,7 +7,10 @@ async function resizeImage(file, maxWidth, quality) {
   const canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
-  canvas.getContext('2d').drawImage(bitmap, 0, 0, w, h);
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bitmap, 0, 0, w, h);
   const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/webp', quality));
   if (blob.type !== 'image/webp') {
     const fallback = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', quality));
@@ -40,7 +43,7 @@ async function uploadPhotos() {
 
   progress.textContent = `Ресайз 0/${total}…`;
   const results = await Promise.all(files.map(async (file) => {
-    const result = await resizeImage(file, 1600, 0.8);
+    const result = await resizeImage(file, 1600, 0.85);
     resizeDone++;
     progress.textContent = `Ресайз ${resizeDone}/${total}…`;
     return result;
