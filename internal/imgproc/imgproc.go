@@ -11,6 +11,7 @@ import (
 	"image/color"
 	"image/jpeg"
 	"math"
+	"runtime"
 
 	"golang.org/x/image/draw"
 
@@ -28,6 +29,15 @@ import (
 // container's 512MB limit alongside the rest of the app.
 const maxSourcePixels = 80_000_000 // ~80MP
 
+// procSem limits image processing to one image at a time process-wide. The
+// container this runs in is memory- and CPU-constrained (512MB, 0.5 CPU);
+// two or three uploads landing back-to-back (e.g. dropping several photos
+// into a post) can otherwise stack their peak memory and blow the limit even
+// though each one individually fits comfortably. Concurrent HTTP requests
+// still queue normally — they just wait their turn here instead of all
+// decoding/resizing at once.
+var procSem = make(chan struct{}, 1)
+
 // Process decodes data (jpeg/png/gif/webp), corrects EXIF rotation, downscales
 // so the width is at most maxWidth (never upscales), and re-encodes as JPEG
 // at the given quality (1-100). It returns the encoded bytes and final
@@ -38,6 +48,14 @@ const maxSourcePixels = 80_000_000 // ~80MP
 // to immediately shrink it. Resizing first keeps that copy small regardless
 // of how large the uploaded photo is.
 func Process(data []byte, maxWidth, quality int) (out []byte, w, h int, err error) {
+	procSem <- struct{}{}
+	// GC before releasing the slot: Go's default pacer only collects once the
+	// heap has doubled since the last cycle, so back-to-back calls can pile
+	// up uncollected garbage from the previous one even though they never run
+	// concurrently. Forcing a sweep here means the next queued upload starts
+	// from a clean slate instead of stacking on top of what came before.
+	defer func() { runtime.GC(); <-procSem }()
+
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("decode config: %w", err)
