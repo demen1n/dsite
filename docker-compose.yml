@@ -11,5 +11,5 @@ services:
       - SITE_TITLE=Дмитрий Деменин
       - SITE_DESC=Программист и фотограф
       - SITE_URL=https://demenin.ru
-    mem_limit: 256m
+    mem_limit: 512m
     cpus: "0.5"

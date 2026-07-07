@@ -2,6 +2,8 @@ package imgproc
 
 import (
 	"bytes"
+	"encoding/binary"
+	"hash/crc32"
 	"image"
 	"image/color"
 	"image/jpeg"
@@ -90,5 +92,46 @@ func TestApplyOrientationRotate90CW(t *testing.T) {
 func TestJpegOrientationParsesTag(t *testing.T) {
 	if got := jpegOrientation([]byte{0x00, 0x01}); got != 1 {
 		t.Errorf("non-JPEG input: got %d, want 1 (no-op)", got)
+	}
+}
+
+func TestResizeSwappedCapsPostRotationWidth(t *testing.T) {
+	// Pre-rotation source is portrait 2000x3000; a 90/270 rotation will follow,
+	// so the *height* (3000) is what must be capped at maxWidth.
+	src := image.NewNRGBA(image.Rect(0, 0, 2000, 3000))
+	out := resize(src, 1600, true)
+	b := out.Bounds()
+	if b.Dy() != 1600 {
+		t.Errorf("got h=%d, want 1600 (becomes width after rotation)", b.Dy())
+	}
+}
+
+// pngIHDROnly builds a minimal-but-valid PNG containing just a signature and
+// an IHDR chunk, enough for image.DecodeConfig to read the declared
+// dimensions without needing (or allocating) real pixel data.
+func pngIHDROnly(t *testing.T, w, h uint32) []byte {
+	t.Helper()
+	buf := new(bytes.Buffer)
+	buf.Write([]byte{137, 80, 78, 71, 13, 10, 26, 10})
+	data := make([]byte, 13)
+	binary.BigEndian.PutUint32(data[0:4], w)
+	binary.BigEndian.PutUint32(data[4:8], h)
+	data[8] = 8 // bit depth
+	data[9] = 2 // color type: truecolor
+	// data[10..12] compression/filter/interlace default to 0
+	chunkType := []byte("IHDR")
+	binary.Write(buf, binary.BigEndian, uint32(len(data)))
+	buf.Write(chunkType)
+	buf.Write(data)
+	crc := crc32.ChecksumIEEE(append(chunkType, data...))
+	binary.Write(buf, binary.BigEndian, crc)
+	return buf.Bytes()
+}
+
+func TestProcessRejectsHugeImages(t *testing.T) {
+	data := pngIHDROnly(t, 20000, 20000) // 400MP, well past the 40MP guard
+	_, _, _, err := Process(data, 1600, 85)
+	if err == nil {
+		t.Fatal("expected error for oversized image, got nil")
 	}
 }
