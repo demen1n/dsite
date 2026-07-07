@@ -1,3 +1,8 @@
+// Ресайз/сжатие картинок теперь делает сервер (internal/imgproc) — качественнее
+// и одинаково во всех браузерах. Старый ресайз в браузере оставлен ниже как
+// аварийный вариант: поставьте true, если серверная обработка вдруг сломается.
+const CLIENT_SIDE_RESIZE = false;
+
 function autoResize(el) {
   el.style.height = 'auto';
   el.style.height = el.scrollHeight + 'px';
@@ -11,7 +16,7 @@ function updatePublishLabel() {
 
 document.getElementById('post-form').addEventListener('submit', async function(e) {
   const input = document.getElementById('cover-input');
-  if (!input.files.length) return;
+  if (!input.files.length || !CLIENT_SIDE_RESIZE) return;
   e.preventDefault();
   const file = input.files[0];
   const resized = await resizeImage(file, 1600, 0.8);
@@ -76,22 +81,26 @@ bodyTA.addEventListener('drop', async e => {
     bodyTA.value = bodyTA.value.substring(0, start) + placeholder + bodyTA.value.substring(start);
     bodyTA.selectionStart = bodyTA.selectionEnd = start + placeholder.length;
 
-    let resized;
-    try {
-      resized = await resizeImage(file, 1600, 0.8);
-    } catch (err) {
-      bodyTA.value = bodyTA.value.replace(placeholder, '');
-      alert('Не удалось обработать изображение.\nВозможно, формат не поддерживается (например, HEIC).\nКонвертируйте в JPG или PNG и попробуйте снова.');
-      continue;
+    let uploadFile = file;
+    if (CLIENT_SIDE_RESIZE) {
+      let resized;
+      try {
+        resized = await resizeImage(file, 1600, 0.8);
+      } catch (err) {
+        bodyTA.value = bodyTA.value.replace(placeholder, '');
+        alert('Не удалось обработать изображение.\nВозможно, формат не поддерживается (например, HEIC).\nКонвертируйте в JPG или PNG и попробуйте снова.');
+        continue;
+      }
+      const ext = resized.type === 'image/webp' ? '.webp' : '.jpg';
+      uploadFile = new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type });
     }
 
     const fd = new FormData();
-    const ext = resized.type === 'image/webp' ? '.webp' : '.jpg';
-    fd.append('image', new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type }));
+    fd.append('image', uploadFile);
     const url = await new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest();
       xhr.open('POST', '/admin/upload');
-      xhr.onload = () => xhr.status === 200 ? resolve(xhr.responseText) : reject(xhr.status);
+      xhr.onload = () => xhr.status === 200 ? resolve(xhr.responseText) : reject(xhr.responseText || xhr.status);
       xhr.onerror = () => reject('network error');
       xhr.send(fd);
     }).catch(err => {
