@@ -1,3 +1,8 @@
+// Ресайз/сжатие теперь делает сервер (internal/imgproc). Старый ресайз в
+// браузере оставлен как аварийный вариант — поставьте true, если серверная
+// обработка вдруг сломается.
+const CLIENT_SIDE_RESIZE = false;
+
 async function resizeImage(file, maxWidth, quality) {
   const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
   const scale = Math.min(1, maxWidth / bitmap.width);
@@ -39,13 +44,13 @@ async function uploadPhotos() {
 
   const files = [...input.files];
   const total = files.length;
-  let resizeDone = 0;
+  let done = 0;
 
-  progress.textContent = `Ресайз 0/${total}…`;
+  progress.textContent = CLIENT_SIDE_RESIZE ? `Ресайз 0/${total}…` : `Подготовка 0/${total}…`;
   const results = await Promise.all(files.map(async (file) => {
-    const result = await resizeImage(file, 1600, 0.85);
-    resizeDone++;
-    progress.textContent = `Ресайз ${resizeDone}/${total}…`;
+    const result = CLIENT_SIDE_RESIZE ? await resizeImage(file, 1600, 0.85) : { blob: file, ext: null };
+    done++;
+    progress.textContent = `${done}/${total}…`;
     return result;
   }));
 
@@ -53,10 +58,9 @@ async function uploadPhotos() {
   form.append('caption', caption);
   form.append('category_id', categoryId);
   form.append('place_id', placeId);
-  results.forEach(({ blob, w, h, ext }, i) => {
-    form.append('photos', new File([blob], files[i].name.replace(/\.\w+$/, ext), { type: blob.type }));
-    form.append('widths[]', w);
-    form.append('heights[]', h);
+  results.forEach(({ blob, ext }, i) => {
+    const name = ext ? files[i].name.replace(/\.\w+$/, ext) : files[i].name;
+    form.append('photos', new File([blob], name, { type: blob.type }));
   });
 
   await new Promise((resolve, reject) => {

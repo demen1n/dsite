@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"dsite/internal/db"
+	"dsite/internal/imgproc"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +14,14 @@ import (
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
+)
+
+// Уменьшение и перекодирование загруженных изображений на сервере: единая
+// точка правды для качества/резкости независимо от того, какой браузер
+// и с каким canvas-движком отправил файл.
+const (
+	uploadMaxWidth = 1600
+	uploadQuality  = 85
 )
 
 var dummyHash []byte
@@ -330,10 +339,8 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 	caption := r.FormValue("caption")
 	categoryID, _ := strconv.Atoi(r.FormValue("category_id"))
 	placeID, _ := strconv.Atoi(r.FormValue("place_id"))
-	widths := r.Form["widths[]"]
-	heights := r.Form["heights[]"]
 
-	for i, fh := range files {
+	for _, fh := range files {
 		f, err := fh.Open()
 		if err != nil {
 			continue
@@ -352,19 +359,25 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		filename, err := saveUpload(data, ext)
+		var filename string
+		var pw, ph int
+		if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
+			filename, err = saveUpload(data, ext)
+			if err == nil {
+				pw, ph, _ = imgproc.Dimensions(data)
+			}
+		} else {
+			var processed []byte
+			processed, pw, ph, err = imgproc.Process(data, uploadMaxWidth, uploadQuality)
+			if err == nil {
+				filename, err = saveUpload(processed, ".jpg")
+			}
+		}
 		if err != nil {
-			log.Printf("saveUpload %s: %v", fh.Filename, err)
+			log.Printf("process/save photo %s: %v", fh.Filename, err)
 			continue
 		}
-		var w, h int
-		if i < len(widths) {
-			w, _ = strconv.Atoi(widths[i])
-		}
-		if i < len(heights) {
-			h, _ = strconv.Atoi(heights[i])
-		}
-		if err := db.AddPhoto(filename, caption, categoryID, placeID, w, h); err != nil {
+		if err := db.AddPhoto(filename, caption, categoryID, placeID, pw, ph); err != nil {
 			log.Printf("AddPhoto %s: %v", filename, err)
 		}
 	}
@@ -612,9 +625,20 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "unsupported file type", 400)
 		return
 	}
-	filename, err := saveUpload(data, ext)
+
+	var filename string
+	if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
+		filename, err = saveUpload(data, ext)
+	} else {
+		var processed []byte
+		processed, _, _, err = imgproc.Process(data, uploadMaxWidth, uploadQuality)
+		if err == nil {
+			filename, err = saveUpload(processed, ".jpg")
+		}
+	}
 	if err != nil {
-		http.Error(w, "Internal Server Error", 500)
+		log.Printf("upload image %s: %v", header.Filename, err)
+		http.Error(w, "could not process image", 500)
 		return
 	}
 
@@ -668,7 +692,14 @@ func handleCoverUpload(r *http.Request) (string, error) {
 	if !isAllowedImageContent(data) {
 		return "", fmt.Errorf("unsupported file type")
 	}
-	return saveUpload(data, ext)
+	if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
+		return saveUpload(data, ext)
+	}
+	processed, _, _, err := imgproc.Process(data, uploadMaxWidth, uploadQuality)
+	if err != nil {
+		return "", fmt.Errorf("process image: %w", err)
+	}
+	return saveUpload(processed, ".jpg")
 }
 
 // ─────────────────────── Categories ───────────────────────

@@ -5,6 +5,7 @@ go 1.26
 require (
 	github.com/yuin/goldmark v1.7.16
 	golang.org/x/crypto v0.48.0
+	golang.org/x/image v0.43.0
 	modernc.org/sqlite v1.46.1
 )
 
