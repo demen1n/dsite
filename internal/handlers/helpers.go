@@ -90,7 +90,10 @@ var (
 func clientIP(r *http.Request) string {
 	if trustedProxy {
 		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-			return strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+			// Берём последний элемент: его дописал наш прокси (Caddy appends),
+			// а первые может прислать сам клиент и подделать IP.
+			parts := strings.Split(xff, ",")
+			return strings.TrimSpace(parts[len(parts)-1])
 		}
 	}
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

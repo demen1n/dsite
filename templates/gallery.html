@@ -64,7 +64,7 @@
   {{if .Data.Places}}
   <div class="gallery-filter-row gallery-places">
     <span class="gallery-filter-label">Место:</span>
-    <button class="place-toggle{{if ne .Data.ActivePlace ""}} active{{end}}" id="place-toggle" onclick="togglePlaces()">
+    <button class="place-toggle{{if ne .Data.ActivePlace ""}} active{{end}}" id="place-toggle">
       <span id="place-toggle-label">{{if eq .Data.ActivePlace ""}}Везде{{else}}{{range .Data.Places}}{{if eq $.Data.ActivePlace .Slug}}{{.Name}}{{end}}{{end}}{{end}}</span>
       <span class="ptarrow">▾</span>
     </button>

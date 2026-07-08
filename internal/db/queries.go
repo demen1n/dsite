@@ -29,6 +29,12 @@ func UpdatePassword(login, hash string) error {
 	return err
 }
 
+// GetAdmin возвращает логин и хеш пароля единственного администратора.
+func GetAdmin() (login, hash string, err error) {
+	err = DB.QueryRow(`SELECT login, password FROM users LIMIT 1`).Scan(&login, &hash)
+	return
+}
+
 // ───────────────────────── Posts ─────────────────────────
 
 type Post struct {
@@ -497,6 +503,11 @@ func SessionValid(token string) bool {
 
 func DeleteSession(token string) {
 	DB.Exec(`DELETE FROM sessions WHERE token=?`, token)
+}
+
+// DeleteAllSessions разлогинивает все устройства (после смены пароля).
+func DeleteAllSessions() {
+	DB.Exec(`DELETE FROM sessions`)
 }
 
 func CleanExpiredSessions() {

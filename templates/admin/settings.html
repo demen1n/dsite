@@ -87,4 +87,23 @@
 
   <button type="submit" class="btn btn-primary">Сохранить</button>
 </form>
+
+<form method="POST" action="/admin/settings/password" style="margin-top:1.5rem">
+  <div style="background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:1.5rem; margin-bottom:1.5rem">
+    <h2 style="font-size:1rem; font-weight:600; margin-bottom:1.25rem; color:var(--muted); text-transform:uppercase; letter-spacing:.04em">Смена пароля</h2>
+    {{if index .Data "_pwerr"}}
+    <p style="color:#b91c1c; font-size:0.9rem; margin-bottom:1rem">{{index .Data "_pwerr"}}</p>
+    {{end}}
+    <div class="form-group">
+      <label>Текущий пароль</label>
+      <input type="password" name="current_password" autocomplete="current-password" required>
+    </div>
+    <div class="form-group" style="margin-bottom:0">
+      <label>Новый пароль <span style="font-weight:400; color:var(--muted)">(минимум 8 символов)</span></label>
+      <input type="password" name="new_password" autocomplete="new-password" minlength="8" required>
+    </div>
+    <p style="color:var(--muted); font-size:0.85rem; margin:0.75rem 0 1rem">После смены пароля все сессии будут разлогинены — потребуется войти заново.</p>
+    <button type="submit" class="btn btn-secondary">Сменить пароль</button>
+  </div>
+</form>
 {{end}}

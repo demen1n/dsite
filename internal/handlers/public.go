@@ -413,11 +413,7 @@ func Feed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	scheme := "https"
-	if r.TLS == nil && r.Header.Get("X-Forwarded-Proto") != "https" {
-		scheme = "http"
-	}
-	base := fmt.Sprintf("%s://%s", scheme, r.Host)
+	base := baseURL(r)
 
 	feed := atomFeed{
 		Xmlns: "http://www.w3.org/2005/Atom",

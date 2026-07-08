@@ -236,10 +236,11 @@ func TestClientIP(t *testing.T) {
 		t.Errorf("trusted: got %q, want 9.9.9.9", got)
 	}
 
-	// Multiple IPs in X-Forwarded-For — take first
+	// Multiple IPs in X-Forwarded-For — take the last one (appended by our
+	// trusted proxy); earlier entries are client-supplied and spoofable.
 	r.Header.Set("X-Forwarded-For", "8.8.8.8, 1.1.1.1")
-	if got := clientIP(r); got != "8.8.8.8" {
-		t.Errorf("multi XFF: got %q, want 8.8.8.8", got)
+	if got := clientIP(r); got != "1.1.1.1" {
+		t.Errorf("multi XFF: got %q, want 1.1.1.1", got)
 	}
 
 	trustedProxy = false

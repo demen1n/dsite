@@ -107,7 +107,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 	if c, err := r.Cookie("session"); err == nil {
 		DeleteSession(c.Value)
 	}
-	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/", SameSite: http.SameSiteLaxMode})
+	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/", HttpOnly: true, Secure: secureCookies, SameSite: http.SameSiteLaxMode})
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -394,6 +394,12 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 // GET /admin/settings
 func AdminSettings(w http.ResponseWriter, r *http.Request) {
 	settings := db.GetAllSettings()
+	switch r.URL.Query().Get("pwerr") {
+	case "short":
+		settings["_pwerr"] = "Пароль должен быть не короче 8 символов"
+	case "wrong":
+		settings["_pwerr"] = "Текущий пароль неверный"
+	}
 	render(w, "admin/settings.html", page("Настройки", settings))
 }
 
@@ -415,6 +421,42 @@ func SaveSettings(w http.ResponseWriter, r *http.Request) {
 	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
+}
+
+// POST /admin/settings/password
+func ChangePassword(w http.ResponseWriter, r *http.Request) {
+	current := r.FormValue("current_password")
+	newPass := r.FormValue("new_password")
+	if len(newPass) < 8 {
+		http.Redirect(w, r, "/admin/settings?pwerr=short", http.StatusFound)
+		return
+	}
+
+	login, hash, err := db.GetAdmin()
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(current)) != nil {
+		http.Redirect(w, r, "/admin/settings?pwerr=wrong", http.StatusFound)
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(newPass), bcrypt.DefaultCost)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	if err := db.UpdatePassword(login, string(newHash)); err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+
+	// Сбрасываем все сессии (включая текущую) — после смены пароля
+	// чужие украденные куки перестают работать. Придётся войти заново.
+	db.DeleteAllSessions()
+	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/", HttpOnly: true, Secure: secureCookies, SameSite: http.SameSiteLaxMode})
+	http.Redirect(w, r, "/admin/login", http.StatusFound)
 }
 
 // POST /admin/settings/avatar

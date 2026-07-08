@@ -147,7 +147,8 @@ document.addEventListener('click', e => {
   const btn = document.getElementById('place-toggle');
   const opts = document.getElementById('place-options');
   if (!btn || !opts) return;
-  if (!btn.contains(e.target) && !opts.contains(e.target)) closePlaces();
+  if (btn.contains(e.target)) { togglePlaces(); return; }
+  if (!opts.contains(e.target)) closePlaces();
 });
 
 function updateFilterActive() {
