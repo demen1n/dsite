@@ -57,6 +57,7 @@ func main() {
 	mux.HandleFunc("GET /gallery", handlers.Gallery)
 	mux.HandleFunc("GET /gallery/filter", handlers.GalleryFilter)
 	mux.HandleFunc("GET /resume", handlers.Resume)
+	mux.HandleFunc("GET /privacy", handlers.Privacy)
 	mux.HandleFunc("GET /feed.xml", handlers.Feed)
 	mux.HandleFunc("GET /search", handlers.Search)
 	mux.HandleFunc("GET /sitemap.xml", handlers.Sitemap)

@@ -180,6 +180,15 @@ func Resume(w http.ResponseWriter, r *http.Request) {
 	render(w, "resume.html", pd)
 }
 
+// ─────────────────────── Privacy ───────────────────────
+
+// GET /privacy
+func Privacy(w http.ResponseWriter, r *http.Request) {
+	pd := page("Политика конфиденциальности", nil)
+	pd.Canonical = baseURL(r) + "/privacy"
+	render(w, "privacy.html", pd)
+}
+
 // ─────────────────────── Search ───────────────────────
 
 type SearchData struct {
