@@ -7,10 +7,12 @@ services:
     volumes:
       - /data:/data
     environment:
-      - SECURE_COOKIES=true
       - SITE_TITLE=Дмитрий Деменин
       - SITE_DESC=Программист и фотограф
       - SITE_URL=https://demenin.ru
+      # За Caddy на этом же хосте: доверяем X-Forwarded-For (последнему элементу),
+      # иначе рейт-лимитер логина видит всех посетителей как один IP прокси.
+      - TRUSTED_PROXY=true
       - GOMEMLIMIT=400MiB
     mem_limit: 512m
     cpus: "0.5"

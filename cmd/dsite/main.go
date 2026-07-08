@@ -105,6 +105,7 @@ func main() {
 
 	mux.HandleFunc("GET /admin/settings", handlers.RequireAuth(handlers.AdminSettings))
 	mux.HandleFunc("POST /admin/settings", handlers.RequireAuth(handlers.SaveSettings))
+	mux.HandleFunc("POST /admin/settings/password", handlers.RequireAuth(handlers.ChangePassword))
 	mux.HandleFunc("POST /admin/settings/avatar", handlers.RequireAuth(handlers.UploadAvatar))
 	mux.HandleFunc("POST /admin/settings/avatar/delete", handlers.RequireAuth(handlers.DeleteAvatar))
 
@@ -152,9 +153,16 @@ func securityHeaders(next http.Handler) http.Handler {
 		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
 		}
+		// Публичные страницы: только внешние скрипты — inline-XSS в контенте
+		// поста не исполнится. Админка (за auth) использует inline-обработчики,
+		// поэтому ей оставлен 'unsafe-inline'.
+		scriptSrc := "'self'"
+		if strings.HasPrefix(r.URL.Path, "/admin") {
+			scriptSrc = "'self' 'unsafe-inline'"
+		}
 		w.Header().Set("Content-Security-Policy",
 			"default-src 'self'; "+
-				"script-src 'self' 'unsafe-inline'; "+
+				"script-src "+scriptSrc+"; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: blob:; "+
 				"connect-src 'self'")

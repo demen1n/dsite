@@ -27,6 +27,9 @@ function closeLightbox() {
   window.scrollTo(0, _lbScrollY);
 }
 document.getElementById('lightbox').addEventListener('click', e => { if (e.target === e.currentTarget) closeLightbox(); });
+document.getElementById('lightbox-close').addEventListener('click', closeLightbox);
+document.getElementById('lightbox-prev').addEventListener('click', () => stepLightbox(-1));
+document.getElementById('lightbox-next').addEventListener('click', () => stepLightbox(1));
 document.addEventListener('keydown', e => {
   if (!document.getElementById('lightbox').classList.contains('open')) return;
   if (e.key === 'Escape') closeLightbox();
