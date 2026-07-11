@@ -12,7 +12,12 @@ var DB *sql.DB
 
 func Init(path string) error {
 	var err error
-	DB, err = sql.Open("sqlite", path+"?_journal_mode=WAL&_foreign_keys=on")
+	// modernc.org/sqlite only recognizes pragmas passed via repeated
+	// _pragma=name(value) params — _journal_mode=WAL&_foreign_keys=on (the
+	// mattn/go-sqlite3 convention) are silently ignored by this driver, so
+	// the app had been running without WAL and without FK enforcement
+	// (ON DELETE CASCADE/SET NULL in the schema were never actually applied).
+	DB, err = sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}
