@@ -522,6 +522,14 @@ type Tag struct {
 	Slug string
 }
 
+// DeleteTagByName удаляет тег по имени вместе со всеми его привязками к
+// постам (post_tags каскадно) — используется для чистки опечаток из
+// автодополнения тегов.
+func DeleteTagByName(name string) error {
+	_, err := DB.Exec(`DELETE FROM tags WHERE slug=?`, tagSlug(name))
+	return err
+}
+
 // ListAllTags возвращает все теги отсортированные по имени.
 func ListAllTags() ([]Tag, error) {
 	rows, err := DB.Query(`SELECT id, name, slug FROM tags ORDER BY name`)

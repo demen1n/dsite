@@ -688,6 +688,21 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte("/uploads/" + filename))
 }
 
+// POST /admin/tags/delete — удаляет тег из автодополнения (и из всех постов,
+// где он проставлен). Используется в редакторе для чистки опечаток.
+func DeleteTag(w http.ResponseWriter, r *http.Request) {
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "name required", 400)
+		return
+	}
+	if err := db.DeleteTagByName(name); err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 // ─────────────────────── Helpers ───────────────────────
 
 // parseTags разбирает строку вида "тег1, тег2, тег3" в слайс имён.

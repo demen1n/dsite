@@ -84,6 +84,7 @@ func main() {
 	mux.HandleFunc("POST /admin/posts/{id}/delete", handlers.RequireAuth(handlers.DeletePost))
 	mux.HandleFunc("POST /admin/posts/preview", handlers.RequireAuth(handlers.PreviewMD))
 	mux.HandleFunc("POST /admin/upload", handlers.RequireAuth(handlers.UploadImage))
+	mux.HandleFunc("POST /admin/tags/delete", handlers.RequireAuth(handlers.DeleteTag))
 
 	mux.HandleFunc("GET /admin/media/picker", handlers.RequireAuth(handlers.MediaPicker))
 	mux.HandleFunc("POST /admin/media/to-gallery", handlers.RequireAuth(handlers.AddToGallery))

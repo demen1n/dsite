@@ -90,8 +90,14 @@
   .tag-dropdown-item {
     padding: 0.35rem 0.7rem; cursor: pointer; font-size: 0.85rem;
     color: var(--text); white-space: nowrap;
+    display: flex; align-items: center; justify-content: space-between; gap: 0.6rem;
   }
   .tag-dropdown-item:hover, .tag-dropdown-item.active { background: var(--border); }
+  .tag-dropdown-delete {
+    cursor: pointer; color: var(--muted); font-size: 0.9rem; line-height: 1;
+    border: none; background: none; padding: 0 0.1rem; margin: 0; flex-shrink: 0;
+  }
+  .tag-dropdown-delete:hover { color: #c0392b; }
 
   /* Toolbar */
   .editor-toolbar {
@@ -275,8 +281,42 @@
       items.forEach((t, i) => {
         const d = document.createElement('div');
         d.className = 'tag-dropdown-item';
-        d.textContent = t;
-        d.onmousedown = (e) => { e.preventDefault(); addTag(t); };
+
+        const label = document.createElement('span');
+        label.textContent = t;
+        d.appendChild(label);
+
+        const del = document.createElement('button');
+        del.type = 'button';
+        del.className = 'tag-dropdown-delete';
+        del.textContent = '×';
+        del.title = 'Удалить тег из списка (и из всех постов)';
+        del.addEventListener('mousedown', async (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (!confirm(`Удалить тег «${t}» из списка? Он также будет убран со всех постов, где стоит.`)) return;
+          try {
+            const resp = await fetch('/admin/tags/delete', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+              body: 'name=' + encodeURIComponent(t),
+            });
+            if (!resp.ok) throw new Error(await resp.text());
+            const idx = allTags.indexOf(t);
+            if (idx !== -1) allTags.splice(idx, 1);
+            d.remove();
+            if (!dropdown.children.length) closeDropdown();
+          } catch (err) {
+            alert('Не удалось удалить тег: ' + err.message);
+          }
+        });
+        d.appendChild(del);
+
+        d.addEventListener('mousedown', (e) => {
+          if (e.target.closest('.tag-dropdown-delete')) return;
+          e.preventDefault();
+          addTag(t);
+        });
         dropdown.appendChild(d);
       });
       dropdown.classList.toggle('open', items.length > 0);
