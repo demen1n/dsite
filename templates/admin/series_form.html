@@ -41,6 +41,16 @@
     <input type="file" name="cover" accept="image/*">
   </div>
 
+  <div class="form-group">
+    <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:400">
+      <input type="checkbox" name="collect_photos" value="1" {{with .Data}}{{if .CollectPhotos}}checked{{end}}{{end}} style="width:auto; accent-color:var(--accent)">
+      Собирать фото со всех постов в галерею
+    </label>
+    <div style="font-size:0.8rem; color:var(--muted); margin-top:0.3rem">
+      Вместо плиток постов страница серии покажет все картинки из их текста одной галереей — как раздел «Галерея».
+    </div>
+  </div>
+
   <div class="editor-layout">
     <div>
       <label style="margin-bottom:0.5rem; display:block">Описание серии <span style="font-weight:400; color:var(--muted)">(markdown, необязательно)</span></label>

@@ -1,40 +1,69 @@
-{{define "content"}}
-{{with .Data}}
-<div style="margin-bottom:0.5rem; font-size:0.85rem; color:var(--muted)">
-  <a href="/series" style="color:var(--muted)">← Все серии</a>
-</div>
-<h1>{{.Name}}</h1>
-{{if .Cover}}
-<img src="/uploads/{{.Cover}}" alt="{{.Name}}" data-lightbox
-     style="width:100%; max-height:420px; object-fit:cover; margin:1.5rem 0; cursor:pointer; border-radius:6px;">
-{{end}}
-{{if .DescriptionHTML}}
-<div class="prose" style="margin-bottom:2rem">
-  {{safeHTML .DescriptionHTML}}
-</div>
+{{define "head"}}
+{{with .Data}}{{if .CollectPhotos}}
+<style>
+  main { max-width: 100%; padding: 0; }
+  .series-intro { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem 0; }
+</style>
+{{end}}{{end}}
 {{end}}
 
-{{if .Posts}}
-<div class="series-grid">
-  {{range $i, $p := .Posts}}
-  <a class="series-card" href="/post/{{$p.Slug}}">
-    {{if $p.DisplayCover}}
-    <img class="series-card-cover" src="{{$p.DisplayCover}}" alt="{{$p.Title}}" loading="lazy">
-    {{else}}
-    <div class="series-card-cover series-card-cover-empty"></div>
-    {{end}}
-    <div class="series-card-body">
-      <span class="series-card-num">{{add $i 1}}</span>
-      <div>
-        <div class="series-card-title">{{$p.Title}}</div>
-        <div class="series-card-date">{{fmtDateShort $p.CreatedAt}}</div>
-      </div>
-    </div>
-  </a>
+{{define "content"}}
+{{with .Data}}
+<div class="{{if .CollectPhotos}}series-intro{{end}}">
+  <div style="margin-bottom:0.5rem; font-size:0.85rem; color:var(--muted)">
+    <a href="/series" style="color:var(--muted)">← Все серии</a>
+  </div>
+  <h1>{{.Name}}</h1>
+  {{if .Cover}}
+  <img src="/uploads/{{.Cover}}" alt="{{.Name}}" data-lightbox
+       style="width:100%; max-height:420px; object-fit:cover; margin:1.5rem 0; cursor:pointer; border-radius:6px;">
+  {{end}}
+  {{if .DescriptionHTML}}
+  <div class="prose" style="margin-bottom:2rem">
+    {{safeHTML .DescriptionHTML}}
+  </div>
   {{end}}
 </div>
+
+{{if .CollectPhotos}}
+  {{if .Photos}}
+  <div class="gallery-grid-inner">
+    {{range .Photos}}
+    <div class="gallery-item">
+      <img src="{{.}}" alt="" decoding="async">
+    </div>
+    {{end}}
+  </div>
+  {{else}}
+  <p style="color:var(--muted); padding:0 1.5rem">В постах этой серии пока нет фотографий.</p>
+  {{end}}
 {{else}}
-<p style="color:var(--muted)">В этой серии пока нет опубликованных постов.</p>
+  {{if .Posts}}
+  <div class="series-grid">
+    {{range $i, $p := .Posts}}
+    <a class="series-card" href="/post/{{$p.Slug}}">
+      {{if $p.DisplayCover}}
+      <img class="series-card-cover" src="{{$p.DisplayCover}}" alt="{{$p.Title}}" loading="lazy">
+      {{else}}
+      <div class="series-card-cover series-card-cover-empty"></div>
+      {{end}}
+      <div class="series-card-body">
+        <span class="series-card-num">{{add $i 1}}</span>
+        <div>
+          <div class="series-card-title">{{$p.Title}}</div>
+          <div class="series-card-date">{{fmtDateShort $p.CreatedAt}}</div>
+        </div>
+      </div>
+    </a>
+    {{end}}
+  </div>
+  {{else}}
+  <p style="color:var(--muted)">В этой серии пока нет опубликованных постов.</p>
+  {{end}}
 {{end}}
 {{end}}
+{{end}}
+
+{{define "scripts"}}
+{{with .Data}}{{if .CollectPhotos}}<script src="/static/gallery.js"></script>{{end}}{{end}}
 {{end}}

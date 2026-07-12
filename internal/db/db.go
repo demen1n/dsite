@@ -125,6 +125,7 @@ func migrateSeries() error {
 		description_md   TEXT NOT NULL DEFAULT '',
 		description_html TEXT NOT NULL DEFAULT '',
 		cover            TEXT NOT NULL DEFAULT '',
+		collect_photos   INTEGER NOT NULL DEFAULT 0,
 		created_at       TEXT NOT NULL DEFAULT (datetime('now'))
 	);
 	`)
@@ -132,6 +133,7 @@ func migrateSeries() error {
 		return err
 	}
 	DB.Exec(`ALTER TABLE posts ADD COLUMN series_id INTEGER REFERENCES series(id) ON DELETE SET NULL`)
+	DB.Exec(`ALTER TABLE series ADD COLUMN collect_photos INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_posts_series_id ON posts(series_id)`)
 	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_series_slug ON series(slug)`)
 	return nil
