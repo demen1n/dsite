@@ -26,6 +26,9 @@
       {{range .Tags}}<a href="/blog?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
     </span>
     {{end}}
+    {{if .SeriesSlug}}
+    <a href="/series/{{.SeriesSlug}}" class="series-badge">📍 {{.SeriesName}}</a>
+    {{end}}
   </div>
   <h1>{{.Title}}</h1>
   {{if .Cover}}
@@ -35,6 +38,16 @@
   <div class="prose">
     {{safeHTML .BodyHTML}}
   </div>
+  {{if or .PrevPost .NextPost}}
+  <nav class="series-postnav">
+    {{if .PrevPost}}
+    <a href="/post/{{.PrevPost.Slug}}"><span class="series-postnav-dir">← Пред. пост серии</span><span class="series-postnav-title">{{.PrevPost.Title}}</span></a>
+    {{end}}
+    {{if .NextPost}}
+    <a href="/post/{{.NextPost.Slug}}" class="series-postnav-next"><span class="series-postnav-dir">След. пост серии →</span><span class="series-postnav-title">{{.NextPost.Title}}</span></a>
+    {{end}}
+  </nav>
+  {{end}}
 </article>
 {{end}}
 {{end}}

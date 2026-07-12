@@ -1,0 +1,50 @@
+{{define "admin_content"}}
+<div class="admin-header">
+  <h1>{{.Title}}</h1>
+  {{with .Data}}<a href="/series/{{.Slug}}" target="_blank" class="btn btn-secondary">Просмотреть ↗</a>{{end}}
+</div>
+
+<form method="POST" action="{{with .Data}}/admin/series/{{.ID}}/edit{{else}}/admin/series/new{{end}}" enctype="multipart/form-data">
+  <div class="form-group">
+    <label>Название</label>
+    <input type="text" name="name" required value="{{with .Data}}{{.Name}}{{end}}" placeholder="Сеул">
+    {{with .Data}}<div style="font-size:0.8rem; color:var(--muted); margin-top:0.3rem">/series/{{.Slug}}</div>{{end}}
+  </div>
+
+  <div class="form-group">
+    <label>Обложка</label>
+    {{with .Data}}{{if .Cover}}
+    <div style="display:flex; align-items:center; gap:1rem; margin-bottom:0.75rem">
+      <img src="/uploads/{{.Cover}}" alt="{{.Name}}" style="width:160px; height:100px; object-fit:cover; border-radius:var(--radius); border:1px solid var(--border)">
+      <label style="display:flex; align-items:center; gap:0.4rem; font-weight:400; cursor:pointer">
+        <input type="checkbox" name="remove_cover" value="1" style="width:auto">
+        Убрать обложку
+      </label>
+    </div>
+    {{end}}{{end}}
+    <input type="file" name="cover" accept="image/*">
+  </div>
+
+  <div class="editor-layout">
+    <div>
+      <label style="margin-bottom:0.5rem; display:block">Описание серии <span style="font-weight:400; color:var(--muted)">(markdown, необязательно)</span></label>
+      <textarea name="description" id="body"
+                hx-post="/admin/posts/preview"
+                hx-trigger="input changed delay:400ms"
+                hx-target="#preview"
+                hx-include="#body"
+                placeholder="Пять дней в Сеуле — рынки, дворцы, ночной город.">{{with .Data}}{{.DescriptionMD}}{{end}}</textarea>
+    </div>
+    <div>
+      <div style="font-size:0.82rem; color:var(--muted); margin-bottom:0.5rem">Превью</div>
+      <div class="preview-pane" id="preview">
+        {{with .Data}}{{safeHTML .DescriptionHTML}}{{end}}
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top:1.25rem">
+    <button type="submit" class="btn btn-primary">Сохранить</button>
+  </div>
+</form>
+{{end}}

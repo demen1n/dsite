@@ -51,6 +51,9 @@ func Init(path string) error {
 	if err = migrateFTS(); err != nil {
 		return fmt.Errorf("migrate fts: %w", err)
 	}
+	if err = migrateSeries(); err != nil {
+		return fmt.Errorf("migrate series: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -108,6 +111,29 @@ func migrateFTS() error {
 	END`)
 	// Populate index from existing posts (idempotent)
 	DB.Exec(`INSERT INTO posts_fts(posts_fts) VALUES('rebuild')`)
+	return nil
+}
+
+// migrateSeries adds the series table (a themed group of posts, e.g. a trip
+// spread over several days — "Seoul", "Osaka") and links posts to it.
+func migrateSeries() error {
+	_, err := DB.Exec(`
+	CREATE TABLE IF NOT EXISTS series (
+		id               INTEGER PRIMARY KEY AUTOINCREMENT,
+		name             TEXT NOT NULL,
+		slug             TEXT NOT NULL UNIQUE,
+		description_md   TEXT NOT NULL DEFAULT '',
+		description_html TEXT NOT NULL DEFAULT '',
+		cover            TEXT NOT NULL DEFAULT '',
+		created_at       TEXT NOT NULL DEFAULT (datetime('now'))
+	);
+	`)
+	if err != nil {
+		return err
+	}
+	DB.Exec(`ALTER TABLE posts ADD COLUMN series_id INTEGER REFERENCES series(id) ON DELETE SET NULL`)
+	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_posts_series_id ON posts(series_id)`)
+	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_series_slug ON series(slug)`)
 	return nil
 }
 
