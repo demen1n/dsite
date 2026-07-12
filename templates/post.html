@@ -18,7 +18,11 @@
 {{with .Data}}
 <article>
   <div style="margin-bottom:0.5rem; font-size:0.85rem; color:var(--muted); display:flex; align-items:center; gap:1rem; flex-wrap:wrap">
+    {{if .FromSeries}}
+    <a href="/series/{{.SeriesSlug}}" style="color:var(--muted)">← {{.SeriesName}}</a>
+    {{else}}
     <a href="/blog" style="color:var(--muted)">← Блог</a>
+    {{end}}
     <span>{{relDate .CreatedAt}}</span>
     {{if .Views}}<span>{{.Views}} просм.</span>{{end}}
     {{if .Tags}}
@@ -26,7 +30,7 @@
       {{range .Tags}}<a href="/blog?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
     </span>
     {{end}}
-    {{if .SeriesSlug}}
+    {{if and .SeriesSlug (not .FromSeries)}}
     <a href="/series/{{.SeriesSlug}}" class="series-badge">📍 {{.SeriesName}}</a>
     {{end}}
   </div>

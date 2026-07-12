@@ -10,6 +10,7 @@ import (
 	"image/png"
 	"math"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 )
@@ -86,6 +87,21 @@ type PostViewData struct {
 	SeriesPosts []db.Post
 	PrevPost    *db.Post
 	NextPost    *db.Post
+	FromSeries  bool // true если пришли по ссылке со страницы серии
+}
+
+// fromSeriesPage сообщает, что реферер запроса — страница серии на этом же
+// сайте (а не блог, поиск или внешняя ссылка).
+func fromSeriesPage(r *http.Request) bool {
+	ref := r.Header.Get("Referer")
+	if ref == "" {
+		return false
+	}
+	u, err := url.Parse(ref)
+	if err != nil || u.Host != r.Host {
+		return false
+	}
+	return strings.HasPrefix(u.Path, "/series/")
 }
 
 // GET /post/{slug}
@@ -104,6 +120,7 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 
 	vd := PostViewData{Post: post}
 	if post.SeriesID != 0 {
+		vd.FromSeries = fromSeriesPage(r)
 		if seriesPosts, err := db.PostsInSeries(post.SeriesID); err == nil {
 			vd.SeriesPosts = seriesPosts
 			for i, sp := range seriesPosts {
