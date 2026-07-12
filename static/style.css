@@ -93,17 +93,23 @@ a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
 .series-wrap { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem; }
 .series-hero { width: 100%; max-height: 640px; object-fit: cover; display: block; cursor: pointer; }
 @media (max-width: 640px) { .series-hero { max-height: 340px; } }
-.series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0; }
-.series-grid-index { grid-template-columns: repeat(2, 1fr); }
-.series-card { display: block; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color 0.15s; }
+/* .series-grid: post tiles within a series page. Flex + JS justified-layout
+   (gallery.js) packs .series-card by its cover's real aspect ratio, same
+   algorithm as the photo gallery. The widths/heights below are only the
+   pre-JS fallback (also what a card looks like if JS is off). */
+.series-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 1.5rem 0; }
+.series-grid-index { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.series-card { display: block; flex: 1 1 260px; max-width: 100%; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color 0.15s; }
 .series-card:hover { border-color: var(--text); }
-.series-card-cover { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
-.series-card-cover-empty { background: var(--border); }
+.series-card-cover { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; opacity: 0; transition: opacity 0.35s ease; }
+.series-card-cover.gfade { opacity: 1; }
+.series-card-cover-empty { background: var(--border); opacity: 1; }
 .series-card-body { display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 0.9rem; font-family: var(--sans); }
+.series-card-text { min-width: 0; overflow-wrap: break-word; }
 .series-card-num { flex-shrink: 0; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--border); color: var(--muted); font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; justify-content: center; }
 .series-card-title { font-size: 0.92rem; font-weight: 600; line-height: 1.3; }
 .series-card-date { font-size: 0.78rem; color: var(--muted); margin-top: 0.15rem; }
-@media (max-width: 520px) { .series-grid { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .series-grid-index { grid-template-columns: 1fr; } }
 
 /* ── Series nav on a post ── */
 .series-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-family: var(--sans); font-size: 0.78rem; color: var(--muted); text-decoration: none; padding: 0.15rem 0.6rem; border: 1px solid var(--border); border-radius: 20px; }

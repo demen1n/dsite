@@ -6,6 +6,38 @@ function setupGalleryLightbox() {
   });
 }
 
+// packJustified packs items into rows that exactly fill containerWidth,
+// each row sharing one height, à la Flickr/Google Photos "justified" grids.
+// ratios[i] is item i's width/height. Returns {width, height} per item, in
+// the original order — the same "justified gallery" math used for both the
+// photo grid and (below) series post-card tiles.
+function packJustified(ratios, containerWidth, gap, targetH) {
+  const rows = [];
+  let row = [], rowRatio = 0;
+  ratios.forEach((r, i) => {
+    row.push(i);
+    rowRatio += r;
+    if (rowRatio * targetH >= containerWidth || i === ratios.length - 1) {
+      rows.push({ indices: [...row], totalRatio: rowRatio });
+      row = []; rowRatio = 0;
+    }
+  });
+
+  const sized = new Array(ratios.length);
+  rows.forEach(({ indices, totalRatio }) => {
+    const gapSpace = gap * (indices.length - 1);
+    const h = Math.round((containerWidth - gapSpace) / totalRatio);
+    let usedWidth = 0;
+    indices.forEach((i, j) => {
+      const isLastInRow = j === indices.length - 1;
+      const w = isLastInRow ? (containerWidth - gapSpace - usedWidth) : Math.round(h * ratios[i]);
+      usedWidth += w;
+      sized[i] = { width: w, height: h };
+    });
+  });
+  return sized;
+}
+
 let galleryRO = null;
 function justify() {
   const grid = document.querySelector('.gallery-grid-inner');
@@ -35,8 +67,8 @@ function justify() {
   galleryRO.observe(grid);
 }
 
-function setupFadeIn() {
-  const imgs = [...document.querySelectorAll('.gallery-item img:not(.gfade)')];
+function setupFadeIn(imgs) {
+  imgs = [...imgs].filter(img => !img.classList.contains('gfade'));
   if (!imgs.length) return;
   const observer = new IntersectionObserver((entries) => {
     entries.forEach(entry => {
@@ -78,45 +110,88 @@ function layout(grid, items, imgs) {
       item.style.cssText = `width:${W}px; height:${h}px; flex:none; overflow:hidden; cursor:pointer;`;
       imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
     });
-    setupFadeIn();
+    setupFadeIn(imgs);
     return;
   }
 
-  const rows = [];
-  let row = [], rowRatio = 0;
-  ratios.forEach((r, i) => {
-    row.push(i);
-    rowRatio += r;
-    if (rowRatio * TARGET_H >= W || i === ratios.length - 1) {
-      rows.push({ indices: [...row], totalRatio: rowRatio });
-      row = []; rowRatio = 0;
-    }
+  const sized = packJustified(ratios, W, GAP, TARGET_H);
+  items.forEach((item, i) => {
+    item.style.cssText = `width:${sized[i].width}px; height:${sized[i].height}px; flex:none; overflow:hidden; cursor:pointer;`;
+    imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
+  });
+  setupFadeIn(imgs);
+}
+
+// ── Series post-card tiles: same justified-packing algorithm as the photo
+// grid, but only the cover image is sized by it — the title/date footer
+// below each card keeps its own natural height. ──
+let seriesGridRO = null;
+function justifySeriesCards() {
+  const grid = document.querySelector('.series-grid');
+  if (!grid) return;
+  const cards = [...grid.querySelectorAll('.series-card')];
+  if (!cards.length) return;
+  const covers = cards.map(el => el.querySelector('.series-card-cover'));
+
+  layoutCards(grid, cards, covers);
+
+  covers.forEach(cover => {
+    if (cover.tagName !== 'IMG') return;
+    if (cover.complete && cover.naturalWidth) return;
+    cover.addEventListener('load', () => layoutCards(grid, cards, covers), { once: true });
   });
 
-  rows.forEach(({ indices, totalRatio }) => {
-    const gapSpace = GAP * (indices.length - 1);
-    const h = Math.round((W - gapSpace) / totalRatio);
-    let usedWidth = 0;
-    indices.forEach((i, j) => {
-      const isLastInRow = j === indices.length - 1;
-      const w = isLastInRow ? (W - gapSpace - usedWidth) : Math.round(h * ratios[i]);
-      usedWidth += w;
-      items[i].style.cssText = `width:${w}px; height:${h}px; flex:none; overflow:hidden; cursor:pointer;`;
-      imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
-    });
+  if (seriesGridRO) seriesGridRO.disconnect();
+  let lastW = grid.clientWidth;
+  seriesGridRO = new ResizeObserver(() => {
+    const w = grid.clientWidth;
+    if (w !== lastW) {
+      lastW = w;
+      layoutCards(grid, cards, covers);
+    }
   });
-  setupFadeIn();
+  seriesGridRO.observe(grid);
+}
+
+function layoutCards(grid, cards, covers) {
+  const W = grid.clientWidth;
+  const GAP = 12;
+  const TARGET_H = Math.max(180, Math.round(W / 3.2));
+
+  const ratios = covers.map(cover => {
+    if (cover.tagName === 'IMG' && cover.naturalWidth && cover.naturalHeight) {
+      return cover.naturalWidth / cover.naturalHeight;
+    }
+    return 4 / 3; // placeholder (no cover) or not loaded yet
+  });
+
+  if (W < 480) {
+    cards.forEach((card, i) => {
+      card.style.cssText = `width:100%; flex:none;`;
+      covers[i].style.height = Math.round(W / ratios[i]) + 'px';
+    });
+    setupFadeIn(covers.filter(c => c.tagName === 'IMG'));
+    return;
+  }
+
+  const sized = packJustified(ratios, W, GAP, TARGET_H);
+  cards.forEach((card, i) => {
+    card.style.cssText = `width:${sized[i].width}px; flex:none;`;
+    covers[i].style.height = sized[i].height + 'px';
+  });
+  setupFadeIn(covers.filter(c => c.tagName === 'IMG'));
 }
 
 setupGalleryLightbox();
 justify();
+justifySeriesCards();
 
-window.addEventListener('load', justify);
+window.addEventListener('load', () => { justify(); justifySeriesCards(); });
 
 let resizeTimer;
 window.addEventListener('resize', () => {
   clearTimeout(resizeTimer);
-  resizeTimer = setTimeout(justify, 100);
+  resizeTimer = setTimeout(() => { justify(); justifySeriesCards(); }, 100);
 });
 
 document.body.addEventListener('htmx:afterSwap', e => {
