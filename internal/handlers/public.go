@@ -149,9 +149,17 @@ func SeriesIndex(w http.ResponseWriter, r *http.Request) {
 	render(w, "series_index.html", pd)
 }
 
+// SeriesPostCard — пост в сетке страницы серии. DisplayCover уже готов для
+// вставки в <img src>: либо обложка поста, либо первая картинка из тела
+// (если своей обложки нет), либо пусто.
+type SeriesPostCard struct {
+	db.Post
+	DisplayCover string
+}
+
 type SeriesViewData struct {
 	*db.Series
-	Posts []db.Post
+	Posts []SeriesPostCard
 }
 
 // GET /series/{slug}
@@ -167,7 +175,18 @@ func SeriesView(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	pd := page(series.Name, SeriesViewData{Series: series, Posts: posts})
+	cards := make([]SeriesPostCard, len(posts))
+	for i, p := range posts {
+		cover := ""
+		switch {
+		case p.Cover != "":
+			cover = "/uploads/" + p.Cover
+		default:
+			cover = firstImageSrc(p.BodyHTML)
+		}
+		cards[i] = SeriesPostCard{Post: p, DisplayCover: cover}
+	}
+	pd := page(series.Name, SeriesViewData{Series: series, Posts: cards})
 	base := baseURL(r)
 	pd.Canonical = base + "/series/" + series.Slug
 	if series.Cover != "" {

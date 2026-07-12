@@ -18,8 +18,8 @@
 <div class="series-grid">
   {{range $i, $p := .Posts}}
   <a class="series-card" href="/post/{{$p.Slug}}">
-    {{if $p.Cover}}
-    <img class="series-card-cover" src="/uploads/{{$p.Cover}}" alt="{{$p.Title}}" loading="lazy">
+    {{if $p.DisplayCover}}
+    <img class="series-card-cover" src="{{$p.DisplayCover}}" alt="{{$p.Title}}" loading="lazy">
     {{else}}
     <div class="series-card-cover series-card-cover-empty"></div>
     {{end}}
