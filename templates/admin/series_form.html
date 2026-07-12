@@ -7,9 +7,25 @@
 <form method="POST" action="{{with .Data}}/admin/series/{{.ID}}/edit{{else}}/admin/series/new{{end}}" enctype="multipart/form-data">
   <div class="form-group">
     <label>Название</label>
-    <input type="text" name="name" required value="{{with .Data}}{{.Name}}{{end}}" placeholder="Сеул">
-    {{with .Data}}<div style="font-size:0.8rem; color:var(--muted); margin-top:0.3rem">/series/{{.Slug}}</div>{{end}}
+    <input type="text" name="name" id="series-name" required value="{{with .Data}}{{.Name}}{{end}}"
+           placeholder="Сеул" oninput="autoSeriesSlug(this.value)">
+    <div style="display:flex; align-items:center; gap:0.3rem; margin-top:0.4rem; font-size:0.85rem; color:var(--muted)">
+      <span style="opacity:0.6">/series/</span>
+      <input type="text" name="slug" id="series-slug" value="{{with .Data}}{{.Slug}}{{end}}"
+             placeholder="slug" oninput="seriesSlugEdited=true"
+             style="border:none; border-bottom:1px dashed transparent; background:transparent; color:var(--muted); font-family:inherit; font-size:0.85rem; outline:none; padding:0; min-width:12ch;"
+             onfocus="this.style.borderBottomColor='var(--accent)'; this.style.color='var(--text)'"
+             onblur="this.style.borderBottomColor='transparent'; this.style.color='var(--muted)'">
+    </div>
   </div>
+  <script>
+    let seriesSlugEdited = false;
+    function autoSeriesSlug(val) {
+      if (seriesSlugEdited) return;
+      document.getElementById('series-slug').value = val.toLowerCase()
+        .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
+    }
+  </script>
 
   <div class="form-group">
     <label>Обложка</label>
