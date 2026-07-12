@@ -39,6 +39,14 @@
     </div>
     {{end}}{{end}}
     <input type="file" name="cover" accept="image/*">
+    <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:400; margin-top:0.6rem">
+      {{$showCover := true}}{{with .Data}}{{$showCover = .ShowCover}}{{end}}
+      <input type="checkbox" name="show_cover" value="1" {{if $showCover}}checked{{end}} style="width:auto; accent-color:var(--accent)">
+      Показывать обложку баннером на странице серии
+    </label>
+    <div style="font-size:0.8rem; color:var(--muted); margin-top:0.3rem">
+      Выключите, если обложка нужна только как превью в списке серий, а на самой странице (особенно в режиме галереи) она лишняя.
+    </div>
   </div>
 
   <div class="form-group">
