@@ -98,12 +98,18 @@ a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
    algorithm as the photo gallery. The widths/heights below are only the
    pre-JS fallback (also what a card looks like if JS is off). */
 .series-grid { display: flex; flex-wrap: wrap; gap: 12px; margin: 1.5rem 0; }
-.series-grid-index { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
+.series-grid-index { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0; }
 .series-card { display: block; flex: 1 1 260px; max-width: 100%; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color 0.15s; }
 .series-card:hover { border-color: var(--text); }
-.series-card-cover { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; opacity: 0; transition: opacity 0.35s ease; }
-.series-card-cover.gfade { opacity: 1; }
-.series-card-cover-empty { background: var(--border); opacity: 1; }
+.series-card-cover { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+.series-card-cover-empty { background: var(--border); }
+/* Fade-in only applies inside .series-grid (the JS-laid-out post tiles,
+   loaded via gallery.js on the series detail page) — .gfade is added once
+   the image has loaded. The /series index page reuses .series-card-cover
+   but never loads that script, so its images must stay visible by default. */
+.series-grid .series-card-cover { opacity: 0; transition: opacity 0.35s ease; }
+.series-grid .series-card-cover.gfade,
+.series-grid .series-card-cover-empty { opacity: 1; }
 .series-card-body { display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 0.9rem; font-family: var(--sans); }
 .series-card-text { min-width: 0; overflow-wrap: break-word; }
 .series-card-num { flex-shrink: 0; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--border); color: var(--muted); font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; justify-content: center; }
