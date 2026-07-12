@@ -292,6 +292,7 @@ type Series struct {
 	DescriptionHTML string
 	Cover           string
 	CollectPhotos   bool // true = страница серии показывает все фото из постов галереей, а не плитками постов
+	ShowCover       bool // false = не показывать обложку-баннер на странице самой серии
 	PostCount       int
 	CreatedAt       time.Time
 }
@@ -300,7 +301,7 @@ type Series struct {
 // от новых к старым.
 func ListSeries() ([]Series, error) {
 	rows, err := DB.Query(`
-		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.collect_photos, s.created_at,
+		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.collect_photos, s.show_cover, s.created_at,
 		       COUNT(p.id) FILTER (WHERE p.published=1) as post_count
 		FROM series s
 		LEFT JOIN posts p ON p.series_id = s.id
@@ -313,12 +314,13 @@ func ListSeries() ([]Series, error) {
 	var list []Series
 	for rows.Next() {
 		var s Series
-		var cp int
+		var cp, sc int
 		var ca string
-		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &ca, &s.PostCount); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &ca, &s.PostCount); err != nil {
 			return nil, err
 		}
 		s.CollectPhotos = cp == 1
+		s.ShowCover = sc == 1
 		s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		list = append(list, s)
 	}
@@ -327,54 +329,62 @@ func ListSeries() ([]Series, error) {
 
 func GetSeriesBySlug(slug string) (*Series, error) {
 	var s Series
-	var cp int
+	var cp, sc int
 	var ca string
-	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, created_at
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, created_at
 	                     FROM series WHERE slug=?`, slug).
-		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &ca)
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &ca)
 	if err != nil {
 		return nil, err
 	}
 	s.CollectPhotos = cp == 1
+	s.ShowCover = sc == 1
 	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	return &s, nil
 }
 
 func GetSeriesByID(id int) (*Series, error) {
 	var s Series
-	var cp int
+	var cp, sc int
 	var ca string
-	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, created_at
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, created_at
 	                     FROM series WHERE id=?`, id).
-		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &ca)
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &ca)
 	if err != nil {
 		return nil, err
 	}
 	s.CollectPhotos = cp == 1
+	s.ShowCover = sc == 1
 	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	return &s, nil
 }
 
-func CreateSeries(name, slug, descMD, descHTML, cover string, collectPhotos bool) (int64, error) {
-	cp := 0
+func CreateSeries(name, slug, descMD, descHTML, cover string, collectPhotos, showCover bool) (int64, error) {
+	cp, sc := 0, 0
 	if collectPhotos {
 		cp = 1
 	}
-	res, err := DB.Exec(`INSERT INTO series (name, slug, description_md, description_html, cover, collect_photos)
-	                      VALUES (?,?,?,?,?,?)`, name, slug, descMD, descHTML, cover, cp)
+	if showCover {
+		sc = 1
+	}
+	res, err := DB.Exec(`INSERT INTO series (name, slug, description_md, description_html, cover, collect_photos, show_cover)
+	                      VALUES (?,?,?,?,?,?,?)`, name, slug, descMD, descHTML, cover, cp, sc)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPhotos bool) error {
-	cp := 0
+func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPhotos, showCover bool) error {
+	cp, sc := 0, 0
 	if collectPhotos {
 		cp = 1
 	}
-	_, err := DB.Exec(`UPDATE series SET name=?, slug=?, description_md=?, description_html=?, cover=?, collect_photos=? WHERE id=?`,
-		name, slug, descMD, descHTML, cover, cp, id)
+	if showCover {
+		sc = 1
+	}
+	_, err := DB.Exec(`UPDATE series SET name=?, slug=?, description_md=?, description_html=?, cover=?, collect_photos=?, show_cover=? WHERE id=?`,
+		name, slug, descMD, descHTML, cover, cp, sc, id)
 	return err
 }
 

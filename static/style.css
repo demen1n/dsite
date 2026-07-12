@@ -90,6 +90,9 @@ a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
 .page-btn--off { pointer-events: none; }
 
 /* ── Series ── */
+.series-wrap { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem; }
+.series-hero { width: 100%; max-height: 640px; object-fit: cover; display: block; cursor: pointer; }
+@media (max-width: 640px) { .series-hero { max-height: 340px; } }
 .series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0; }
 .series-grid-index { grid-template-columns: repeat(2, 1fr); }
 .series-card { display: block; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color 0.15s; }
