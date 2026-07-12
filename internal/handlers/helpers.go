@@ -525,6 +525,17 @@ func firstImageSrc(html string) string {
 	return m[1]
 }
 
+// allImageSrcs возвращает src всех картинок в теле поста — используется для
+// серий, собирающих фото со всех своих постов в одну галерею.
+func allImageSrcs(html string) []string {
+	matches := reImgSrc.FindAllStringSubmatch(html, -1)
+	srcs := make([]string, 0, len(matches))
+	for _, m := range matches {
+		srcs = append(srcs, m[1])
+	}
+	return srcs
+}
+
 // excerpt снимает HTML-теги и возвращает первые ~280 символов, обрывая по слову.
 func excerpt(html string) string {
 	plain := reHTMLTag.ReplaceAllString(html, "")

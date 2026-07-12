@@ -176,7 +176,8 @@ type SeriesPostCard struct {
 
 type SeriesViewData struct {
 	*db.Series
-	Posts []SeriesPostCard
+	Posts  []SeriesPostCard // плитки постов — когда CollectPhotos выключен
+	Photos []string         // src всех картинок из постов — когда CollectPhotos включен
 }
 
 // GET /series/{slug}
@@ -192,18 +193,26 @@ func SeriesView(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	cards := make([]SeriesPostCard, len(posts))
-	for i, p := range posts {
-		cover := ""
-		switch {
-		case p.Cover != "":
-			cover = "/uploads/" + p.Cover
-		default:
-			cover = firstImageSrc(p.BodyHTML)
+	vd := SeriesViewData{Series: series}
+	if series.CollectPhotos {
+		for _, p := range posts {
+			vd.Photos = append(vd.Photos, allImageSrcs(p.BodyHTML)...)
 		}
-		cards[i] = SeriesPostCard{Post: p, DisplayCover: cover}
+	} else {
+		cards := make([]SeriesPostCard, len(posts))
+		for i, p := range posts {
+			cover := ""
+			switch {
+			case p.Cover != "":
+				cover = "/uploads/" + p.Cover
+			default:
+				cover = firstImageSrc(p.BodyHTML)
+			}
+			cards[i] = SeriesPostCard{Post: p, DisplayCover: cover}
+		}
+		vd.Posts = cards
 	}
-	pd := page(series.Name, SeriesViewData{Series: series, Posts: cards})
+	pd := page(series.Name, vd)
 	base := baseURL(r)
 	pd.Canonical = base + "/series/" + series.Slug
 	if series.Cover != "" {
