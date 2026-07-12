@@ -305,7 +305,10 @@ func CreateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name required", 400)
 		return
 	}
-	slug := slugify(name)
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	if slug == "" {
+		slug = slugify(name)
+	}
 	if slug == "" {
 		http.Error(w, "invalid name", 400)
 		return
@@ -363,7 +366,10 @@ func UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name required", 400)
 		return
 	}
-	slug := slugify(name)
+	slug := strings.TrimSpace(r.FormValue("slug"))
+	if slug == "" {
+		slug = slugify(name)
+	}
 	if slug == "" {
 		http.Error(w, "invalid name", 400)
 		return
