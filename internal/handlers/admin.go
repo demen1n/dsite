@@ -22,6 +22,12 @@ import (
 const (
 	uploadMaxWidth = 1600
 	uploadQuality  = 85
+	// coverMaxHeight caps only "cover" images (post/series cover, avatar) —
+	// they're always displayed cropped into a bounded box (object-fit:cover
+	// with a max-height), so a portrait photo doesn't need its full, much
+	// taller-than-shown long edge stored. Gallery photos and inline post
+	// images are shown at full aspect ratio and stay width-only capped.
+	coverMaxHeight = 1000
 )
 
 var dummyHash []byte
@@ -509,7 +515,7 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 			}
 		} else {
 			var processed []byte
-			processed, pw, ph, err = imgproc.Process(data, uploadMaxWidth, uploadQuality)
+			processed, pw, ph, err = imgproc.Process(data, uploadMaxWidth, 0, uploadQuality)
 			if err == nil {
 				filename, err = saveUpload(processed, ".jpg")
 			}
@@ -609,31 +615,13 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.MultipartForm.RemoveAll()
 
-	file, header, err := r.FormFile("avatar")
+	filename, err := handleBoundedImageUpload(r, "avatar", coverMaxHeight)
 	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+	if filename == "" {
 		http.Error(w, "no file", http.StatusBadRequest)
-		return
-	}
-	defer file.Close()
-
-	data, err := io.ReadAll(file)
-	if err != nil {
-		http.Error(w, "read error", http.StatusInternalServerError)
-		return
-	}
-
-	ext := strings.ToLower(filepath.Ext(header.Filename))
-	if ext == "" {
-		ext = ".webp"
-	}
-	if !isAllowedImageExt(ext) || !isAllowedImageContent(data) {
-		http.Error(w, "invalid image", http.StatusBadRequest)
-		return
-	}
-
-	filename, err := saveUpload(data, ext)
-	if err != nil {
-		http.Error(w, "save error", http.StatusInternalServerError)
 		return
 	}
 
@@ -814,7 +802,7 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 		filename, err = saveUpload(data, ext)
 	} else {
 		var processed []byte
-		processed, _, _, err = imgproc.Process(data, uploadMaxWidth, uploadQuality)
+		processed, _, _, err = imgproc.Process(data, uploadMaxWidth, 0, uploadQuality)
 		if err == nil {
 			filename, err = saveUpload(processed, ".jpg")
 		}
@@ -868,8 +856,17 @@ func parseTags(s string) []string {
 	return out
 }
 
+// handleCoverUpload reads a "cover"-field image (post cover, series cover),
+// resizes it capped on both dimensions (see coverMaxHeight) and saves it.
 func handleCoverUpload(r *http.Request) (string, error) {
-	file, header, err := r.FormFile("cover")
+	return handleBoundedImageUpload(r, "cover", coverMaxHeight)
+}
+
+// handleBoundedImageUpload reads an image from the named multipart field,
+// processes it through imgproc with the given height cap (0 = width-only),
+// and saves the result. Returns "", nil if the field wasn't submitted.
+func handleBoundedImageUpload(r *http.Request, field string, maxHeight int) (string, error) {
+	file, header, err := r.FormFile(field)
 	if err != nil {
 		return "", nil // нет файла — не ошибка
 	}
@@ -893,7 +890,7 @@ func handleCoverUpload(r *http.Request) (string, error) {
 	if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
 		return saveUpload(data, ext)
 	}
-	processed, _, _, err := imgproc.Process(data, uploadMaxWidth, uploadQuality)
+	processed, _, _, err := imgproc.Process(data, uploadMaxWidth, maxHeight, uploadQuality)
 	if err != nil {
 		return "", fmt.Errorf("process image: %w", err)
 	}

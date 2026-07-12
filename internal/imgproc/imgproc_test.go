@@ -27,7 +27,7 @@ func makeJPEG(t *testing.T, w, h int) []byte {
 
 func TestProcessDownscales(t *testing.T) {
 	data := makeJPEG(t, 3200, 2000)
-	out, w, h, err := Process(data, 1600, 85)
+	out, w, h, err := Process(data, 1600, 0, 85)
 	if err != nil {
 		t.Fatalf("Process: %v", err)
 	}
@@ -41,12 +41,33 @@ func TestProcessDownscales(t *testing.T) {
 
 func TestProcessNeverUpscales(t *testing.T) {
 	data := makeJPEG(t, 800, 600)
-	_, w, h, err := Process(data, 1600, 85)
+	_, w, h, err := Process(data, 1600, 0, 85)
 	if err != nil {
 		t.Fatalf("Process: %v", err)
 	}
 	if w != 800 || h != 600 {
 		t.Errorf("got %dx%d, want unchanged 800x600", w, h)
+	}
+}
+
+func TestProcessCapsHeightForPortraitCovers(t *testing.T) {
+	// Portrait photo, width already under maxWidth but very tall — this is
+	// exactly the case that used to slip through uncapped (post/series
+	// covers are always displayed cropped, so there's no point storing
+	// 2400px of height nobody sees).
+	data := makeJPEG(t, 1200, 3600)
+	out, w, h, err := Process(data, 1600, 1000, 85)
+	if err != nil {
+		t.Fatalf("Process: %v", err)
+	}
+	if h != 1000 {
+		t.Errorf("got h=%d, want capped at 1000", h)
+	}
+	if w != 333 && w != 334 {
+		t.Errorf("got w=%d, want ~333 (aspect ratio preserved)", w)
+	}
+	if _, _, err := image.Decode(bytes.NewReader(out)); err != nil {
+		t.Errorf("output isn't valid image: %v", err)
 	}
 }
 
@@ -99,7 +120,7 @@ func TestResizeSwappedCapsPostRotationWidth(t *testing.T) {
 	// Pre-rotation source is portrait 2000x3000; a 90/270 rotation will follow,
 	// so the *height* (3000) is what must be capped at maxWidth.
 	src := image.NewNRGBA(image.Rect(0, 0, 2000, 3000))
-	out := resize(src, 1600, true)
+	out := resize(src, 1600, 0, true)
 	b := out.Bounds()
 	if b.Dy() != 1600 {
 		t.Errorf("got h=%d, want 1600 (becomes width after rotation)", b.Dy())
@@ -130,7 +151,7 @@ func pngIHDROnly(t *testing.T, w, h uint32) []byte {
 
 func TestProcessRejectsHugeImages(t *testing.T) {
 	data := pngIHDROnly(t, 20000, 20000) // 400MP, well past the 40MP guard
-	_, _, _, err := Process(data, 1600, 85)
+	_, _, _, err := Process(data, 1600, 0, 85)
 	if err == nil {
 		t.Fatal("expected error for oversized image, got nil")
 	}

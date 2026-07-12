@@ -39,15 +39,23 @@ const maxSourcePixels = 80_000_000 // ~80MP
 var procSem = make(chan struct{}, 1)
 
 // Process decodes data (jpeg/png/gif/webp), corrects EXIF rotation, downscales
-// so the width is at most maxWidth (never upscales), and re-encodes as JPEG
-// at the given quality (1-100). It returns the encoded bytes and final
-// dimensions.
+// so the result is at most maxWidth wide and (if maxHeight > 0) at most
+// maxHeight tall — never upscales — and re-encodes as JPEG at the given
+// quality (1-100). It returns the encoded bytes and final dimensions.
+//
+// maxHeight is normally 0 (unbounded): a width-only cap keeps a photo's
+// natural aspect ratio, which is what you want for anything displayed in
+// full (gallery photos, inline post images). Pass maxHeight > 0 for images
+// that are always shown cropped into a bounded box (post/series covers,
+// avatar) — otherwise a portrait-oriented photo only gets capped on its
+// (already short) width and keeps a needlessly tall, heavy long edge that
+// nothing ever displays.
 //
 // Resize runs before the EXIF-orientation rotate: rotating first would mean
 // allocating a full-resolution copy of the source (up to 4 bytes/pixel) just
 // to immediately shrink it. Resizing first keeps that copy small regardless
 // of how large the uploaded photo is.
-func Process(data []byte, maxWidth, quality int) (out []byte, w, h int, err error) {
+func Process(data []byte, maxWidth, maxHeight, quality int) (out []byte, w, h int, err error) {
 	procSem <- struct{}{}
 	// GC before releasing the slot: Go's default pacer only collects once the
 	// heap has doubled since the last cycle, so back-to-back calls can pile
@@ -70,7 +78,7 @@ func Process(data []byte, maxWidth, quality int) (out []byte, w, h int, err erro
 	}
 
 	o := jpegOrientation(data)
-	img := resize(src, maxWidth, o >= 5) // o 5-8 swap width/height on display
+	img := resize(src, maxWidth, maxHeight, o >= 5) // o 5-8 swap width/height on display
 	img = applyOrientation(img, o)
 
 	buf := new(bytes.Buffer)
@@ -91,21 +99,31 @@ func Dimensions(data []byte) (w, h int, err error) {
 	return cfg.Width, cfg.Height, nil
 }
 
-// resize scales src so its displayed width (the source's width, or its
-// height if swapped — i.e. a 90/270 EXIF rotation is coming next) is at most
-// maxWidth. It never upscales. swapped lets the caller apply orientation
-// after resizing while still capping the width the user will actually see.
-func resize(src image.Image, maxWidth int, swapped bool) image.Image {
+// resize scales src so its displayed dimensions (the source's width/height,
+// swapped if a 90/270 EXIF rotation is coming next) fit within maxWidth and
+// (if set) maxHeight. It never upscales. swapped lets the caller apply
+// orientation after resizing while still capping what the user will
+// actually see.
+func resize(src image.Image, maxWidth, maxHeight int, swapped bool) image.Image {
 	b := src.Bounds()
 	w, h := b.Dx(), b.Dy()
-	displayW := w
+	displayW, displayH := w, h
 	if swapped {
-		displayW = h
+		displayW, displayH = h, w
 	}
-	if displayW <= maxWidth {
+
+	scale := 1.0
+	if displayW > maxWidth {
+		scale = float64(maxWidth) / float64(displayW)
+	}
+	if maxHeight > 0 && displayH > maxHeight {
+		if hScale := float64(maxHeight) / float64(displayH); hScale < scale {
+			scale = hScale
+		}
+	}
+	if scale >= 1 {
 		return src
 	}
-	scale := float64(maxWidth) / float64(displayW)
 	newW := int(math.Round(float64(w) * scale))
 	newH := int(math.Round(float64(h) * scale))
 
