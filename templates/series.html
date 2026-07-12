@@ -49,7 +49,7 @@
       {{end}}
       <div class="series-card-body">
         <span class="series-card-num">{{add $i 1}}</span>
-        <div>
+        <div class="series-card-text">
           <div class="series-card-title">{{$p.Title}}</div>
           <div class="series-card-date">{{fmtDateShort $p.CreatedAt}}</div>
         </div>
@@ -66,5 +66,5 @@
 {{end}}
 
 {{define "scripts"}}
-{{with .Data}}{{if .CollectPhotos}}<script src="/static/gallery.js"></script>{{end}}{{end}}
+<script src="/static/gallery.js"></script>
 {{end}}
