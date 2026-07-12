@@ -258,7 +258,7 @@ func DeletePost(id int) error {
 // посты по порядку.
 func PostsInSeries(seriesID int) ([]Post, error) {
 	rows, err := DB.Query(`
-		SELECT p.id, p.slug, p.title, p.cover, p.published, p.views, p.created_at, p.updated_at
+		SELECT p.id, p.slug, p.title, p.cover, p.body_html, p.published, p.views, p.created_at, p.updated_at
 		FROM posts p
 		WHERE p.series_id=? AND p.published=1
 		ORDER BY p.created_at ASC`, seriesID)
@@ -271,7 +271,7 @@ func PostsInSeries(seriesID int) ([]Post, error) {
 		var p Post
 		var pub int
 		var ca, ua string
-		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &pub, &p.Views, &ca, &ua); err != nil {
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &p.BodyHTML, &pub, &p.Views, &ca, &ua); err != nil {
 			return nil, err
 		}
 		p.Published = pub == 1

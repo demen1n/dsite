@@ -513,6 +513,17 @@ func slugify(s string) string {
 }
 
 var reHTMLTag = regexp.MustCompile(`<[^>]+>`)
+var reImgSrc = regexp.MustCompile(`<img[^>]+src="([^"]*)"`)
+
+// firstImageSrc возвращает src первой картинки в теле поста — используется
+// как замена обложке для карточек серии, когда у поста своей обложки нет.
+func firstImageSrc(html string) string {
+	m := reImgSrc.FindStringSubmatch(html)
+	if m == nil {
+		return ""
+	}
+	return m[1]
+}
 
 // excerpt снимает HTML-теги и возвращает первые ~280 символов, обрывая по слову.
 func excerpt(html string) string {
