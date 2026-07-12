@@ -56,6 +56,8 @@ func main() {
 	mux.HandleFunc("GET /post/{slug}", handlers.ViewPost)
 	mux.HandleFunc("GET /gallery", handlers.Gallery)
 	mux.HandleFunc("GET /gallery/filter", handlers.GalleryFilter)
+	mux.HandleFunc("GET /series", handlers.SeriesIndex)
+	mux.HandleFunc("GET /series/{slug}", handlers.SeriesView)
 	mux.HandleFunc("GET /resume", handlers.Resume)
 	mux.HandleFunc("GET /privacy", handlers.Privacy)
 	mux.HandleFunc("GET /feed.xml", handlers.Feed)
@@ -85,6 +87,13 @@ func main() {
 	mux.HandleFunc("POST /admin/posts/preview", handlers.RequireAuth(handlers.PreviewMD))
 	mux.HandleFunc("POST /admin/upload", handlers.RequireAuth(handlers.UploadImage))
 	mux.HandleFunc("POST /admin/tags/delete", handlers.RequireAuth(handlers.DeleteTag))
+
+	mux.HandleFunc("GET /admin/series", handlers.RequireAuth(handlers.AdminSeries))
+	mux.HandleFunc("GET /admin/series/new", handlers.RequireAuth(handlers.NewSeriesForm))
+	mux.HandleFunc("POST /admin/series/new", handlers.RequireAuth(handlers.CreateSeries))
+	mux.HandleFunc("GET /admin/series/{id}/edit", handlers.RequireAuth(handlers.EditSeriesForm))
+	mux.HandleFunc("POST /admin/series/{id}/edit", handlers.RequireAuth(handlers.UpdateSeries))
+	mux.HandleFunc("POST /admin/series/{id}/delete", handlers.RequireAuth(handlers.DeleteSeries))
 
 	mux.HandleFunc("GET /admin/media/picker", handlers.RequireAuth(handlers.MediaPicker))
 	mux.HandleFunc("POST /admin/media/to-gallery", handlers.RequireAuth(handlers.AddToGallery))

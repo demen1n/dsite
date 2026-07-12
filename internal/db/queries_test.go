@@ -52,7 +52,7 @@ func TestUserCRUD(t *testing.T) {
 func TestPostCRUD(t *testing.T) {
 	setupTestDB(t)
 
-	id, err := CreatePost("test-post", "Test Post", "# Hello", "<h1>Hello</h1>", "", true)
+	id, err := CreatePost("test-post", "Test Post", "# Hello", "<h1>Hello</h1>", "", true, 0)
 	if err != nil || id == 0 {
 		t.Fatalf("CreatePost: id=%d err=%v", id, err)
 	}
@@ -67,7 +67,7 @@ func TestPostCRUD(t *testing.T) {
 		t.Errorf("GetPostByID: slug=%q err=%v", p2.Slug, err)
 	}
 
-	if err := UpdatePost(int(id), "updated-slug", "Updated", "## Up", "<h2>Up</h2>", "", false); err != nil {
+	if err := UpdatePost(int(id), "updated-slug", "Updated", "## Up", "<h2>Up</h2>", "", false, 0); err != nil {
 		t.Fatalf("UpdatePost: %v", err)
 	}
 	p3, _ := GetPostByID(int(id))
@@ -93,11 +93,11 @@ func TestListPostsPaginated(t *testing.T) {
 	setupTestDB(t)
 
 	for i := 1; i <= 3; i++ {
-		if _, err := CreatePost(fmt.Sprintf("post-%d", i), fmt.Sprintf("Post %d", i), "", "", "", true); err != nil {
+		if _, err := CreatePost(fmt.Sprintf("post-%d", i), fmt.Sprintf("Post %d", i), "", "", "", true, 0); err != nil {
 			t.Fatal(err)
 		}
 	}
-	CreatePost("draft", "Draft", "", "", "", false) //nolint
+	CreatePost("draft", "Draft", "", "", "", false, 0) //nolint
 
 	posts, total, err := ListPostsPaginated("", 1, 10)
 	if err != nil {
@@ -123,7 +123,7 @@ func TestListPostsPaginated(t *testing.T) {
 func TestIncrementViews(t *testing.T) {
 	setupTestDB(t)
 
-	id, _ := CreatePost("views-test", "Views", "", "", "", true)
+	id, _ := CreatePost("views-test", "Views", "", "", "", true, 0)
 	IncrementViews(int(id))
 	IncrementViews(int(id))
 
@@ -138,7 +138,7 @@ func TestIncrementViews(t *testing.T) {
 func TestSetPostTags(t *testing.T) {
 	setupTestDB(t)
 
-	id, _ := CreatePost("tagged", "Tagged", "", "", "", true)
+	id, _ := CreatePost("tagged", "Tagged", "", "", "", true, 0)
 
 	if err := SetPostTags(int(id), []string{"Go", "Программирование", "Web"}); err != nil {
 		t.Fatalf("SetPostTags: %v", err)
@@ -401,8 +401,8 @@ func TestResume(t *testing.T) {
 func TestSearchPosts(t *testing.T) {
 	setupTestDB(t)
 
-	CreatePost("search-test", "Search Test Post", "findme unique keyword", "<p>findme</p>", "", true) //nolint
-	CreatePost("other", "Other Post", "unrelated content", "<p>other</p>", "", true)                  //nolint
+	CreatePost("search-test", "Search Test Post", "findme unique keyword", "<p>findme</p>", "", true, 0) //nolint
+	CreatePost("other", "Other Post", "unrelated content", "<p>other</p>", "", true, 0)                  //nolint
 
 	results, err := SearchPosts("findme")
 	if err != nil {
@@ -427,7 +427,7 @@ func TestSearchPosts(t *testing.T) {
 func TestSearchPostsDraft(t *testing.T) {
 	setupTestDB(t)
 
-	CreatePost("draft-search", "Draft Post", "secretword", "", "", false) //nolint
+	CreatePost("draft-search", "Draft Post", "secretword", "", "", false, 0) //nolint
 
 	results, err := SearchPosts("secretword")
 	if err != nil {

@@ -79,6 +79,15 @@ func Index(w http.ResponseWriter, r *http.Request) {
 
 // ─────────────────────── Post ───────────────────────
 
+// PostViewData оборачивает пост данными о серии (если он в неё входит):
+// соседние посты для навигации "пред/след" и список всей серии.
+type PostViewData struct {
+	*db.Post
+	SeriesPosts []db.Post
+	PrevPost    *db.Post
+	NextPost    *db.Post
+}
+
 // GET /post/{slug}
 func ViewPost(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
@@ -92,7 +101,27 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	db.IncrementViews(post.ID)
-	pd := page(post.Title, post)
+
+	vd := PostViewData{Post: post}
+	if post.SeriesID != 0 {
+		if seriesPosts, err := db.PostsInSeries(post.SeriesID); err == nil {
+			vd.SeriesPosts = seriesPosts
+			for i, sp := range seriesPosts {
+				if sp.ID != post.ID {
+					continue
+				}
+				if i > 0 {
+					vd.PrevPost = &seriesPosts[i-1]
+				}
+				if i < len(seriesPosts)-1 {
+					vd.NextPost = &seriesPosts[i+1]
+				}
+				break
+			}
+		}
+	}
+
+	pd := page(post.Title, vd)
 	pd.OGDescription = excerpt(post.BodyHTML)
 	base := baseURL(r)
 	pd.Canonical = base + "/post/" + post.Slug
@@ -100,6 +129,51 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		pd.OGImage = base + "/uploads/" + post.Cover
 	}
 	render(w, "post.html", pd)
+}
+
+// ─────────────────────── Series ───────────────────────
+
+type SeriesIndexData struct {
+	Series []db.Series
+}
+
+// GET /series
+func SeriesIndex(w http.ResponseWriter, r *http.Request) {
+	list, err := db.ListSeries()
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	pd := page("Серии", SeriesIndexData{Series: list})
+	pd.Canonical = baseURL(r) + "/series"
+	render(w, "series_index.html", pd)
+}
+
+type SeriesViewData struct {
+	*db.Series
+	Posts []db.Post
+}
+
+// GET /series/{slug}
+func SeriesView(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	series, err := db.GetSeriesBySlug(slug)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	posts, err := db.PostsInSeries(series.ID)
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	pd := page(series.Name, SeriesViewData{Series: series, Posts: posts})
+	base := baseURL(r)
+	pd.Canonical = base + "/series/" + series.Slug
+	if series.Cover != "" {
+		pd.OGImage = base + "/uploads/" + series.Cover
+	}
+	render(w, "series.html", pd)
 }
 
 // ─────────────────────── Gallery ───────────────────────
@@ -237,10 +311,20 @@ func Sitemap(w http.ResponseWriter, r *http.Request) {
 			{Loc: base + "/", ChangeFreq: "weekly", Priority: "1.0"},
 			{Loc: base + "/blog", ChangeFreq: "weekly", Priority: "0.9"},
 			{Loc: base + "/gallery", ChangeFreq: "weekly", Priority: "0.8"},
+			{Loc: base + "/series", ChangeFreq: "weekly", Priority: "0.7"},
 		},
 	}
 	if !ResumeHidden() {
 		sm.URLs = append(sm.URLs, sitemapURL{Loc: base + "/resume", ChangeFreq: "monthly", Priority: "0.5"})
+	}
+	if series, err := db.ListSeries(); err == nil {
+		for _, s := range series {
+			sm.URLs = append(sm.URLs, sitemapURL{
+				Loc:        base + "/series/" + s.Slug,
+				ChangeFreq: "monthly",
+				Priority:   "0.7",
+			})
+		}
 	}
 	posts, err := db.ListPosts(true)
 	if err == nil {

@@ -1,6 +1,7 @@
 package db
 
 import (
+	"database/sql"
 	"strings"
 	"time"
 )
@@ -38,17 +39,20 @@ func GetAdmin() (login, hash string, err error) {
 // ───────────────────────── Posts ─────────────────────────
 
 type Post struct {
-	ID        int
-	Slug      string
-	Title     string
-	BodyMD    string
-	BodyHTML  string
-	Cover     string
-	Published bool
-	Views     int
-	Tags      []string
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	ID         int
+	Slug       string
+	Title      string
+	BodyMD     string
+	BodyHTML   string
+	Cover      string
+	Published  bool
+	Views      int
+	Tags       []string
+	CreatedAt  time.Time
+	UpdatedAt  time.Time
+	SeriesID   int // 0 = not part of a series
+	SeriesName string
+	SeriesSlug string
 }
 
 const PostsPerPage = 10
@@ -152,22 +156,28 @@ func GetPostBySlug(slug string) (*Post, error) {
 	var p Post
 	var pub int
 	var ca, ua, tagsStr string
+	var seriesID sql.NullInt64
+	var seriesName, seriesSlug sql.NullString
 	err := DB.QueryRow(`
 		SELECT p.id, p.slug, p.title, p.body_md, p.body_html, p.cover, p.published, p.views,
-		       p.created_at, p.updated_at,
+		       p.created_at, p.updated_at, p.series_id, s.name, s.slug,
 		       COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
 		FROM posts p
 		LEFT JOIN post_tags pt ON pt.post_id = p.id
 		LEFT JOIN tags t ON t.id = pt.tag_id
+		LEFT JOIN series s ON s.id = p.series_id
 		WHERE p.slug=? GROUP BY p.id`, slug).
 		Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua, &tagsStr)
+			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &tagsStr)
 	if err != nil {
 		return nil, err
 	}
 	p.Published = pub == 1
 	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
+	p.SeriesID = int(seriesID.Int64)
+	p.SeriesName = seriesName.String
+	p.SeriesSlug = seriesSlug.String
 	if tagsStr != "" {
 		p.Tags = strings.Split(tagsStr, ",")
 	}
@@ -178,54 +188,183 @@ func GetPostByID(id int) (*Post, error) {
 	var p Post
 	var pub int
 	var ca, ua, tagsStr string
+	var seriesID sql.NullInt64
+	var seriesName, seriesSlug sql.NullString
 	err := DB.QueryRow(`
 		SELECT p.id, p.slug, p.title, p.body_md, p.body_html, p.cover, p.published, p.views,
-		       p.created_at, p.updated_at,
+		       p.created_at, p.updated_at, p.series_id, s.name, s.slug,
 		       COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
 		FROM posts p
 		LEFT JOIN post_tags pt ON pt.post_id = p.id
 		LEFT JOIN tags t ON t.id = pt.tag_id
+		LEFT JOIN series s ON s.id = p.series_id
 		WHERE p.id=? GROUP BY p.id`, id).
 		Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua, &tagsStr)
+			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &tagsStr)
 	if err != nil {
 		return nil, err
 	}
 	p.Published = pub == 1
 	p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
+	p.SeriesID = int(seriesID.Int64)
+	p.SeriesName = seriesName.String
+	p.SeriesSlug = seriesSlug.String
 	if tagsStr != "" {
 		p.Tags = strings.Split(tagsStr, ",")
 	}
 	return &p, nil
 }
 
-func CreatePost(slug, title, bodyMD, bodyHTML, cover string, published bool) (int64, error) {
+// seriesIDArg превращает 0 (нет серии) в NULL для записи в БД.
+func seriesIDArg(seriesID int) any {
+	if seriesID <= 0 {
+		return nil
+	}
+	return seriesID
+}
+
+func CreatePost(slug, title, bodyMD, bodyHTML, cover string, published bool, seriesID int) (int64, error) {
 	pub := 0
 	if published {
 		pub = 1
 	}
-	res, err := DB.Exec(`INSERT INTO posts (slug, title, body_md, body_html, cover, published)
-	                      VALUES (?,?,?,?,?,?)`, slug, title, bodyMD, bodyHTML, cover, pub)
+	res, err := DB.Exec(`INSERT INTO posts (slug, title, body_md, body_html, cover, published, series_id)
+	                      VALUES (?,?,?,?,?,?,?)`, slug, title, bodyMD, bodyHTML, cover, pub, seriesIDArg(seriesID))
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func UpdatePost(id int, slug, title, bodyMD, bodyHTML, cover string, published bool) error {
+func UpdatePost(id int, slug, title, bodyMD, bodyHTML, cover string, published bool, seriesID int) error {
 	pub := 0
 	if published {
 		pub = 1
 	}
 	_, err := DB.Exec(`UPDATE posts SET slug=?, title=?, body_md=?, body_html=?, cover=?,
-	                   published=?, updated_at=datetime('now') WHERE id=?`,
-		slug, title, bodyMD, bodyHTML, cover, pub, id)
+	                   published=?, series_id=?, updated_at=datetime('now') WHERE id=?`,
+		slug, title, bodyMD, bodyHTML, cover, pub, seriesIDArg(seriesID), id)
 	return err
 }
 
 func DeletePost(id int) error {
 	_, err := DB.Exec(`DELETE FROM posts WHERE id=?`, id)
+	return err
+}
+
+// PostsInSeries возвращает опубликованные посты серии в хронологическом
+// порядке (по дате создания) — так задаётся порядок серии: просто публикуй
+// посты по порядку.
+func PostsInSeries(seriesID int) ([]Post, error) {
+	rows, err := DB.Query(`
+		SELECT p.id, p.slug, p.title, p.cover, p.published, p.views, p.created_at, p.updated_at
+		FROM posts p
+		WHERE p.series_id=? AND p.published=1
+		ORDER BY p.created_at ASC`, seriesID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var posts []Post
+	for rows.Next() {
+		var p Post
+		var pub int
+		var ca, ua string
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &pub, &p.Views, &ca, &ua); err != nil {
+			return nil, err
+		}
+		p.Published = pub == 1
+		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
+		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
+// ───────────────────────── Series ─────────────────────────
+
+type Series struct {
+	ID              int
+	Name            string
+	Slug            string
+	DescriptionMD   string
+	DescriptionHTML string
+	Cover           string
+	PostCount       int
+	CreatedAt       time.Time
+}
+
+// ListSeries возвращает все серии с числом опубликованных постов в каждой,
+// от новых к старым.
+func ListSeries() ([]Series, error) {
+	rows, err := DB.Query(`
+		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.created_at,
+		       COUNT(p.id) FILTER (WHERE p.published=1) as post_count
+		FROM series s
+		LEFT JOIN posts p ON p.series_id = s.id
+		GROUP BY s.id
+		ORDER BY s.created_at DESC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var list []Series
+	for rows.Next() {
+		var s Series
+		var ca string
+		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &ca, &s.PostCount); err != nil {
+			return nil, err
+		}
+		s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
+		list = append(list, s)
+	}
+	return list, rows.Err()
+}
+
+func GetSeriesBySlug(slug string) (*Series, error) {
+	var s Series
+	var ca string
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, created_at
+	                     FROM series WHERE slug=?`, slug).
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &ca)
+	if err != nil {
+		return nil, err
+	}
+	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
+	return &s, nil
+}
+
+func GetSeriesByID(id int) (*Series, error) {
+	var s Series
+	var ca string
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, created_at
+	                     FROM series WHERE id=?`, id).
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &ca)
+	if err != nil {
+		return nil, err
+	}
+	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
+	return &s, nil
+}
+
+func CreateSeries(name, slug, descMD, descHTML, cover string) (int64, error) {
+	res, err := DB.Exec(`INSERT INTO series (name, slug, description_md, description_html, cover)
+	                      VALUES (?,?,?,?,?)`, name, slug, descMD, descHTML, cover)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+func UpdateSeries(id int, name, slug, descMD, descHTML, cover string) error {
+	_, err := DB.Exec(`UPDATE series SET name=?, slug=?, description_md=?, description_html=?, cover=? WHERE id=?`,
+		name, slug, descMD, descHTML, cover, id)
+	return err
+}
+
+func DeleteSeries(id int) error {
+	_, err := DB.Exec(`DELETE FROM series WHERE id=?`, id)
 	return err
 }
 

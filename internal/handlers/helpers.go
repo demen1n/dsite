@@ -181,8 +181,9 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 		"fmtDateShort": func(t time.Time) string { return t.Format("02.01.2006") },
 		"relDate":      relDate,
 		"excerpt":      excerpt,
+		"postWord":     postWord,
 		"hasMore":      func(s string) bool { return strings.Contains(s, "<!--more-->") },
-		"beforeMore":   func(s string) template.HTML {
+		"beforeMore": func(s string) template.HTML {
 			if i := strings.Index(s, "<!--more-->"); i >= 0 {
 				return template.HTML(s[:i])
 			}
@@ -299,6 +300,7 @@ type PageData struct {
 	Socials       map[string]string
 	Data          any
 	AllTags       []string
+	AllSeries     []db.Series
 	OGDescription string
 	OGImage       string // absolute URL
 	Canonical     string
@@ -567,6 +569,17 @@ func weekWord(n int) string {
 		return "недели"
 	default:
 		return "недель"
+	}
+}
+
+func postWord(n int) string {
+	switch {
+	case n%10 == 1 && n%100 != 11:
+		return "пост"
+	case n%10 >= 2 && n%10 <= 4 && (n%100 < 10 || n%100 >= 20):
+		return "поста"
+	default:
+		return "постов"
 	}
 }
 

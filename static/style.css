@@ -89,6 +89,28 @@ a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
 .page-btn:hover { color: var(--text); }
 .page-btn--off { pointer-events: none; }
 
+/* ── Series ── */
+.series-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; margin: 1.5rem 0; }
+.series-grid-index { grid-template-columns: repeat(2, 1fr); }
+.series-card { display: block; text-decoration: none; color: var(--text); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; transition: border-color 0.15s; }
+.series-card:hover { border-color: var(--text); }
+.series-card-cover { width: 100%; aspect-ratio: 4/3; object-fit: cover; display: block; }
+.series-card-cover-empty { background: var(--border); }
+.series-card-body { display: flex; align-items: center; gap: 0.7rem; padding: 0.75rem 0.9rem; font-family: var(--sans); }
+.series-card-num { flex-shrink: 0; width: 1.6rem; height: 1.6rem; border-radius: 50%; background: var(--border); color: var(--muted); font-size: 0.8rem; font-weight: 600; display: flex; align-items: center; justify-content: center; }
+.series-card-title { font-size: 0.92rem; font-weight: 600; line-height: 1.3; }
+.series-card-date { font-size: 0.78rem; color: var(--muted); margin-top: 0.15rem; }
+@media (max-width: 520px) { .series-grid { grid-template-columns: 1fr; } }
+
+/* ── Series nav on a post ── */
+.series-badge { display: inline-flex; align-items: center; gap: 0.3rem; font-family: var(--sans); font-size: 0.78rem; color: var(--muted); text-decoration: none; padding: 0.15rem 0.6rem; border: 1px solid var(--border); border-radius: 20px; }
+.series-badge:hover { color: var(--text); border-color: var(--text); }
+.series-postnav { display: flex; justify-content: space-between; gap: 1rem; margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font-family: var(--sans); }
+.series-postnav a { color: var(--text); text-decoration: none; font-size: 0.88rem; max-width: 46%; }
+.series-postnav a:hover .series-postnav-title { text-decoration: underline; }
+.series-postnav-dir { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.2rem; }
+.series-postnav-next { text-align: right; margin-left: auto; }
+
 /* ── Gallery ── */
 .gallery-grid-inner { display: flex; flex-wrap: wrap; gap: 3px; }
 .gallery-item { overflow: hidden; cursor: pointer; }

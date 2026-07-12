@@ -223,6 +223,19 @@
     </div>
   </div>
 
+  <!-- Series -->
+  <div class="editor-tags">
+    <span class="editor-tags-label">Серия:</span>
+    <select name="series_id" form="post-form" style="border:1px solid var(--border); border-radius:4px; padding:0.2rem 0.5rem; font-size:0.85rem; background:var(--bg); color:var(--text); font-family:inherit">
+      <option value="0">— нет —</option>
+      {{$curSeries := 0}}{{with .Data}}{{$curSeries = .SeriesID}}{{end}}
+      {{range .AllSeries}}
+      <option value="{{.ID}}" {{if eq $curSeries .ID}}selected{{end}}>{{.Name}}</option>
+      {{end}}
+    </select>
+    <a href="/admin/series/new" target="_blank" style="font-size:0.8rem; color:var(--muted)">+ новая</a>
+  </div>
+
   <!-- Tags -->
   <div class="editor-tags">
     <span class="editor-tags-label">Теги:</span>

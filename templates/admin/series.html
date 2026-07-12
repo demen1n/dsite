@@ -1,0 +1,44 @@
+{{define "admin_content"}}
+<div class="admin-header">
+  <h1>Серии</h1>
+  <a class="btn btn-primary" href="/admin/series/new">+ Новая серия</a>
+</div>
+
+<div class="table-wrap">
+  {{if .Data}}
+  <table>
+    <thead>
+      <tr>
+        <th>Название</th>
+        <th>Slug</th>
+        <th>Постов</th>
+        <th>Дата</th>
+        <th></th>
+      </tr>
+    </thead>
+    <tbody>
+      {{range .Data}}
+      <tr>
+        <td><strong>{{.Name}}</strong></td>
+        <td><code style="font-size:0.82rem; color:var(--muted)">/series/{{.Slug}}</code></td>
+        <td style="color:var(--muted); text-align:right">{{.PostCount}}</td>
+        <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .CreatedAt}}</td>
+        <td style="white-space:nowrap; text-align:right">
+          <a class="btn btn-secondary btn-sm" href="/series/{{.Slug}}" target="_blank">Открыть ↗</a>
+          <a class="btn btn-secondary btn-sm" href="/admin/series/{{.ID}}/edit">Редактировать</a>
+          <form method="POST" action="/admin/series/{{.ID}}/delete" style="display:inline"
+                onsubmit="return confirm('Удалить серию «{{.Name}}»? Посты останутся, но потеряют привязку к серии.')">
+            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+          </form>
+        </td>
+      </tr>
+      {{end}}
+    </tbody>
+  </table>
+  {{else}}
+  <div style="padding:2.5rem; text-align:center; color:var(--muted)">
+    Серий пока нет. <a href="/admin/series/new">Создайте первую</a>.
+  </div>
+  {{end}}
+</div>
+{{end}}

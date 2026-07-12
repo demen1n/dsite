@@ -129,6 +129,7 @@ func AdminIndex(w http.ResponseWriter, r *http.Request) {
 func NewPost(w http.ResponseWriter, r *http.Request) {
 	pd := page("Новый пост", nil)
 	pd.AllTags = loadAllTagNames()
+	pd.AllSeries, _ = db.ListSeries()
 	render(w, "admin/editor.html", pd)
 }
 
@@ -165,7 +166,8 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	id, err := db.CreatePost(slug, title, bodyMD, bodyHTML, cover, published)
+	seriesID, _ := strconv.Atoi(r.FormValue("series_id"))
+	id, err := db.CreatePost(slug, title, bodyMD, bodyHTML, cover, published, seriesID)
 	if err != nil {
 		http.Error(w, "Internal Server Error", 500)
 		return
@@ -192,6 +194,7 @@ func EditPostForm(w http.ResponseWriter, r *http.Request) {
 	}
 	pd := page("Редактировать пост", post)
 	pd.AllTags = loadAllTagNames()
+	pd.AllSeries, _ = db.ListSeries()
 	render(w, "admin/editor.html", pd)
 }
 
@@ -234,7 +237,8 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	if err := db.UpdatePost(id, slug, title, bodyMD, bodyHTML, cover, published); err != nil {
+	seriesID, _ := strconv.Atoi(r.FormValue("series_id"))
+	if err := db.UpdatePost(id, slug, title, bodyMD, bodyHTML, cover, published, seriesID); err != nil {
 		http.Error(w, "DB error", 500)
 		return
 	}
@@ -268,6 +272,135 @@ func PreviewMD(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Write([]byte(html))
+}
+
+// ─────────────────────── Series ───────────────────────
+
+// GET /admin/series
+func AdminSeries(w http.ResponseWriter, r *http.Request) {
+	list, err := db.ListSeries()
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	render(w, "admin/series.html", page("Серии", list))
+}
+
+// GET /admin/series/new
+func NewSeriesForm(w http.ResponseWriter, r *http.Request) {
+	render(w, "admin/series_form.html", page("Новая серия", nil))
+}
+
+// POST /admin/series/new
+func CreateSeries(w http.ResponseWriter, r *http.Request) {
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "name required", 400)
+		return
+	}
+	slug := slugify(name)
+	if slug == "" {
+		http.Error(w, "invalid name", 400)
+		return
+	}
+	descMD := r.FormValue("description")
+	descHTML, err := RenderMD(descMD)
+	if err != nil {
+		http.Error(w, "markdown error", 500)
+		return
+	}
+	cover, err := handleCoverUpload(r)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	id, err := db.CreateSeries(name, slug, descMD, descHTML, cover)
+	if err != nil {
+		http.Error(w, "Internal Server Error", 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/admin/series/%d/edit", id), http.StatusFound)
+}
+
+// GET /admin/series/{id}/edit
+func EditSeriesForm(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	series, err := db.GetSeriesByID(id)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	render(w, "admin/series_form.html", page("Редактировать серию", series))
+}
+
+// POST /admin/series/{id}/edit
+func UpdateSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
+	if err := r.ParseMultipartForm(8 << 20); err != nil {
+		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+
+	name := strings.TrimSpace(r.FormValue("name"))
+	if name == "" {
+		http.Error(w, "name required", 400)
+		return
+	}
+	slug := slugify(name)
+	if slug == "" {
+		http.Error(w, "invalid name", 400)
+		return
+	}
+	descMD := r.FormValue("description")
+	descHTML, err := RenderMD(descMD)
+	if err != nil {
+		http.Error(w, "markdown error", 500)
+		return
+	}
+	cover, err := handleCoverUpload(r)
+	if err != nil {
+		http.Error(w, err.Error(), 400)
+		return
+	}
+	if cover == "" && r.FormValue("remove_cover") != "1" {
+		existing, _ := db.GetSeriesByID(id)
+		if existing != nil {
+			cover = existing.Cover
+		}
+	}
+	if err := db.UpdateSeries(id, name, slug, descMD, descHTML, cover); err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/admin/series/%d/edit", id), http.StatusFound)
+}
+
+// POST /admin/series/{id}/delete
+func DeleteSeries(w http.ResponseWriter, r *http.Request) {
+	id, err := strconv.Atoi(r.PathValue("id"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	db.DeleteSeries(id)
+	http.Redirect(w, r, "/admin/series", http.StatusFound)
 }
 
 // ─────────────────────── Media ───────────────────────

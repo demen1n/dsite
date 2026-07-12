@@ -1,0 +1,26 @@
+{{define "content"}}
+<h1>Серии</h1>
+{{with .Data}}
+{{if .Series}}
+<div class="series-grid series-grid-index">
+  {{range .Series}}
+  <a class="series-card" href="/series/{{.Slug}}">
+    {{if .Cover}}
+    <img class="series-card-cover" src="/uploads/{{.Cover}}" alt="{{.Name}}" loading="lazy">
+    {{else}}
+    <div class="series-card-cover series-card-cover-empty"></div>
+    {{end}}
+    <div class="series-card-body">
+      <div>
+        <div class="series-card-title">{{.Name}}</div>
+        <div class="series-card-date">{{.PostCount}} {{postWord .PostCount}}</div>
+      </div>
+    </div>
+  </a>
+  {{end}}
+</div>
+{{else}}
+<p style="color:var(--muted)">Серий пока нет.</p>
+{{end}}
+{{end}}
+{{end}}
