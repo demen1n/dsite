@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"dsite/internal/db"
-	"encoding/binary"
+	"dsite/internal/imgproc"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -398,44 +398,6 @@ func DeleteSession(token string) {
 
 // ───── File utils ─────
 
-// webpDimensions returns the pixel dimensions of a WebP file.
-// Supports VP8 (lossy), VP8L (lossless), and VP8X (extended) chunks.
-// Returns 0,0 on parse failure.
-func webpDimensions(data []byte) (int, int) {
-	if len(data) < 30 || string(data[0:4]) != "RIFF" || string(data[8:12]) != "WEBP" {
-		return 0, 0
-	}
-	chunk := string(data[12:16])
-	switch chunk {
-	case "VP8 ":
-		// lossy: width/height at bytes 26-29 (14-bit values, LE uint16)
-		if len(data) < 30 {
-			return 0, 0
-		}
-		w := int(binary.LittleEndian.Uint16(data[26:28])) & 0x3FFF
-		h := int(binary.LittleEndian.Uint16(data[28:30])) & 0x3FFF
-		return w, h
-	case "VP8L":
-		// lossless: bits 0-13 = width-1, bits 14-27 = height-1
-		if len(data) < 25 {
-			return 0, 0
-		}
-		bits := binary.LittleEndian.Uint32(data[21:25])
-		w := int(bits&0x3FFF) + 1
-		h := int((bits>>14)&0x3FFF) + 1
-		return w, h
-	case "VP8X":
-		// extended: 24-bit LE width-1 at bytes 24-26, height-1 at bytes 27-29
-		if len(data) < 30 {
-			return 0, 0
-		}
-		w := (int(data[24]) | int(data[25])<<8 | int(data[26])<<16) + 1
-		h := (int(data[27]) | int(data[28])<<8 | int(data[29])<<16) + 1
-		return w, h
-	}
-	return 0, 0
-}
-
 // BackfillPhotoDimensions reads dimension from files for photos that have none stored.
 // Runs in background so it doesn't block the response.
 func BackfillPhotoDimensions(photos []db.Photo) {
@@ -455,11 +417,12 @@ func BackfillPhotoDimensions(photos []db.Photo) {
 			if err != nil {
 				continue
 			}
-			w, h := webpDimensions(data)
-			if w > 0 && h > 0 {
-				if err := db.UpdatePhotoDimensions(p.ID, w, h); err != nil {
-					log.Printf("backfill dimensions for photo %d: %v", p.ID, err)
-				}
+			w, h, err := imgproc.Dimensions(data)
+			if err != nil {
+				continue
+			}
+			if err := db.UpdatePhotoDimensions(p.ID, w, h); err != nil {
+				log.Printf("backfill dimensions for photo %d: %v", p.ID, err)
 			}
 		}
 	}()

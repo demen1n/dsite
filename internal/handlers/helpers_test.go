@@ -172,53 +172,6 @@ func TestIsAllowedImageContent(t *testing.T) {
 	}
 }
 
-// ───── webpDimensions ─────
-
-func TestWebpDimensionsInvalid(t *testing.T) {
-	if w, h := webpDimensions([]byte("not a webp")); w != 0 || h != 0 {
-		t.Errorf("invalid data: got %d,%d", w, h)
-	}
-	if w, h := webpDimensions([]byte("RIFF")); w != 0 || h != 0 {
-		t.Errorf("too short: got %d,%d", w, h)
-	}
-}
-
-func TestWebpDimensionsVP8X(t *testing.T) {
-	buf := make([]byte, 30)
-	copy(buf[0:4], "RIFF")
-	copy(buf[8:12], "WEBP")
-	copy(buf[12:16], "VP8X")
-	// width=100 → store 99 as 24-bit LE
-	buf[24] = 99
-	// height=200 → store 199 as 24-bit LE
-	buf[27] = 199
-
-	w, h := webpDimensions(buf)
-	if w != 100 || h != 200 {
-		t.Errorf("VP8X: got %d×%d, want 100×200", w, h)
-	}
-}
-
-func TestWebpDimensionsVP8L(t *testing.T) {
-	buf := make([]byte, 30)
-	copy(buf[0:4], "RIFF")
-	copy(buf[8:12], "WEBP")
-	copy(buf[12:16], "VP8L")
-	// VP8L: 4 bytes at offset 21, bits 0-13 = width-1, bits 14-27 = height-1
-	// width=640 → 639 = 0x27F; height=480 → 479 = 0x1DF
-	// bits: [13:0]=0x27F, [27:14]=0x1DF → uint32 = 0x1DF<<14 | 0x27F
-	val := uint32(639) | (uint32(479) << 14)
-	buf[21] = byte(val)
-	buf[22] = byte(val >> 8)
-	buf[23] = byte(val >> 16)
-	buf[24] = byte(val >> 24)
-
-	w, h := webpDimensions(buf)
-	if w != 640 || h != 480 {
-		t.Errorf("VP8L: got %d×%d, want 640×480", w, h)
-	}
-}
-
 // ───── clientIP ─────
 
 func TestClientIP(t *testing.T) {
