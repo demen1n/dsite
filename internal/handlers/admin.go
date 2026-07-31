@@ -52,6 +52,10 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 			renderFragment(w, "admin/login.html", "admin/setup.html", page("Настройка", "Заполните все поля"))
 			return
 		}
+		if len(pass) < 8 {
+			renderFragment(w, "admin/login.html", "admin/setup.html", page("Настройка", "Пароль должен быть не короче 8 символов"))
+			return
+		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
 		if err != nil {
 			http.Error(w, "hash error", 500)
@@ -477,7 +481,7 @@ func AdminGallery(w http.ResponseWriter, r *http.Request) {
 
 // POST /admin/gallery/upload
 func UploadPhoto(w http.ResponseWriter, r *http.Request) {
-	r.Body = http.MaxBytesReader(w, r.Body, 100<<20)
+	r.Body = http.MaxBytesReader(w, r.Body, 30<<20)
 	if err := r.ParseMultipartForm(8 << 20); err != nil {
 		http.Error(w, "request too large", http.StatusRequestEntityTooLarge)
 		return
@@ -490,45 +494,54 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 	placeID, _ := strconv.Atoi(r.FormValue("place_id"))
 
 	for _, fh := range files {
-		f, err := fh.Open()
-		if err != nil {
-			continue
-		}
-		data, err := io.ReadAll(f)
-		f.Close()
-		if err != nil {
-			continue
-		}
+		// Each file's read+process+save runs under a single reserved slot, so
+		// concurrent upload requests can't each hold their full source buffer
+		// in RAM while queued (see imgproc.Reserve). A closure keeps the
+		// release scoped to one file instead of the whole request.
+		func() {
+			release := imgproc.Reserve()
+			defer release()
 
-		ext := strings.ToLower(filepath.Ext(fh.Filename))
-		if ext == "" {
-			ext = ".webp"
-		}
-		if !isAllowedImageExt(ext) || !isAllowedImageContent(data) {
-			continue
-		}
+			f, err := fh.Open()
+			if err != nil {
+				return
+			}
+			data, err := io.ReadAll(f)
+			f.Close()
+			if err != nil {
+				return
+			}
 
-		var filename string
-		var pw, ph int
-		if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
-			filename, err = saveUpload(data, ext)
-			if err == nil {
-				pw, ph, _ = imgproc.Dimensions(data)
+			ext := strings.ToLower(filepath.Ext(fh.Filename))
+			if ext == "" {
+				ext = ".webp"
 			}
-		} else {
-			var processed []byte
-			processed, pw, ph, err = imgproc.Process(data, uploadMaxWidth, 0, uploadQuality)
-			if err == nil {
-				filename, err = saveUpload(processed, ".jpg")
+			if !isAllowedImageExt(ext) || !isAllowedImageContent(data) {
+				return
 			}
-		}
-		if err != nil {
-			log.Printf("process/save photo %s: %v", fh.Filename, err)
-			continue
-		}
-		if err := db.AddPhoto(filename, caption, categoryID, placeID, pw, ph); err != nil {
-			log.Printf("AddPhoto %s: %v", filename, err)
-		}
+
+			var filename string
+			var pw, ph int
+			if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
+				filename, err = saveUpload(data, ext)
+				if err == nil {
+					pw, ph, _ = imgproc.Dimensions(data)
+				}
+			} else {
+				var processed []byte
+				processed, pw, ph, err = imgproc.Process(data, uploadMaxWidth, 0, uploadQuality)
+				if err == nil {
+					filename, err = saveUpload(processed, ".jpg")
+				}
+			}
+			if err != nil {
+				log.Printf("process/save photo %s: %v", fh.Filename, err)
+				return
+			}
+			if err := db.AddPhoto(filename, caption, categoryID, placeID, pw, ph); err != nil {
+				log.Printf("AddPhoto %s: %v", filename, err)
+			}
+		}()
 	}
 
 	// HTMX: возвращаем обновлённый список
@@ -803,8 +816,10 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 	if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
 		filename, err = saveUpload(data, ext)
 	} else {
+		release := imgproc.Reserve()
 		var processed []byte
 		processed, _, _, err = imgproc.Process(data, uploadMaxWidth, 0, uploadQuality)
+		release()
 		if err == nil {
 			filename, err = saveUpload(processed, ".jpg")
 		}
@@ -892,7 +907,9 @@ func handleBoundedImageUpload(r *http.Request, field string, maxHeight int) (str
 	if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
 		return saveUpload(data, ext)
 	}
+	release := imgproc.Reserve()
 	processed, _, _, err := imgproc.Process(data, uploadMaxWidth, maxHeight, uploadQuality)
+	release()
 	if err != nil {
 		return "", fmt.Errorf("process image: %w", err)
 	}

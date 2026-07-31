@@ -38,6 +38,28 @@ const maxSourcePixels = 80_000_000 // ~80MP
 // decoding/resizing at once.
 var procSem = make(chan struct{}, 1)
 
+// Reserve blocks until the single processing slot is free and returns a
+// function that releases it. Process does not acquire this itself — callers
+// must call Reserve before reading their source file into memory and hold it
+// through the call to Process (or the raw-save path for formats Process
+// doesn't touch, like GIF). Acquiring only around Process would still let
+// several concurrent requests each read their full multi-MB source into RAM
+// while queued, stacking peak memory across requests instead of bounding it
+// to roughly one file's worth at a time.
+func Reserve() (release func()) {
+	procSem <- struct{}{}
+	return func() {
+		// GC before releasing the slot: Go's default pacer only collects once
+		// the heap has doubled since the last cycle, so back-to-back calls can
+		// pile up uncollected garbage from the previous one even though they
+		// never run concurrently. Forcing a sweep here means the next queued
+		// upload starts from a clean slate instead of stacking on top of what
+		// came before.
+		runtime.GC()
+		<-procSem
+	}
+}
+
 // Process decodes data (jpeg/png/gif/webp), corrects EXIF rotation, downscales
 // so the result is at most maxWidth wide and (if maxHeight > 0) at most
 // maxHeight tall — never upscales — and re-encodes as JPEG at the given
@@ -55,15 +77,9 @@ var procSem = make(chan struct{}, 1)
 // allocating a full-resolution copy of the source (up to 4 bytes/pixel) just
 // to immediately shrink it. Resizing first keeps that copy small regardless
 // of how large the uploaded photo is.
+//
+// Callers must hold a Reserve() slot for the duration of this call.
 func Process(data []byte, maxWidth, maxHeight, quality int) (out []byte, w, h int, err error) {
-	procSem <- struct{}{}
-	// GC before releasing the slot: Go's default pacer only collects once the
-	// heap has doubled since the last cycle, so back-to-back calls can pile
-	// up uncollected garbage from the previous one even though they never run
-	// concurrently. Forcing a sweep here means the next queued upload starts
-	// from a clean slate instead of stacking on top of what came before.
-	defer func() { runtime.GC(); <-procSem }()
-
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("decode config: %w", err)
