@@ -371,7 +371,7 @@ func Sitemap(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	}
-	posts, err := db.ListPosts(true)
+	posts, err := db.ListPostsMeta(true)
 	if err == nil {
 		for _, p := range posts {
 			sm.URLs = append(sm.URLs, sitemapURL{
@@ -520,7 +520,12 @@ type atomFeed struct {
 	Link    atomLink    `xml:"link"`
 	Updated string      `xml:"updated"`
 	ID      string      `xml:"id"`
+	Author  atomAuthor  `xml:"author"`
 	Entries []atomEntry `xml:"entry"`
+}
+
+type atomAuthor struct {
+	Name string `xml:"name"`
 }
 
 type atomLink struct {
@@ -554,14 +559,15 @@ func Feed(w http.ResponseWriter, r *http.Request) {
 	base := baseURL(r)
 
 	feed := atomFeed{
-		Xmlns: "http://www.w3.org/2005/Atom",
-		Title: siteTitle,
-		Link:  atomLink{Href: base + "/feed.xml", Rel: "self"},
-		ID:    base + "/",
+		Xmlns:  "http://www.w3.org/2005/Atom",
+		Title:  siteTitle,
+		Link:   atomLink{Href: base + "/feed.xml", Rel: "self"},
+		ID:     base + "/",
+		Author: atomAuthor{Name: siteTitle},
 	}
 
 	if len(posts) > 0 {
-		feed.Updated = posts[0].CreatedAt.UTC().Format("2006-01-02T15:04:05Z")
+		feed.Updated = posts[0].UpdatedAt.UTC().Format("2006-01-02T15:04:05Z")
 	}
 
 	for _, p := range posts {
@@ -570,7 +576,7 @@ func Feed(w http.ResponseWriter, r *http.Request) {
 			Title:   p.Title,
 			Link:    atomLink{Href: link},
 			ID:      link,
-			Updated: p.CreatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			Updated: p.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"),
 			Summary: excerpt(p.BodyHTML),
 			Content: atomContent{Type: "html", Content: p.BodyHTML},
 		})
