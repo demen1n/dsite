@@ -47,7 +47,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// ── Статика ──
-	mux.Handle("GET /static/", noListing(http.StripPrefix("/static/", http.FileServer(http.Dir("./static")))))
+	mux.Handle("GET /static/", cacheControl("public, max-age=3600")(noListing(http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))))
 	mux.Handle("GET /uploads/", immutableCache(noListing(http.StripPrefix("/uploads/", http.FileServer(http.Dir(cfg.UploadsDir))))))
 
 	// ── Публичные ──
@@ -143,6 +143,18 @@ func immutableCache(next http.Handler) http.Handler {
 		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// cacheControl sets the given Cache-Control value on every response,
+// success or not — fine for /static, whose files ship with the binary and
+// change only on deploy.
+func cacheControl(value string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Cache-Control", value)
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // noListing blocks directory listing for file servers.

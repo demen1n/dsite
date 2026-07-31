@@ -65,16 +65,20 @@ templates/
 
 **Templates**: Block inheritance — base template defines layout, page templates override blocks. HTMX fragment responses render standalone without the layout wrapper. The rendering logic is in `helpers.go:renderTemplate`.
 
-**Database**: Raw SQL, no ORM. `modernc.org/sqlite` (pure Go, no CGO). Schema migrations run on startup in `db.go`. Tables: `users`, `posts`, `photos`, `resume`.
+**Database**: Raw SQL, no ORM. `modernc.org/sqlite` (pure Go, no CGO). Schema migrations run on startup in `db.go`. Tables: `users`, `posts`, `photos`, `resume`, `categories`, `places`, `series`, `tags`, `post_tags`, `sessions`, `settings`, plus the `posts_fts` FTS5 virtual table (full-text search over post title/body, kept in sync via triggers).
 
 **Sessions**: Stored in SQLite (`sessions` table). 30-day expiry. Expired sessions cleaned on startup and hourly. Single admin user.
 
-**Images**: Client-side resize to max 1600px WebP (via OffscreenCanvas in the browser) before upload. Server stores with a random hex filename. Upload validation checks both file extension (allowlist) and magic bytes (MIME content).
+**Images**: Server-side resize/re-encode via `internal/imgproc` (EXIF-corrected, max 1600px wide, JPEG output) — replaced the old browser-side canvas resize. GIFs are stored as-is (unprocessed) to preserve animation. Server stores with a random hex filename. Upload validation checks both file extension (allowlist) and magic bytes (MIME content). `imgproc.Process` no longer self-throttles concurrency — callers must hold an `imgproc.Reserve()` slot for the duration of the call (see `internal/imgproc/imgproc.go`).
 
 **Slugs**: `slugify()` in `helpers.go` supports Cyrillic — transliterates to Latin before slugifying, so Russian category/post names work correctly.
 
 **Markdown**: `github.com/yuin/goldmark` with GFM extensions (tables, strikethrough). Unsafe HTML allowed for flexibility. Markdown is stored alongside pre-rendered HTML in the posts table.
 
-**Frontend**: CSS is embedded directly in `templates/base.html` and `templates/admin/base.html`. HTMX loaded from CDN (`unpkg.com`). No build step.
+**Frontend**: CSS lives in `/static/style.css` (public) and `/static/admin.css` (admin), served with a 1-hour `Cache-Control`. HTMX is vendored and served from `/static/htmx.min.js` (not loaded from a CDN). No build step.
 
-**Security**: `securityHeaders` middleware sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. `csrfCheck` middleware validates `Origin` header on POST requests, falling back to `Referer` for traditional form submissions. Login rate-limited to 5 attempts per 15 min per IP.
+**Security**: `securityHeaders` middleware sets `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy`, and `Content-Security-Policy`. `csrfCheck` middleware validates `Origin` header on POST requests, falling back to `Referer` for traditional form submissions. Login rate-limited to 5 attempts per 15 min per IP. Set `SITE_URL` in production — if unset, sitemap/feed/canonical URLs fall back to the client-controlled `Host` header (a startup warning is logged when this happens).
+
+**Uploads are never garbage-collected automatically**: replacing a post/series cover or an avatar leaves the old file on disk (deliberate — avoids deleting a file another post/series still references, since usage tracking doesn't cover every place a filename could appear, e.g. series descriptions or the resume body). Clean up manually via `/admin/uploads`, which shows per-file usage and flags unused files.
+
+**Backups**: no automated backup is currently configured. The SQLite file is the only copy of all content, on a single VPS. Recommended: [litestream](https://litestream.io/) streaming WAL to S3-compatible storage, or at minimum a cron job running `sqlite3 /data/data.db ".backup ..."` with rotation.

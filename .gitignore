@@ -21,5 +21,8 @@ Thumbs.db
 *.swp
 *.swo
 
+# Local scratch/backup files
+.backups/
+
 # Go
 vendor/demenin.ru.har

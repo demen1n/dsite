@@ -121,7 +121,7 @@ func Logout(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin
 func AdminIndex(w http.ResponseWriter, r *http.Request) {
-	posts, err := db.ListPosts(false)
+	posts, err := db.ListPostsMeta(false)
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
@@ -180,7 +180,9 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if tagsStr := r.FormValue("tags"); tagsStr != "" {
-		db.SetPostTags(int(id), parseTags(tagsStr))
+		if err := db.SetPostTags(int(id), parseTags(tagsStr)); err != nil {
+			log.Printf("SetPostTags for post %d: %v", id, err)
+		}
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/admin/posts/%d/edit", id), http.StatusFound)
@@ -259,7 +261,9 @@ func DeletePost(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	db.DeletePost(id)
+	if err := db.DeletePost(id); err != nil {
+		log.Printf("DeletePost %d: %v", id, err)
+	}
 	http.Redirect(w, r, "/admin", http.StatusFound)
 }
 
@@ -959,25 +963,37 @@ func AdminUploads(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "read dir error", 500)
 		return
 	}
-	var files []UploadFile
+	type fileInfo struct {
+		name string
+		info os.FileInfo
+	}
+	var infos []fileInfo
+	names := make([]string, 0, len(entries))
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
-		name := entry.Name()
 		info, err := entry.Info()
 		if err != nil {
 			continue
 		}
-		usage, err := db.GetFileUsage(name)
-		if err != nil {
-			log.Printf("GetFileUsage %s: %v", name, err)
-			continue
-		}
+		infos = append(infos, fileInfo{entry.Name(), info})
+		names = append(names, entry.Name())
+	}
+
+	usageByName, err := db.GetAllFileUsage(names)
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+
+	files := make([]UploadFile, 0, len(infos))
+	for _, fi := range infos {
+		usage := usageByName[fi.name]
 		files = append(files, UploadFile{
-			Filename: name,
-			Size:     info.Size(),
-			ModTime:  info.ModTime(),
+			Filename: fi.name,
+			Size:     fi.info.Size(),
+			ModTime:  fi.info.ModTime(),
 			Usage:    usage,
 			Unused:   !usage.InGallery && len(usage.PostTitles) == 0,
 		})
