@@ -1,19 +1,26 @@
 package main
 
 import (
+	"context"
 	"dsite/internal/config"
 	"dsite/internal/db"
 	"dsite/internal/handlers"
+	"errors"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
 func main() {
 	cfg := config.LoadConfig()
+	if cfg.SiteURL == "" {
+		log.Println("WARNING: SITE_URL is not set — sitemap/feed/canonical URLs will be built from the request Host header, which a client can spoof. Set SITE_URL in production.")
+	}
 
 	// Создаём папку для загрузок
 	if err := os.MkdirAll(cfg.UploadsDir, 0755); err != nil {
@@ -132,8 +139,27 @@ func main() {
 		IdleTimeout:       120 * time.Second,
 		MaxHeaderBytes:    1 << 16,
 	}
-	log.Printf("🚀 Server running at http://localhost:%s", cfg.Port)
-	log.Fatal(srv.ListenAndServe())
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+
+	go func() {
+		log.Printf("🚀 Server running at http://localhost:%s", cfg.Port)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatal(err)
+		}
+	}()
+
+	<-ctx.Done()
+	stop()
+	log.Println("shutting down...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("shutdown: %v", err)
+	}
+	db.DB.Close()
+	log.Println("stopped")
 }
 
 // immutableCache sets a 1-year Cache-Control for uploads whose filenames are
@@ -176,7 +202,10 @@ func securityHeaders(next http.Handler) http.Handler {
 				"script-src "+scriptSrc+"; "+
 				"style-src 'self' 'unsafe-inline'; "+
 				"img-src 'self' data: blob:; "+
-				"connect-src 'self'")
+				"connect-src 'self'; "+
+				"base-uri 'none'; "+
+				"form-action 'self'; "+
+				"frame-ancestors 'self'")
 		next.ServeHTTP(w, r)
 	})
 }
