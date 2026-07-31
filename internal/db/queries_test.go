@@ -424,6 +424,46 @@ func TestSearchPosts(t *testing.T) {
 	}
 }
 
+// TestSearchPostsIndexStaysInSync guards against the FTS5 external-content
+// trigger bug where UPDATE/DELETE on posts left stale/phantom entries in
+// posts_fts (see AUDIT.md §1.1): edits must drop old tokens, deletes must
+// remove the row from the index.
+func TestSearchPostsIndexStaysInSync(t *testing.T) {
+	setupTestDB(t)
+
+	id, err := CreatePost("sync-test", "Sync Test", "alphaword unique", "<p>alphaword</p>", "", true, 0)
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+
+	results, err := SearchPosts("alphaword")
+	if err != nil || len(results) != 1 {
+		t.Fatalf("SearchPosts before update: got %v err=%v", results, err)
+	}
+
+	if err := UpdatePost(int(id), "sync-test", "Sync Test", "betaword unique", "<p>betaword</p>", "", true, 0); err != nil {
+		t.Fatalf("UpdatePost: %v", err)
+	}
+
+	results, err = SearchPosts("alphaword")
+	if err != nil || len(results) != 0 {
+		t.Errorf("SearchPosts after update should not find old text, got %v err=%v", results, err)
+	}
+	results, err = SearchPosts("betaword")
+	if err != nil || len(results) != 1 {
+		t.Errorf("SearchPosts after update should find new text, got %v err=%v", results, err)
+	}
+
+	if err := DeletePost(int(id)); err != nil {
+		t.Fatalf("DeletePost: %v", err)
+	}
+
+	results, err = SearchPosts("betaword")
+	if err != nil || len(results) != 0 {
+		t.Errorf("SearchPosts after delete should be empty, got %v err=%v", results, err)
+	}
+}
+
 func TestSearchPostsDraft(t *testing.T) {
 	setupTestDB(t)
 

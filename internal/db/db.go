@@ -17,7 +17,7 @@ func Init(path string) error {
 	// mattn/go-sqlite3 convention) are silently ignored by this driver, so
 	// the app had been running without WAL and without FK enforcement
 	// (ON DELETE CASCADE/SET NULL in the schema were never actually applied).
-	DB, err = sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)")
+	DB, err = sql.Open("sqlite", path+"?_pragma=journal_mode(WAL)&_pragma=foreign_keys(1)&_pragma=busy_timeout(5000)&_pragma=synchronous(NORMAL)")
 	if err != nil {
 		return fmt.Errorf("open db: %w", err)
 	}
@@ -92,6 +92,15 @@ func migratePlaces() error {
 	return nil
 }
 
+// migrateFTS creates the posts_fts external-content index and the triggers
+// that keep it in sync with posts. External-content FTS5 tables can't be
+// kept in sync with a plain UPDATE/DELETE on the index — SQLite needs the
+// *old* row values fed back through the special 'delete' command before the
+// new row goes in, otherwise stale tokens survive edits and deleted rows
+// never leave the index. The old triggers (posts_fts_au/posts_fts_ad) did a
+// plain UPDATE/DELETE, so they're dropped and recreated here on every
+// startup; the unconditional rebuild below heals any index left corrupted
+// by the old triggers.
 func migrateFTS() error {
 	_, err := DB.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
 		title, body_md,
@@ -103,13 +112,17 @@ func migrateFTS() error {
 	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_ai AFTER INSERT ON posts BEGIN
 		INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
 	END`)
-	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_au AFTER UPDATE ON posts BEGIN
-		UPDATE posts_fts SET title=new.title, body_md=new.body_md WHERE rowid=old.id;
+	DB.Exec(`DROP TRIGGER IF EXISTS posts_fts_au`)
+	DB.Exec(`CREATE TRIGGER posts_fts_au AFTER UPDATE ON posts BEGIN
+		INSERT INTO posts_fts(posts_fts, rowid, title, body_md) VALUES('delete', old.id, old.title, old.body_md);
+		INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
 	END`)
-	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_ad AFTER DELETE ON posts BEGIN
-		DELETE FROM posts_fts WHERE rowid=old.id;
+	DB.Exec(`DROP TRIGGER IF EXISTS posts_fts_ad`)
+	DB.Exec(`CREATE TRIGGER posts_fts_ad AFTER DELETE ON posts BEGIN
+		INSERT INTO posts_fts(posts_fts, rowid, title, body_md) VALUES('delete', old.id, old.title, old.body_md);
 	END`)
-	// Populate index from existing posts (idempotent)
+	// Heal any index corruption left by the old triggers, and populate the
+	// index from existing posts on first run. Idempotent, safe every startup.
 	DB.Exec(`INSERT INTO posts_fts(posts_fts) VALUES('rebuild')`)
 	return nil
 }
