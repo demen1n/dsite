@@ -149,6 +149,17 @@ func pngIHDROnly(t *testing.T, w, h uint32) []byte {
 	return buf.Bytes()
 }
 
+func TestDimensionsJPEG(t *testing.T) {
+	data := makeJPEG(t, 640, 480)
+	w, h, err := Dimensions(data)
+	if err != nil {
+		t.Fatalf("Dimensions: %v", err)
+	}
+	if w != 640 || h != 480 {
+		t.Errorf("got %dx%d, want 640x480", w, h)
+	}
+}
+
 func TestProcessRejectsHugeImages(t *testing.T) {
 	data := pngIHDROnly(t, 20000, 20000) // 400MP, well past the 40MP guard
 	_, _, _, err := Process(data, 1600, 0, 85)
