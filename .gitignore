@@ -1,5 +1,6 @@
 # Binary
 /dsite
+dist/
 
 # Database and uploads (runtime data)
 *.db
