@@ -1,32 +1,34 @@
 # dsite
 
-Минималистичный персональный сайт: посты, галерея, резюме.  
-Go + HTMX + SQLite. Один бинар, нулевые зависимости в рантайме.
+A minimalist personal website engine: blog posts, photo gallery, resume.
+Go + HTMX + SQLite. Single binary, zero runtime dependencies, no build step.
 
-## Запуск локально
+[Русская версия](README.ru.md)
+
+## Quick start
 
 ```bash
 INSECURE_COOKIES=true go run ./cmd/dsite
 ```
 
-> `INSECURE_COOKIES=true` нужен при запуске по HTTP (localhost) — иначе сессионная кука
-> имеет флаг `Secure` и браузер не отправляет её по HTTP, вход в админку не работает.
-> В production (за HTTPS-прокси) эта переменная не нужна.
+> `INSECURE_COOKIES=true` is needed when running over plain HTTP (localhost) —
+> otherwise the session cookie has the `Secure` flag and the browser won't send
+> it, so admin login won't work. Not needed in production behind an HTTPS proxy.
 
-Откройте http://localhost:8080  
-При первом запуске перейдите на `/admin/setup` — создайте аккаунт.
+Open http://localhost:8080. On first run, visit `/admin/setup` to create the admin account.
 
-## Переменные окружения
+## Environment variables
 
-| Переменная          | По умолчанию     | Описание                                        |
-|---------------------|------------------|-------------------------------------------------|
-| `PORT`              | `8080`           | Порт сервера                                    |
-| `DB_PATH`           | `./data.db`      | Путь к SQLite базе                              |
-| `UPLOADS_DIR`       | `./uploads`      | Папка для загрузок                              |
-| `SITE_TITLE`        | `My Blog`        | Название сайта                                  |
-| `SITE_DESC`         | `Фото и заметки` | Подзаголовок                                    |
-| `INSECURE_COOKIES`  | —                | Установи `true` для локального запуска по HTTP  |
-| `TRUSTED_PROXY`     | —                | Установи `true` если сервер за обратным прокси  |
+| Variable           | Default          | Description                                              |
+|--------------------|------------------|----------------------------------------------------------|
+| `PORT`             | `8080`           | Server port                                              |
+| `DB_PATH`          | `./data.db`      | SQLite database path                                     |
+| `UPLOADS_DIR`      | `./uploads`      | Uploads directory                                        |
+| `SITE_TITLE`       | `My Blog`        | Site title                                               |
+| `SITE_DESC`        | `Фото и заметки` | Site subtitle                                            |
+| `SITE_URL`         | _(auto-detect)_  | Canonical base URL (e.g. `https://example.com`), used in sitemap/robots/feed. Set it in production. |
+| `INSECURE_COOKIES` | —                | Set to `true` for local development over HTTP            |
+| `TRUSTED_PROXY`    | —                | Set to `true` when behind a reverse proxy (trusts `X-Forwarded-For` for login rate limiting) |
 
 ## Docker
 
@@ -35,55 +37,68 @@ docker build -t dsite .
 docker run -p 8080:8080 -v dsite_data:/data dsite
 ```
 
-## Структура
+Or with compose: copy `docker-compose.example.yml` to `docker-compose.yml`,
+adjust the values, and run `docker compose up -d`. Terminate TLS with any
+reverse proxy (Caddy, nginx) in front and set `TRUSTED_PROXY=true`.
+
+## Features
+
+**Content**
+- Posts with a markdown editor, HTMX live preview, tags, cover image and slug
+- Post series with their own pages
+- Photo gallery with categories, shooting locations and drag-and-drop ordering
+- Resume page in markdown
+- Editable home page (markdown, changed from settings without a rebuild)
+- Atom feed (`/feed.xml`), `sitemap.xml`, `robots.txt`
+- Full-text search (SQLite FTS5), works for Cyrillic too
+
+**Admin**
+- Uploads browser (`/admin/uploads`) — shows where each file is used, deletes unused ones
+- Media picker for inserting images into posts
+- Settings: site title, subtitle, home page text, social links, resume visibility
+- Cyrillic-aware slugs (transliterated to Latin)
+
+**Image uploads**
+- Server-side resize/re-encode (EXIF-corrected, max 1600px, JPEG); GIFs stored as-is to preserve animation
+- Magic-byte validation on top of an extension allowlist, random hex filenames
+- Immutable `Cache-Control` for uploads (1 year)
+
+**Security**
+- CSRF protection (Origin/Referer check on POST)
+- Login rate limiting (5 attempts / 15 min per IP)
+- Security headers (CSP, X-Frame-Options, Referrer-Policy, etc.)
+- Sessions in SQLite, 30-day expiry, scheduled cleanup
+
+## Project structure
 
 ```
-cmd/dsite/main.go          # Точка входа, роутинг
-internal/config/config.go  # Конфиг из env
+cmd/dsite/main.go          # Entry point: config, DB init, routing
+internal/config/config.go  # Environment config
 internal/db/
-  db.go                    # Инициализация SQLite + миграции
-  queries.go               # Все запросы к БД
+  db.go                    # SQLite init (WAL) + schema migrations
+  queries.go               # All database operations (raw SQL, no ORM)
 internal/handlers/
-  helpers.go               # Шаблонизатор, сессии, утилиты
-  public.go                # Публичные страницы
-  admin.go                 # Авторизация + CRUD
-templates/
-  base.html                # Публичный лэйаут (CSS внутри)
-  admin/base.html          # Лэйаут админки
-  admin/editor.html        # Редактор постов
-static/                    # htmx.min.js
-uploads/                   # Загруженные файлы
+  helpers.go               # Templates, sessions, markdown, file uploads
+  public.go                # Public pages
+  admin.go                 # Auth + admin CRUD
+internal/imgproc/          # Server-side image resize/re-encode
+templates/                 # html/template with block inheritance
+static/                    # CSS, JS, vendored HTMX — no build step
 ```
 
-## Фичи
+## Dependencies
 
-**Контент**
-- Посты с markdown-редактором, live-превью, тегами, обложкой и slug'ом
-- Галерея с категориями, местами съёмки и drag-and-drop сортировкой
-- Резюме в markdown
-- RSS-лента (`/feed.xml`)
-- Полнотекстовый поиск (SQLite FTS5)
+- [`modernc.org/sqlite`](https://pkg.go.dev/modernc.org/sqlite) — pure-Go SQLite, no CGO
+- [`github.com/yuin/goldmark`](https://github.com/yuin/goldmark) — Markdown → HTML (GFM)
+- [`golang.org/x/crypto`](https://pkg.go.dev/golang.org/x/crypto) — bcrypt
+- [HTMX](https://htmx.org) — vendored in `static/`, no CDN
 
-**Админка**
-- Браузер загрузок (`/admin/uploads`) — показывает где используется каждый файл (галерея, посты), удаление неиспользуемых
-- Редактор главной страницы (markdown) — меняется из настроек без пересборки
-- Настройки: название сайта, подзаголовок, текст главной, ссылки на соцсети, видимость резюме
-- Медиапикер для вставки изображений в посты
+## Backups
 
-**Загрузка фото**
-- Клиентский ресайз до 1600px и конвертация в WebP (OffscreenCanvas) перед отправкой
-- Проверка magic bytes на сервере, случайные hex-имена файлов
-- Immutable Cache-Control для загрузок (1 год)
+The SQLite file is the only copy of all content. Recommended:
+[litestream](https://litestream.io/) streaming to S3-compatible storage, or at
+minimum a cron job running `sqlite3 /data/data.db ".backup ..."` with rotation.
 
-**Безопасность**
-- CSRF-защита (проверка Origin / Referer)
-- Rate limiting на логин (5 попыток / 15 мин)
-- Security headers (CSP, X-Frame-Options, HSTS и др.)
-- Сессии в SQLite, 30-дневный срок, очистка по расписанию
+## License
 
-## Зависимости
-
-- `modernc.org/sqlite` — чистый Go SQLite, без CGO
-- `github.com/yuin/goldmark` — Markdown → HTML
-- `golang.org/x/crypto` — bcrypt
-- HTMX 1.9 — подгружен локально, без сборки
+[MIT](LICENSE)

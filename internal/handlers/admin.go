@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"dsite/internal/db"
-	"dsite/internal/imgproc"
 	"fmt"
+	"github.com/demen1n/dsite/internal/db"
+	"github.com/demen1n/dsite/internal/imgproc"
 	"io"
 	"log"
 	"net/http"

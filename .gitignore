@@ -7,9 +7,10 @@
 *.db-wal
 uploads/
 
-# Environment
+# Environment / local deploy config
 .env
 .env.*
+docker-compose.yml
 
 # OS
 .DS_Store
@@ -25,4 +26,7 @@ Thumbs.db
 .backups/
 
 # Go
-vendor/demenin.ru.har
+vendor/
+
+# Browser traffic dumps
+*.har

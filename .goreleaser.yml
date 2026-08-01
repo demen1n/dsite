@@ -1,0 +1,25 @@
+version: 2
+project_name: dsite
+
+builds:
+  - main: ./cmd/dsite
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - linux
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+
+# The binary loads templates/ and static/ from disk, so ship them in the archive.
+archives:
+  - files:
+      - LICENSE
+      - README.md
+      - docker-compose.example.yml
+      - templates/**/*
+      - static/**/*
+
+checksum:
+  name_template: checksums.txt

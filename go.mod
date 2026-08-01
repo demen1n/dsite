@@ -1,4 +1,4 @@
-module dsite
+module github.com/demen1n/dsite
 
 go 1.26
 

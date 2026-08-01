@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"bytes"
-	"dsite/internal/db"
 	"encoding/xml"
 	"fmt"
+	"github.com/demen1n/dsite/internal/db"
 	"image"
 	"image/color"
 	"image/png"
@@ -535,11 +535,11 @@ type atomLink struct {
 }
 
 type atomEntry struct {
-	Title   string   `xml:"title"`
-	Link    atomLink `xml:"link"`
-	ID      string   `xml:"id"`
-	Updated string   `xml:"updated"`
-	Summary string   `xml:"summary"`
+	Title   string      `xml:"title"`
+	Link    atomLink    `xml:"link"`
+	ID      string      `xml:"id"`
+	Updated string      `xml:"updated"`
+	Summary string      `xml:"summary"`
 	Content atomContent `xml:"content"`
 }
 

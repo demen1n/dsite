@@ -2,10 +2,10 @@ package main
 
 import (
 	"context"
-	"dsite/internal/config"
-	"dsite/internal/db"
-	"dsite/internal/handlers"
 	"errors"
+	"github.com/demen1n/dsite/internal/config"
+	"github.com/demen1n/dsite/internal/db"
+	"github.com/demen1n/dsite/internal/handlers"
 	"log"
 	"net/http"
 	"net/url"

@@ -1,0 +1,20 @@
+# Copy to docker-compose.yml and adjust for your setup.
+services:
+  dsite:
+    # Build locally with `docker build -t dsite .` or use a published image.
+    image: dsite
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - /data:/data
+    environment:
+      - SITE_TITLE=My Blog
+      - SITE_DESC=Photos and notes
+      - SITE_URL=https://example.com
+      # Behind a reverse proxy on the same host: trust X-Forwarded-For
+      # (otherwise the login rate limiter sees every visitor as the proxy IP).
+      - TRUSTED_PROXY=true
+      - GOMEMLIMIT=400MiB
+    mem_limit: 512m
+    cpus: "0.5"

@@ -13,8 +13,8 @@ Push to `main` → GitHub Actions CI/CD автоматически собира�
 ## Commands
 
 ```bash
-# Run locally
-go run ./cmd/dsite
+# Run locally (INSECURE_COOKIES needed for admin login over plain HTTP)
+INSECURE_COOKIES=true go run ./cmd/dsite
 
 # Build binary
 go build -o dsite ./cmd/dsite
@@ -24,8 +24,8 @@ go fmt ./...
 go vet ./...
 
 # Docker
-docker build -t myblog .
-docker run -p 8080:8080 -v myblog_data:/data myblog
+docker build -t dsite .
+docker run -p 8080:8080 -v dsite_data:/data dsite
 ```
 
 First run: visit `/admin/setup` to create the admin account.
@@ -40,6 +40,8 @@ First run: visit `/admin/setup` to create the admin account.
 | `SITE_TITLE`  | `My Blog`        | Site title             |
 | `SITE_DESC`   | `Фото и заметки` | Site subtitle          |
 | `SITE_URL`    | _(auto-detect)_  | Canonical base URL (e.g. `https://demenin.ru`), used in sitemap/robots/feeds |
+| `INSECURE_COOKIES` | —           | `true` for local development over plain HTTP |
+| `TRUSTED_PROXY`    | —           | `true` behind a reverse proxy (trusts `X-Forwarded-For` for login rate limiting) |
 
 ## Architecture
 

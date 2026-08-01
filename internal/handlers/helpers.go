@@ -3,11 +3,11 @@ package handlers
 import (
 	"bytes"
 	"crypto/rand"
-	"dsite/internal/db"
-	"dsite/internal/imgproc"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/demen1n/dsite/internal/db"
+	"github.com/demen1n/dsite/internal/imgproc"
 	"html/template"
 	"log"
 	"net"
