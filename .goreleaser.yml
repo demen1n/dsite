@@ -18,8 +18,9 @@ archives:
       - LICENSE
       - README.md
       - docker-compose.example.yml
+      - templates/*
       - templates/**/*
-      - static/**/*
+      - static/*
 
 checksum:
   name_template: checksums.txt
