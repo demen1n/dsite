@@ -435,12 +435,17 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// Проверяем что файл реально существует в uploads
-	if _, err := os.Stat(filepath.Join(uploadsDir, filename)); err != nil {
+	path := filepath.Join(uploadsDir, filename)
+	if _, err := os.Stat(path); err != nil {
 		http.Error(w, "file not found", 404)
 		return
 	}
+	var pw, ph int
+	if data, err := os.ReadFile(path); err == nil {
+		pw, ph, _ = imgproc.Dimensions(data)
+	}
 	caption := r.FormValue("caption")
-	if err := db.AddPhoto(filename, caption, 0, 0, 0, 0); err != nil {
+	if err := db.AddPhoto(filename, caption, 0, 0, pw, ph); err != nil {
 		http.Error(w, "DB error", 500)
 		return
 	}
