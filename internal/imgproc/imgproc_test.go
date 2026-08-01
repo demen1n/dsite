@@ -26,6 +26,7 @@ func makeJPEG(t *testing.T, w, h int) []byte {
 }
 
 func TestProcessDownscales(t *testing.T) {
+	defer Reserve()()
 	data := makeJPEG(t, 3200, 2000)
 	out, w, h, err := Process(data, 1600, 0, 85)
 	if err != nil {
@@ -40,6 +41,7 @@ func TestProcessDownscales(t *testing.T) {
 }
 
 func TestProcessNeverUpscales(t *testing.T) {
+	defer Reserve()()
 	data := makeJPEG(t, 800, 600)
 	_, w, h, err := Process(data, 1600, 0, 85)
 	if err != nil {
@@ -55,6 +57,7 @@ func TestProcessCapsHeightForPortraitCovers(t *testing.T) {
 	// exactly the case that used to slip through uncapped (post/series
 	// covers are always displayed cropped, so there's no point storing
 	// 2400px of height nobody sees).
+	defer Reserve()()
 	data := makeJPEG(t, 1200, 3600)
 	out, w, h, err := Process(data, 1600, 1000, 85)
 	if err != nil {
@@ -161,6 +164,7 @@ func TestDimensionsJPEG(t *testing.T) {
 }
 
 func TestProcessRejectsHugeImages(t *testing.T) {
+	defer Reserve()()
 	data := pngIHDROnly(t, 20000, 20000) // 400MP, well past the 40MP guard
 	_, _, _, err := Process(data, 1600, 0, 85)
 	if err == nil {
