@@ -5,6 +5,18 @@ Go + HTMX + SQLite. Один бинарь, нулевые зависимости
 
 [English version](README.md)
 
+## Скриншоты
+
+Главная и галерея с фильтрами по темам и местам:
+
+![Главная](docs/screenshots/home.png)
+
+![Галерея](docs/screenshots/gallery.jpg)
+
+Markdown-редактор с live-превью на HTMX:
+
+![Редактор постов](docs/screenshots/editor.png)
+
 ## Запуск локально
 
 ```bash

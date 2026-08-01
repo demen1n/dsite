@@ -5,6 +5,18 @@ Go + HTMX + SQLite. Single binary, zero runtime dependencies, no build step.
 
 [Русская версия](README.ru.md)
 
+## Screenshots
+
+Home page and photo gallery with category/place filters:
+
+![Home page](docs/screenshots/home.png)
+
+![Gallery](docs/screenshots/gallery.jpg)
+
+Markdown editor with HTMX live preview:
+
+![Post editor](docs/screenshots/editor.png)
+
 ## Quick start
 
 ```bash
