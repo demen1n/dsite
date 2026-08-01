@@ -87,6 +87,38 @@ func ListPosts(onlyPublished bool) ([]Post, error) {
 	return posts, rows.Err()
 }
 
+// ListPostsMeta is like ListPosts but leaves BodyMD/BodyHTML unset — for
+// callers that only need metadata (sitemap, admin post list) and would
+// otherwise pull every post's full markdown+HTML off disk just to read a
+// slug and a date.
+func ListPostsMeta(onlyPublished bool) ([]Post, error) {
+	q := `SELECT id, slug, title, cover, published, views, created_at, updated_at
+	      FROM posts`
+	if onlyPublished {
+		q += ` WHERE published=1`
+	}
+	q += ` ORDER BY created_at DESC`
+	rows, err := DB.Query(q)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var posts []Post
+	for rows.Next() {
+		var p Post
+		var pub int
+		var ca, ua string
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &pub, &p.Views, &ca, &ua); err != nil {
+			return nil, err
+		}
+		p.Published = pub == 1
+		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
+		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
 // ListPostsPaginated возвращает посты с пагинацией и опциональным фильтром по тегу.
 // Возвращает посты, суммарное количество и ошибку.
 func ListPostsPaginated(tagSlug string, page, perPage int) ([]Post, int, error) {
@@ -795,6 +827,55 @@ func GetFileUsage(filename string) (FileUsage, error) {
 		u.PostTitles = append(u.PostTitles, title)
 	}
 	return u, rows.Err()
+}
+
+// GetAllFileUsage reports gallery/post usage for every name in filenames in
+// one pass over photos and posts, instead of running GetFileUsage's two
+// queries per file — on an uploads folder with hundreds of files that was
+// O(files × posts) in round-trips alone.
+func GetAllFileUsage(filenames []string) (map[string]FileUsage, error) {
+	usage := make(map[string]FileUsage, len(filenames))
+	for _, f := range filenames {
+		usage[f] = FileUsage{}
+	}
+
+	galleryRows, err := DB.Query(`SELECT filename FROM photos`)
+	if err != nil {
+		return nil, err
+	}
+	defer galleryRows.Close()
+	for galleryRows.Next() {
+		var fn string
+		if err := galleryRows.Scan(&fn); err != nil {
+			return nil, err
+		}
+		if u, ok := usage[fn]; ok {
+			u.InGallery = true
+			usage[fn] = u
+		}
+	}
+	if err := galleryRows.Err(); err != nil {
+		return nil, err
+	}
+
+	postRows, err := DB.Query(`SELECT title, cover, body_md FROM posts`)
+	if err != nil {
+		return nil, err
+	}
+	defer postRows.Close()
+	for postRows.Next() {
+		var title, cover, bodyMD string
+		if err := postRows.Scan(&title, &cover, &bodyMD); err != nil {
+			return nil, err
+		}
+		for fn, u := range usage {
+			if fn == cover || strings.Contains(bodyMD, fn) {
+				u.PostTitles = append(u.PostTitles, title)
+				usage[fn] = u
+			}
+		}
+	}
+	return usage, postRows.Err()
 }
 
 // ───────────────────────── Settings ─────────────────────────

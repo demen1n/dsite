@@ -89,6 +89,29 @@ func TestPostCRUD(t *testing.T) {
 	}
 }
 
+func TestListPostsMeta(t *testing.T) {
+	setupTestDB(t)
+
+	CreatePost("meta-test", "Meta Test", "full markdown body", "<p>full markdown body</p>", "", true, 0) //nolint
+	CreatePost("meta-draft", "Meta Draft", "draft body", "<p>draft body</p>", "", false, 0)              //nolint
+
+	published, err := ListPostsMeta(true)
+	if err != nil || len(published) != 1 {
+		t.Fatalf("ListPostsMeta(true): got %v err=%v", published, err)
+	}
+	if published[0].Title != "Meta Test" || published[0].Slug != "meta-test" {
+		t.Errorf("ListPostsMeta(true): got %+v", published[0])
+	}
+	if published[0].BodyMD != "" || published[0].BodyHTML != "" {
+		t.Errorf("ListPostsMeta should leave body fields unset, got MD=%q HTML=%q", published[0].BodyMD, published[0].BodyHTML)
+	}
+
+	all, err := ListPostsMeta(false)
+	if err != nil || len(all) != 2 {
+		t.Fatalf("ListPostsMeta(false): got %v err=%v", all, err)
+	}
+}
+
 func TestListPostsPaginated(t *testing.T) {
 	setupTestDB(t)
 
@@ -330,8 +353,8 @@ func TestExpiredSession(t *testing.T) {
 func TestCleanExpiredSessions(t *testing.T) {
 	setupTestDB(t)
 
-	CreateSession("alive", time.Now().Add(time.Hour))    //nolint
-	CreateSession("dead", time.Now().Add(-time.Hour))    //nolint
+	CreateSession("alive", time.Now().Add(time.Hour)) //nolint
+	CreateSession("dead", time.Now().Add(-time.Hour)) //nolint
 
 	CleanExpiredSessions()
 
@@ -499,5 +522,31 @@ func TestGetFileUsage(t *testing.T) {
 	}
 	if usage.InGallery {
 		t.Error("InGallery: want false for unused file")
+	}
+}
+
+func TestGetAllFileUsage(t *testing.T) {
+	setupTestDB(t)
+
+	AddPhoto("gallery.webp", "", 0, 0, 0, 0)                                              //nolint
+	CreatePost("cover-post", "Cover Post", "no mention here", "", "cover.jpg", true, 0)   //nolint
+	CreatePost("body-post", "Body Post", "see inline.jpg embedded here", "", "", true, 0) //nolint
+
+	usage, err := GetAllFileUsage([]string{"gallery.webp", "cover.jpg", "inline.jpg", "orphan.webp"})
+	if err != nil {
+		t.Fatalf("GetAllFileUsage: %v", err)
+	}
+
+	if !usage["gallery.webp"].InGallery {
+		t.Error("gallery.webp: want InGallery true")
+	}
+	if len(usage["cover.jpg"].PostTitles) != 1 || usage["cover.jpg"].PostTitles[0] != "Cover Post" {
+		t.Errorf("cover.jpg: got %v", usage["cover.jpg"].PostTitles)
+	}
+	if len(usage["inline.jpg"].PostTitles) != 1 || usage["inline.jpg"].PostTitles[0] != "Body Post" {
+		t.Errorf("inline.jpg: got %v", usage["inline.jpg"].PostTitles)
+	}
+	if usage["orphan.webp"].InGallery || len(usage["orphan.webp"].PostTitles) != 0 {
+		t.Errorf("orphan.webp: want unused, got %+v", usage["orphan.webp"])
 	}
 }
