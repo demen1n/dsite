@@ -101,6 +101,7 @@ func main() {
 	mux.HandleFunc("GET /admin/series/{id}/edit", handlers.RequireAuth(handlers.EditSeriesForm))
 	mux.HandleFunc("POST /admin/series/{id}/edit", handlers.RequireAuth(handlers.UpdateSeries))
 	mux.HandleFunc("POST /admin/series/{id}/delete", handlers.RequireAuth(handlers.DeleteSeries))
+	mux.HandleFunc("POST /admin/series/reorder", handlers.RequireAuth(handlers.ReorderSeries))
 
 	mux.HandleFunc("GET /admin/media/picker", handlers.RequireAuth(handlers.MediaPicker))
 	mux.HandleFunc("POST /admin/media/to-gallery", handlers.RequireAuth(handlers.AddToGallery))

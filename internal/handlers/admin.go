@@ -661,6 +661,22 @@ func DeleteAvatar(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
 }
 
+// POST /admin/series/reorder
+func ReorderSeries(w http.ResponseWriter, r *http.Request) {
+	r.ParseForm()
+	var ids []int
+	for _, s := range r.Form["ids"] {
+		if id, err := strconv.Atoi(s); err == nil {
+			ids = append(ids, id)
+		}
+	}
+	if err := db.UpdateSeriesOrder(ids); err != nil {
+		http.Error(w, "db error", 500)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 // POST /admin/gallery/reorder
 func ReorderPhotos(w http.ResponseWriter, r *http.Request) {
 	r.ParseForm()
