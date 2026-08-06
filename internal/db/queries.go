@@ -338,7 +338,7 @@ func ListSeries() ([]Series, error) {
 		FROM series s
 		LEFT JOIN posts p ON p.series_id = s.id
 		GROUP BY s.id
-		ORDER BY s.created_at DESC`)
+		ORDER BY s.sort_order, s.id`)
 	if err != nil {
 		return nil, err
 	}
@@ -423,6 +423,20 @@ func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPho
 func DeleteSeries(id int) error {
 	_, err := DB.Exec(`DELETE FROM series WHERE id=?`, id)
 	return err
+}
+
+func UpdateSeriesOrder(ids []int) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	for i, id := range ids {
+		if _, err := tx.Exec(`UPDATE series SET sort_order=? WHERE id=?`, i+1, id); err != nil {
+			tx.Rollback()
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // ───────────────────────── Categories ─────────────────────────

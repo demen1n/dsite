@@ -9,6 +9,7 @@
   <table>
     <thead>
       <tr>
+        <th></th>
         <th>Название</th>
         <th>Slug</th>
         <th>Постов</th>
@@ -16,9 +17,10 @@
         <th></th>
       </tr>
     </thead>
-    <tbody>
+    <tbody id="series-list">
       {{range .Data}}
-      <tr>
+      <tr data-series-id="{{.ID}}" draggable="true" style="cursor:grab">
+        <td style="color:var(--muted); width:1.2rem">⠿</td>
         <td><strong>{{.Name}}</strong></td>
         <td><code style="font-size:0.82rem; color:var(--muted)">/series/{{.Slug}}</code></td>
         <td style="color:var(--muted); text-align:right">{{.PostCount}}</td>
@@ -35,10 +37,12 @@
       {{end}}
     </tbody>
   </table>
+  <p style="color:var(--muted); font-size:0.82rem; margin-top:0.5rem">Перетащите строку за ⠿, чтобы изменить порядок — так серии будут отсортированы на публичной странице /series.</p>
   {{else}}
   <div style="padding:2.5rem; text-align:center; color:var(--muted)">
     Серий пока нет. <a href="/admin/series/new">Создайте первую</a>.
   </div>
   {{end}}
 </div>
+<script src="/static/admin-series.js"></script>
 {{end}}

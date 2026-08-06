@@ -151,6 +151,12 @@ func migrateSeries() error {
 	DB.Exec(`ALTER TABLE series ADD COLUMN show_cover INTEGER NOT NULL DEFAULT 1`)
 	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_posts_series_id ON posts(series_id)`)
 	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_series_slug ON series(slug)`)
+	// sort_order: manual ordering set via admin drag-reorder. Reorder always
+	// writes 1-indexed values (see UpdateSeriesOrder), so 0 stays a safe
+	// "unset" sentinel for this backfill on every future startup.
+	DB.Exec(`ALTER TABLE series ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`)
+	DB.Exec(`UPDATE series SET sort_order = id WHERE sort_order = 0`)
+	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_series_sort_order ON series(sort_order)`)
 	return nil
 }
 
