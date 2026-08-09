@@ -472,6 +472,6 @@
 
 {{define "admin_scripts"}}
 <script>window.DRAFT_KEY = 'dsite_editor_{{if .Data}}{{.Data.ID}}{{else}}new{{end}}';</script>
-<script src="/static/editor.js"></script>
+<script src="{{static "editor.js"}}"></script>
 {{end}}
 

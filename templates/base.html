@@ -7,8 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
   <link rel="icon" type="image/png" href="/favicon.png?v=3">
   <link rel="icon" type="image/x-icon" href="/favicon.ico?v=3">
-  <link rel="stylesheet" href="/static/style.css">
-  <script src="/static/htmx.min.js" defer></script>
+  <link rel="stylesheet" href="{{static "style.css"}}">
+  <script src="{{static "htmx.min.js"}}" defer></script>
   <meta name="description" content="{{if .OGDescription}}{{.OGDescription}}{{else}}{{.SiteDesc}}{{end}}">
   {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
   <meta property="og:title" content="{{if .Title}}{{.Title}} — {{.SiteTitle}}{{else}}{{.SiteTitle}}{{end}}">
@@ -70,7 +70,7 @@
   <img id="lightbox-img" src="" alt="">
   <button id="lightbox-next">&#8594;</button>
 </div>
-<script src="/static/lightbox.js"></script>
+<script src="{{static "lightbox.js"}}"></script>
 
 {{block "scripts" .}}{{end}}
 </body>

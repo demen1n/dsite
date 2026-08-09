@@ -3,6 +3,7 @@ package handlers
 import (
 	"bytes"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -26,18 +27,19 @@ import (
 )
 
 var (
-	baseTmpl      *template.Template
-	adminBaseTmpl *template.Template
-	templatesDir  string
-	uploadsDir    string
-	siteTitle     string
-	siteDesc      string
-	siteURL       string // canonical base URL, e.g. https://demenin.ru
-	homeAvatar    string // filename of profile photo, served from /uploads/
-	secureCookies bool
-	trustedProxy  bool
-	md            goldmark.Markdown
-	funcMap       template.FuncMap
+	baseTmpl       *template.Template
+	adminBaseTmpl  *template.Template
+	templatesDir   string
+	uploadsDir     string
+	siteTitle      string
+	siteDesc       string
+	siteURL        string // canonical base URL, e.g. https://demenin.ru
+	homeAvatar     string // filename of profile photo, served from /uploads/
+	secureCookies  bool
+	trustedProxy   bool
+	md             goldmark.Markdown
+	funcMap        template.FuncMap
+	staticVersions map[string]string // filename -> content hash, for cache-busting /static URLs
 )
 
 // ───── Upload allowlist ─────
@@ -169,6 +171,7 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 	siteURL = strings.TrimRight(siteBaseURL, "/")
 	secureCookies = secure
 	trustedProxy = trusted
+	loadStaticVersions("./static")
 
 	md = goldmark.New(
 		goldmark.WithExtensions(extension.GFM, extension.Table),
@@ -206,6 +209,12 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 			b, err := json.Marshal(v)
 			return template.JS(b), err
 		},
+		"static": func(name string) string {
+			if v, ok := staticVersions[name]; ok {
+				return "/static/" + name + "?v=" + v
+			}
+			return "/static/" + name
+		},
 	}
 
 	var err error
@@ -226,6 +235,31 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 			cleanLoginAttempts()
 		}
 	}()
+}
+
+// loadStaticVersions hashes every file in the static dir so templates can
+// append a content-derived ?v= query param (see the "static" template func).
+// Without it, browsers keep serving a stale cached /static/x.js for up to
+// an hour after deploy (Cache-Control: max-age=3600) since the URL itself
+// never changes.
+func loadStaticVersions(dir string) {
+	staticVersions = map[string]string{}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		log.Printf("static versions: %v", err)
+		return
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		data, err := os.ReadFile(filepath.Join(dir, e.Name()))
+		if err != nil {
+			continue
+		}
+		sum := sha256.Sum256(data)
+		staticVersions[e.Name()] = hex.EncodeToString(sum[:])[:8]
+	}
 }
 
 // render рендерит страницу.
