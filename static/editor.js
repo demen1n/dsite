@@ -139,6 +139,32 @@ function insertMD(before, after) {
   htmx.trigger(ta, 'input');
 }
 
+// Находит диапазон `![...](src)` в тексте поста, соответствующий n-му
+// вхождению этого src среди <img> превью — так отличаем повторно
+// использованную картинку от её же дублей.
+function locateImageRange(img) {
+  const src = img.getAttribute('src');
+  if (!src) return null;
+  const allImgs = [...document.querySelectorAll('#preview img')];
+  let ordinal = 0;
+  for (const el of allImgs) {
+    if (el.getAttribute('src') === src) {
+      ordinal++;
+      if (el === img) break;
+    }
+  }
+  const re = /!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
+  const md = bodyTA.value;
+  let m, seen = 0;
+  while ((m = re.exec(md))) {
+    if (m[1] === src) {
+      seen++;
+      if (seen === ordinal) return { start: m.index, end: m.index + m[0].length };
+    }
+  }
+  return null;
+}
+
 document.getElementById('preview').addEventListener('click', e => {
   const img = e.target.closest('img');
   if (!img || !img.src.includes('/uploads/')) return;
@@ -146,6 +172,15 @@ document.getElementById('preview').addEventListener('click', e => {
   document.getElementById('itg-filename').value = filename;
   document.getElementById('itg-caption').value = img.alt || '';
   document.getElementById('img-popup-result').textContent = '';
+
+  const range = locateImageRange(img);
+  window._imgPopupRange = range;
+  document.getElementById('img-popup-delete').disabled = !range;
+  if (range) {
+    bodyTA.focus();
+    bodyTA.setSelectionRange(range.start, range.end);
+  }
+
   const popup = document.getElementById('img-popup');
   popup.style.display = 'block';
   popup.style.left = Math.min(e.clientX, window.innerWidth - 280) + 'px';
@@ -158,6 +193,17 @@ function closeImgPopup() {
 
 function afterImgToGallery() {
   setTimeout(closeImgPopup, 1500);
+}
+
+function deleteImgFromBody() {
+  const range = window._imgPopupRange;
+  if (!range) return;
+  const before = bodyTA.value.slice(0, range.start);
+  let after = bodyTA.value.slice(range.end);
+  if (before.endsWith('\n') && after.startsWith('\n')) after = after.slice(1);
+  bodyTA.value = before + after;
+  htmx.trigger(bodyTA, 'input');
+  closeImgPopup();
 }
 
 document.addEventListener('keydown', e => {
