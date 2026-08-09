@@ -149,6 +149,9 @@
   .img-popup input[type="text"]::placeholder { color: #bbb; }
   .img-popup-close { position: absolute; top: 0.4rem; right: 0.6rem; background: none; border: none; cursor: pointer; color: var(--muted); font-size: 1rem; line-height: 1; }
   .img-popup-result { font-size: 0.8rem; color: #16a34a; margin-top: 0.4rem; }
+  .img-popup-delete { display: block; width: 100%; margin-top: 0.6rem; padding-top: 0.6rem; border: none; border-top: 1px solid var(--border); background: none; color: #c0392b; font-size: 0.8rem; text-align: left; cursor: pointer; }
+  .img-popup-delete:hover { text-decoration: underline; }
+  .img-popup-delete:disabled { color: var(--muted); cursor: default; text-decoration: none; }
   .editor-preview img { cursor: pointer; }
   .editor-preview img:hover { outline: 2px solid var(--accent); outline-offset: 2px; }
 
@@ -458,6 +461,7 @@
     <button type="submit" class="btn btn-primary btn-sm">Добавить</button>
   </form>
   <div class="img-popup-result" id="img-popup-result"></div>
+  <button type="button" class="img-popup-delete" id="img-popup-delete" onclick="deleteImgFromBody()">Удалить из текста</button>
 </div>
 
 <form id="post-form" method="POST" enctype="multipart/form-data"
