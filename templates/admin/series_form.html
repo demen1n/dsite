@@ -20,9 +20,20 @@
   </div>
   <script>
     let seriesSlugEdited = false;
+    // Держим в синхронизации с cyrillicMap в internal/handlers/helpers.go
+    const SERIES_CYRILLIC_MAP = {
+      'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
+      'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'j', 'к': 'k', 'л': 'l', 'м': 'm',
+      'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+      'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+      'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
+    };
+    function seriesTransliterate(s) {
+      return [...s].map(ch => SERIES_CYRILLIC_MAP[ch] ?? ch).join('');
+    }
     function autoSeriesSlug(val) {
       if (seriesSlugEdited) return;
-      document.getElementById('series-slug').value = val.toLowerCase()
+      document.getElementById('series-slug').value = seriesTransliterate(val.toLowerCase())
         .replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
     }
   </script>
