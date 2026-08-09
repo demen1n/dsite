@@ -175,7 +175,7 @@ let autoSaveTimer;
 
   const titleEl = document.getElementById('title');
   const bodyEl  = document.getElementById('body');
-  const tagsEl  = document.getElementById('tags');
+  const tagsEl  = document.getElementById('tags-hidden');
 
   if (draft.title === titleEl.value && draft.body === bodyEl.value && draft.tags === tagsEl.value) return;
 
@@ -197,7 +197,7 @@ function draftRestore() {
   if (!draft) return;
   document.getElementById('title').value = draft.title;
   document.getElementById('body').value  = draft.body;
-  document.getElementById('tags').value  = draft.tags;
+  document.getElementById('tags-hidden').value  = draft.tags;
   autoResize(document.getElementById('title'));
   htmx.trigger(document.getElementById('body'), 'input');
   document.getElementById('autosave-bar')?.remove();
@@ -212,12 +212,12 @@ function draftSave() {
   localStorage.setItem(DRAFT_KEY, JSON.stringify({
     title: document.getElementById('title').value,
     body:  document.getElementById('body').value,
-    tags:  document.getElementById('tags').value,
+    tags:  document.getElementById('tags-hidden').value,
     ts:    Date.now(),
   }));
 }
 
-['title', 'body', 'tags'].forEach(id => {
+['title', 'body', 'tags-hidden'].forEach(id => {
   document.getElementById(id)?.addEventListener('input', () => {
     clearTimeout(autoSaveTimer);
     autoSaveTimer = setTimeout(draftSave, 2000);
