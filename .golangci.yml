@@ -1,0 +1,43 @@
+version: "2"
+
+linters:
+  default: standard
+  settings:
+    errcheck:
+      exclude-functions:
+        # Deferred/best-effort cleanup: the error, if any, can't change what
+        # the caller does and the connection or file is going away regardless.
+        - (io.Closer).Close
+        - (*database/sql.DB).Close
+        - (*database/sql.Rows).Close
+        - (*database/sql.Tx).Rollback
+        - (*mime/multipart.Form).RemoveAll
+        - os.Remove
+        - os.Setenv
+        - os.Unsetenv
+        # Writes into an already-committed HTTP response: nothing left to do
+        # with the error besides log a broken connection.
+        - (net/http.ResponseWriter).Write
+        - (*net/http.Request).ParseForm
+        - fmt.Fprint
+        - fmt.Fprintf
+        - (*encoding/json.Encoder).Encode
+        - (*encoding/xml.Encoder).Encode
+        - image/png.Encode
+        - encoding/binary.Write
+  exclusions:
+    rules:
+      # Idempotent schema migrations: "duplicate column" errors are expected
+      # and intentionally ignored (see comment in db.go).
+      - path: internal/db/db.go
+        linters:
+          - errcheck
+      # Test files: assertions do the real checking; ignoring setup/teardown
+      # errors (Setenv, Close, ...) is standard practice and not worth the noise.
+      - path: _test\.go
+        linters:
+          - errcheck
+
+formatters:
+  enable:
+    - gofmt

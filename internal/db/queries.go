@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"log"
 	"strings"
 	"time"
 )
@@ -181,7 +182,9 @@ func ListPostsPaginated(tagSlug string, page, perPage int) ([]Post, int, error) 
 
 // IncrementViews атомарно увеличивает счётчик просмотров поста.
 func IncrementViews(id int) {
-	DB.Exec(`UPDATE posts SET views=views+1 WHERE id=?`, id)
+	if _, err := DB.Exec(`UPDATE posts SET views=views+1 WHERE id=?`, id); err != nil {
+		log.Printf("IncrementViews %d: %v", id, err)
+	}
 }
 
 func GetPostBySlug(slug string) (*Post, error) {
@@ -711,17 +714,20 @@ func SessionValid(token string) bool {
 	return err == nil && time.Now().Before(t)
 }
 
-func DeleteSession(token string) {
-	DB.Exec(`DELETE FROM sessions WHERE token=?`, token)
+func DeleteSession(token string) error {
+	_, err := DB.Exec(`DELETE FROM sessions WHERE token=?`, token)
+	return err
 }
 
 // DeleteAllSessions разлогинивает все устройства (после смены пароля).
-func DeleteAllSessions() {
-	DB.Exec(`DELETE FROM sessions`)
+func DeleteAllSessions() error {
+	_, err := DB.Exec(`DELETE FROM sessions`)
+	return err
 }
 
-func CleanExpiredSessions() {
-	DB.Exec(`DELETE FROM sessions WHERE expires_at < datetime('now')`)
+func CleanExpiredSessions() error {
+	_, err := DB.Exec(`DELETE FROM sessions WHERE expires_at < datetime('now')`)
+	return err
 }
 
 // ───────────────────────── Tags ─────────────────────────
@@ -918,6 +924,8 @@ func SetSetting(key, value string) error {
 // SeedSettings inserts defaults only if keys don't already exist.
 func SeedSettings(defaults map[string]string) {
 	for k, v := range defaults {
-		DB.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)`, k, v)
+		if _, err := DB.Exec(`INSERT OR IGNORE INTO settings (key, value) VALUES (?,?)`, k, v); err != nil {
+			log.Printf("SeedSettings %s: %v", k, err)
+		}
 	}
 }

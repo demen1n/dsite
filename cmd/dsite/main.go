@@ -33,10 +33,14 @@ func main() {
 	}
 
 	// Инициализация хендлеров
-	db.CleanExpiredSessions()
+	if err := db.CleanExpiredSessions(); err != nil {
+		log.Printf("CleanExpiredSessions: %v", err)
+	}
 	go func() {
 		for range time.Tick(time.Hour) {
-			db.CleanExpiredSessions()
+			if err := db.CleanExpiredSessions(); err != nil {
+				log.Printf("CleanExpiredSessions: %v", err)
+			}
 		}
 	}()
 	db.SeedSettings(map[string]string{
@@ -159,7 +163,9 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
-	db.DB.Close()
+	if err := db.DB.Close(); err != nil {
+		log.Printf("db close: %v", err)
+	}
 	log.Println("stopped")
 }
 

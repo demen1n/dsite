@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Deployment
 
-Push to `main` → GitHub Actions CI/CD автоматически собирает и деплоит на Beget (demenin.ru). Ручной деплой не нужен — просто `git push`.
+Push to `main` → GitHub Actions CI/CD автоматически собирает и деплоит на Beget (demenin.ru). Ручной деплой не нужен — просто `git push`. CI (`.github/workflows/ci.yml`) runs gofmt/vet/tests, golangci-lint (config in `.golangci.yml`), and uploads coverage to Codecov on every push and PR.
 
 ## Commands
 
@@ -22,6 +22,9 @@ go build -o dsite ./cmd/dsite
 # Format and vet
 go fmt ./...
 go vet ./...
+
+# Lint (same as CI; config in .golangci.yml)
+golangci-lint run ./...
 
 # Docker
 docker build -t dsite .

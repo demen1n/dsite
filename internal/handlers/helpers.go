@@ -400,12 +400,14 @@ func baseURL(r *http.Request) string {
 
 const sessionDuration = 30 * 24 * time.Hour
 
-func NewSession() string {
+func NewSession() (string, error) {
 	b := make([]byte, 16)
 	rand.Read(b)
 	token := hex.EncodeToString(b)
-	db.CreateSession(token, time.Now().Add(sessionDuration))
-	return token
+	if err := db.CreateSession(token, time.Now().Add(sessionDuration)); err != nil {
+		return "", err
+	}
+	return token, nil
 }
 
 func IsAuthed(r *http.Request) bool {
@@ -427,7 +429,9 @@ func RequireAuth(next http.HandlerFunc) http.HandlerFunc {
 }
 
 func DeleteSession(token string) {
-	db.DeleteSession(token)
+	if err := db.DeleteSession(token); err != nil {
+		log.Printf("DeleteSession: %v", err)
+	}
 }
 
 // ───── File utils ─────

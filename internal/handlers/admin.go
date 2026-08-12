@@ -96,7 +96,11 @@ func Login(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		RecordLoginSuccess(r)
-		token := NewSession()
+		token, err := NewSession()
+		if err != nil {
+			http.Error(w, "Internal Server Error", 500)
+			return
+		}
 		http.SetCookie(w, &http.Cookie{
 			Name:     "session",
 			Value:    token,
@@ -254,7 +258,9 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	db.SetPostTags(id, parseTags(r.FormValue("tags")))
+	if err := db.SetPostTags(id, parseTags(r.FormValue("tags"))); err != nil {
+		log.Printf("SetPostTags for post %d: %v", id, err)
+	}
 	http.Redirect(w, r, fmt.Sprintf("/admin/posts/%d/edit", id), http.StatusFound)
 }
 
@@ -423,7 +429,9 @@ func DeleteSeries(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	db.DeleteSeries(id)
+	if err := db.DeleteSeries(id); err != nil {
+		log.Printf("DeleteSeries %d: %v", id, err)
+	}
 	http.Redirect(w, r, "/admin/series", http.StatusFound)
 }
 
@@ -583,12 +591,16 @@ func SaveSettings(w http.ResponseWriter, r *http.Request) {
 		"social_vk", "social_linkedin", "social_email",
 	}
 	for _, key := range fields {
-		db.SetSetting(key, r.FormValue(key))
+		if err := db.SetSetting(key, r.FormValue(key)); err != nil {
+			log.Printf("SetSetting %s: %v", key, err)
+		}
 	}
+	resumeHiddenVal := "0"
 	if r.FormValue("resume_hidden") == "1" {
-		db.SetSetting("resume_hidden", "1")
-	} else {
-		db.SetSetting("resume_hidden", "0")
+		resumeHiddenVal = "1"
+	}
+	if err := db.SetSetting("resume_hidden", resumeHiddenVal); err != nil {
+		log.Printf("SetSetting resume_hidden: %v", err)
 	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
@@ -625,7 +637,9 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	// Сбрасываем все сессии (включая текущую) — после смены пароля
 	// чужие украденные куки перестают работать. Придётся войти заново.
-	db.DeleteAllSessions()
+	if err := db.DeleteAllSessions(); err != nil {
+		log.Printf("DeleteAllSessions: %v", err)
+	}
 	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/", HttpOnly: true, Secure: secureCookies, SameSite: http.SameSiteLaxMode})
 	http.Redirect(w, r, "/admin/login", http.StatusFound)
 }
@@ -649,14 +663,18 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	db.SetSetting("home_avatar", filename)
+	if err := db.SetSetting("home_avatar", filename); err != nil {
+		log.Printf("SetSetting home_avatar: %v", err)
+	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
 }
 
 // POST /admin/settings/avatar/delete
 func DeleteAvatar(w http.ResponseWriter, r *http.Request) {
-	db.SetSetting("home_avatar", "")
+	if err := db.SetSetting("home_avatar", ""); err != nil {
+		log.Printf("SetSetting home_avatar: %v", err)
+	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
 }
@@ -802,7 +820,9 @@ func SaveResume(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "markdown error", 500)
 		return
 	}
-	db.UpdateResume(bodyMD, bodyHTML)
+	if err := db.UpdateResume(bodyMD, bodyHTML); err != nil {
+		log.Printf("UpdateResume: %v", err)
+	}
 	http.Redirect(w, r, "/admin/resume", http.StatusFound)
 }
 
@@ -1048,7 +1068,7 @@ func DeleteUploadFile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if usage.InGallery || len(usage.PostTitles) > 0 {
-		http.Error(w, "file is in use", 409)
+		http.Error(w, "file is in use", http.StatusConflict)
 		return
 	}
 	if err := os.Remove(filepath.Join(uploadsDir, filename)); err != nil {

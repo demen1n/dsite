@@ -408,17 +408,6 @@ func FaviconPNG(w http.ResponseWriter, r *http.Request) {
 	w.Write(faviconPNGData)
 }
 
-// faviconCameraSVG — старый фавикон с фотоаппаратом (бэкап)
-const faviconCameraSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <rect width="32" height="32" rx="5" fill="#28282e"/>
-  <rect x="4" y="12" width="24" height="15" rx="2" fill="#ffffff"/>
-  <path d="M12 12V9a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3" fill="#ffffff"/>
-  <circle cx="16" cy="19.5" r="5" fill="#28282e"/>
-  <circle cx="16" cy="19.5" r="3.8" fill="#507090"/>
-  <circle cx="16" cy="19.5" r="2.3" fill="#28282e"/>
-  <circle cx="14.6" cy="18" r="0.9" fill="rgba(255,255,255,0.7)"/>
-</svg>`
-
 const faviconSVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
   <circle cx="16" cy="16" r="16" fill="#1c1c1c"/>
   <ellipse cx="16" cy="14" rx="5.5" ry="7.5" fill="#e8a800"/>
@@ -463,21 +452,6 @@ func icoFillEllipse(img *image.RGBA, cx, cy, rx, ry float64, c color.RGBA) {
 			}
 		}
 	}
-}
-
-// drawCameraFavicon — старый фавикон с фотоаппаратом (бэкап)
-func drawCameraFavicon(img *image.RGBA) {
-	dark := color.RGBA{0x28, 0x28, 0x2e, 0xff}
-	white := color.RGBA{0xff, 0xff, 0xff, 0xff}
-	ring := color.RGBA{0x50, 0x70, 0x90, 0xff}
-	hilight := color.RGBA{0xe0, 0xe0, 0xf4, 0xff}
-	icoFillRect(img, 0, 0, 32, 32, dark)
-	icoFillRect(img, 4, 12, 28, 27, white)
-	icoFillRect(img, 12, 7, 20, 12, white)
-	icoFillCircle(img, 16, 19.5, 5.0, dark)
-	icoFillCircle(img, 16, 19.5, 3.8, ring)
-	icoFillCircle(img, 16, 19.5, 2.3, dark)
-	icoFillCircle(img, 14.6, 18.0, 0.9, hilight)
 }
 
 // GET /favicon.ico
