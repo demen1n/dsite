@@ -3,6 +3,8 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
+	"github.com/demen1n/dsite/internal/backup"
 	"github.com/demen1n/dsite/internal/config"
 	"github.com/demen1n/dsite/internal/db"
 	"github.com/demen1n/dsite/internal/handlers"
@@ -18,6 +20,14 @@ import (
 
 func main() {
 	cfg := config.LoadConfig()
+
+	if len(os.Args) > 1 && os.Args[1] == "backup" {
+		if err := runBackupOnce(cfg); err != nil {
+			log.Fatal("backup: ", err)
+		}
+		return
+	}
+
 	if cfg.SiteURL == "" {
 		log.Println("WARNING: SITE_URL is not set — sitemap/feed/canonical URLs will be built from the request Host header, which a client can spoof. Set SITE_URL in production.")
 	}
@@ -43,6 +53,28 @@ func main() {
 			}
 		}
 	}()
+	if cfg.BackupInterval > 0 {
+		if remote, err := backup.NewRemote(cfg.BackupRemote, cfg.YaDiskToken, cfg.BackupRemoteDir); err != nil {
+			log.Printf("backup: %v — automatic backups disabled", err)
+		} else {
+			go func() {
+				for range time.Tick(cfg.BackupInterval) {
+					path, err := backup.Run(context.Background(), backup.Config{
+						DB:         db.DB,
+						UploadsDir: cfg.UploadsDir,
+						OutDir:     cfg.BackupDir,
+						Keep:       cfg.BackupKeep,
+						Remote:     remote,
+					})
+					if err != nil {
+						log.Printf("backup: %v", err)
+					} else {
+						log.Println("backup: completed,", path)
+					}
+				}
+			}()
+		}
+	}
 	db.SeedSettings(map[string]string{
 		"site_title": cfg.SiteTitle,
 		"site_desc":  cfg.SiteDesc,
@@ -167,6 +199,33 @@ func main() {
 		log.Printf("db close: %v", err)
 	}
 	log.Println("stopped")
+}
+
+// runBackupOnce handles `dsite backup`: a standalone one-shot invocation for
+// cron or manual use, independent of the automatic in-process backups the
+// server can also run on cfg.BackupInterval.
+func runBackupOnce(cfg config.Config) error {
+	if err := db.Init(cfg.DBPath); err != nil {
+		return fmt.Errorf("db init: %w", err)
+	}
+	defer db.DB.Close()
+
+	remote, err := backup.NewRemote(cfg.BackupRemote, cfg.YaDiskToken, cfg.BackupRemoteDir)
+	if err != nil {
+		return err
+	}
+	path, err := backup.Run(context.Background(), backup.Config{
+		DB:         db.DB,
+		UploadsDir: cfg.UploadsDir,
+		OutDir:     cfg.BackupDir,
+		Keep:       cfg.BackupKeep,
+		Remote:     remote,
+	})
+	if err != nil {
+		return err
+	}
+	log.Println("backup written to", path)
+	return nil
 }
 
 // immutableCache sets a 1-year Cache-Control for uploads whose filenames are

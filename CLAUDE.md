@@ -26,6 +26,11 @@ go vet ./...
 # Lint (same as CI; config in .golangci.yml)
 golangci-lint run ./...
 
+# One-shot backup: snapshots the DB (VACUUM INTO) + tars/gzips it with the
+# uploads dir into BACKUP_DIR, rotating old local archives, and — if
+# BACKUP_REMOTE is set — pushing the archive off-site too.
+go run ./cmd/dsite backup
+
 # Docker
 docker build -t dsite .
 docker run -p 8080:8080 -v dsite_data:/data dsite
@@ -45,6 +50,12 @@ First run: visit `/admin/setup` to create the admin account.
 | `SITE_URL`    | _(auto-detect)_  | Canonical base URL (e.g. `https://demenin.ru`), used in sitemap/robots/feeds |
 | `INSECURE_COOKIES` | —           | `true` for local development over plain HTTP |
 | `TRUSTED_PROXY`    | —           | `true` behind a reverse proxy (trusts `X-Forwarded-For` for login rate limiting) |
+| `BACKUP_DIR`        | `./backups`      | Local directory for backup archives (`dsite backup`, see below) |
+| `BACKUP_KEEP`       | `7`              | Local archives to retain; older ones are deleted on rotation |
+| `BACKUP_INTERVAL`   | `24h`            | How often the running server backs up automatically; `0` disables it (the `dsite backup` subcommand is unaffected) |
+| `BACKUP_REMOTE`     | —                | Off-site backend to also push archives to: `yadisk` (empty = local only) |
+| `BACKUP_REMOTE_DIR` | `/dsite-backups` | Destination folder on the remote backend |
+| `YADISK_TOKEN`      | —                | Yandex Disk OAuth token (required when `BACKUP_REMOTE=yadisk`); create an app at https://oauth.yandex.ru with the `cloud_api:disk.write` scope |
 
 ## Architecture
 
@@ -86,4 +97,4 @@ templates/
 
 **Uploads are never garbage-collected automatically**: replacing a post/series cover or an avatar leaves the old file on disk (deliberate — avoids deleting a file another post/series still references, since usage tracking doesn't cover every place a filename could appear, e.g. series descriptions or the resume body). Clean up manually via `/admin/uploads`, which shows per-file usage and flags unused files.
 
-**Backups**: no automated backup is currently configured. The SQLite file is the only copy of all content, on a single VPS. Recommended: [litestream](https://litestream.io/) streaming WAL to S3-compatible storage, or at minimum a cron job running `sqlite3 /data/data.db ".backup ..."` with rotation.
+**Backups**: `internal/backup` snapshots the DB via SQLite's `VACUUM INTO` (a consistent copy taken without blocking concurrent readers/writers under WAL) and bundles it with the whole `uploads/` directory into a single `.tar.gz` under `BACKUP_DIR`, rotating old local archives down to `BACKUP_KEEP`. Trigger it two ways: `dsite backup` (one-shot, e.g. from cron) or automatically inside the running server on `BACKUP_INTERVAL` (default 24h; first run fires after one interval, not immediately on startup, so redeploys don't each trigger a backup). A local copy is always written — `BACKUP_REMOTE` optionally also pushes the same archive off-site through the `backup.Remote` interface (`internal/backup/remote.go`); the only backend implemented so far is `yadisk` (Yandex Disk's REST API, `internal/backup/yadisk.go`). Add an S3-compatible backend the same way if needed later — implement `Remote` and add a case to `backup.NewRemote`.
