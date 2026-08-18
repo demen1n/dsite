@@ -23,7 +23,7 @@ func main() {
 	}
 
 	// Создаём папку для загрузок
-	if err := os.MkdirAll(cfg.UploadsDir, 0755); err != nil {
+	if err := os.MkdirAll(cfg.UploadsDir, 0750); err != nil {
 		log.Fatal("mkdir uploads:", err)
 	}
 

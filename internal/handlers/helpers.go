@@ -471,7 +471,11 @@ func saveUpload(data []byte, ext string) (string, error) {
 	rand.Read(b)
 	filename := fmt.Sprintf("%d_%s%s", time.Now().Unix(), hex.EncodeToString(b), ext)
 	path := filepath.Join(uploadsDir, filename)
-	return filename, os.WriteFile(path, data, 0644)
+	//nolint:gosec // G703: filename is server-generated (timestamp+random hex);
+	// its only caller-supplied part, ext, comes from filepath.Ext (which by
+	// construction can't contain a path separator) and is checked against
+	// isAllowedImageExt before saveUpload is ever called.
+	return filename, os.WriteFile(path, data, 0600)
 }
 
 var cyrillicMap = map[rune]string{
