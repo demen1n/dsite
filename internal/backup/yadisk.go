@@ -7,10 +7,21 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"time"
 )
 
 // yaDiskAPI is a var (not a const) so tests can point it at an httptest server.
 var yaDiskAPI = "https://cloud-api.yandex.net/v1/disk/resources"
+
+// defaultTimeout bounds the whole request/response cycle of each call
+// (connect, write body, read body) — http.DefaultClient has no timeout at
+// all, so a stalled connection would otherwise hang Upload forever and, with
+// it, the in-process backup ticker in cmd/dsite. Observed real-world uploads
+// (~110MB archive over a slow VPS uplink) took ~14 minutes; this leaves
+// generous headroom above that while still giving up eventually.
+const defaultTimeout = 30 * time.Minute
+
+var defaultHTTPClient = &http.Client{Timeout: defaultTimeout}
 
 // YandexDisk uploads backup archives to a folder in Yandex Disk via its
 // REST API: https://yandex.ru/dev/disk/api/reference/upload.html
@@ -63,7 +74,7 @@ func (y YandexDisk) client() *http.Client {
 	if y.Client != nil {
 		return y.Client
 	}
-	return http.DefaultClient
+	return defaultHTTPClient
 }
 
 // ensureDir creates y.Dir if it doesn't exist yet; a 409 (already exists) is not an error.

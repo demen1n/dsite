@@ -11,6 +11,14 @@ import (
 	"testing"
 )
 
+func TestYandexDisk_client_HasATimeoutByDefault(t *testing.T) {
+	y := YandexDisk{Token: "t", Dir: "/d"}
+	c := y.client()
+	if c.Timeout <= 0 {
+		t.Fatal("default client has no timeout — a stalled upload would hang Upload (and the backup ticker) forever")
+	}
+}
+
 func TestYandexDisk_Upload(t *testing.T) {
 	const token = "test-token"
 	var (
