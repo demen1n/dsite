@@ -16,5 +16,11 @@ services:
       # (otherwise the login rate limiter sees every visitor as the proxy IP).
       - TRUSTED_PROXY=true
       - GOMEMLIMIT=400MiB
+      # Optional: also push each backup archive to Yandex Disk (BACKUP_DIR
+      # already defaults to /data/backups, on the persisted volume, so the
+      # local copy needs no extra config). Get a token with the
+      # cloud_api:disk.write scope from an app at https://oauth.yandex.ru.
+      # - BACKUP_REMOTE=yadisk
+      # - YADISK_TOKEN=
     mem_limit: 512m
     cpus: "0.5"
