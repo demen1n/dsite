@@ -820,8 +820,19 @@ func tagSlug(s string) string {
 // ───────────────────────── Uploads ─────────────────────────
 
 type FileUsage struct {
-	InGallery  bool
-	PostTitles []string
+	InGallery    bool
+	PostTitles   []string
+	SeriesTitles []string
+	IsAvatar     bool
+	InResume     bool
+}
+
+// InUse reports whether the file is referenced anywhere this package tracks.
+// Centralized so every check point (the uploads browser badges, the delete
+// guard) agrees on the same definition instead of each re-deriving it from
+// individual fields and risking drift as fields get added.
+func (u FileUsage) InUse() bool {
+	return u.InGallery || u.IsAvatar || u.InResume || len(u.PostTitles) > 0 || len(u.SeriesTitles) > 0
 }
 
 func GetFileUsage(filename string) (FileUsage, error) {
@@ -833,26 +844,52 @@ func GetFileUsage(filename string) (FileUsage, error) {
 	u.InGallery = count > 0
 
 	escaped := strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(filename)
-	rows, err := DB.Query(`SELECT title FROM posts WHERE cover=? OR body_md LIKE ? ESCAPE '\'`,
-		filename, "%"+escaped+"%")
+	likePattern := "%" + escaped + "%"
+
+	postRows, err := DB.Query(`SELECT title FROM posts WHERE cover=? OR body_md LIKE ? ESCAPE '\'`, filename, likePattern)
 	if err != nil {
 		return u, err
 	}
-	defer rows.Close()
-	for rows.Next() {
+	defer postRows.Close()
+	for postRows.Next() {
 		var title string
-		if err := rows.Scan(&title); err != nil {
+		if err := postRows.Scan(&title); err != nil {
 			return u, err
 		}
 		u.PostTitles = append(u.PostTitles, title)
 	}
-	return u, rows.Err()
+	if err := postRows.Err(); err != nil {
+		return u, err
+	}
+
+	seriesRows, err := DB.Query(`SELECT name FROM series WHERE cover=? OR description_md LIKE ? ESCAPE '\'`, filename, likePattern)
+	if err != nil {
+		return u, err
+	}
+	defer seriesRows.Close()
+	for seriesRows.Next() {
+		var name string
+		if err := seriesRows.Scan(&name); err != nil {
+			return u, err
+		}
+		u.SeriesTitles = append(u.SeriesTitles, name)
+	}
+	if err := seriesRows.Err(); err != nil {
+		return u, err
+	}
+
+	u.IsAvatar = GetAllSettings()["home_avatar"] == filename
+	if resume, err := GetResume(); err == nil {
+		u.InResume = strings.Contains(resume.BodyMD, filename)
+	}
+
+	return u, nil
 }
 
-// GetAllFileUsage reports gallery/post usage for every name in filenames in
-// one pass over photos and posts, instead of running GetFileUsage's two
-// queries per file — on an uploads folder with hundreds of files that was
-// O(files × posts) in round-trips alone.
+// GetAllFileUsage reports usage for every name in filenames in one pass over
+// each source table, instead of running GetFileUsage's queries per file — on
+// an uploads folder with hundreds of files that was O(files × posts) in
+// round-trips alone.
 func GetAllFileUsage(filenames []string) (map[string]FileUsage, error) {
 	usage := make(map[string]FileUsage, len(filenames))
 	for _, f := range filenames {
@@ -895,7 +932,48 @@ func GetAllFileUsage(filenames []string) (map[string]FileUsage, error) {
 			}
 		}
 	}
-	return usage, postRows.Err()
+	if err := postRows.Err(); err != nil {
+		return nil, err
+	}
+
+	seriesRows, err := DB.Query(`SELECT name, cover, description_md FROM series`)
+	if err != nil {
+		return nil, err
+	}
+	defer seriesRows.Close()
+	for seriesRows.Next() {
+		var name, cover, descMD string
+		if err := seriesRows.Scan(&name, &cover, &descMD); err != nil {
+			return nil, err
+		}
+		for fn, u := range usage {
+			if fn == cover || strings.Contains(descMD, fn) {
+				u.SeriesTitles = append(u.SeriesTitles, name)
+				usage[fn] = u
+			}
+		}
+	}
+	if err := seriesRows.Err(); err != nil {
+		return nil, err
+	}
+
+	if avatar := GetAllSettings()["home_avatar"]; avatar != "" {
+		if u, ok := usage[avatar]; ok {
+			u.IsAvatar = true
+			usage[avatar] = u
+		}
+	}
+
+	if resume, err := GetResume(); err == nil && resume.BodyMD != "" {
+		for fn, u := range usage {
+			if strings.Contains(resume.BodyMD, fn) {
+				u.InResume = true
+				usage[fn] = u
+			}
+		}
+	}
+
+	return usage, nil
 }
 
 // ───────────────────────── Settings ─────────────────────────

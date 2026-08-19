@@ -1053,7 +1053,7 @@ func AdminUploads(w http.ResponseWriter, r *http.Request) {
 			Size:     fi.info.Size(),
 			ModTime:  fi.info.ModTime(),
 			Usage:    usage,
-			Unused:   !usage.InGallery && len(usage.PostTitles) == 0,
+			Unused:   !usage.InUse(),
 		})
 	}
 	render(w, "admin/uploads.html", page("Файлы", files))
@@ -1067,7 +1067,7 @@ func DeleteUploadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "db error", 500)
 		return
 	}
-	if usage.InGallery || len(usage.PostTitles) > 0 {
+	if usage.InUse() {
 		http.Error(w, "file is in use", http.StatusConflict)
 		return
 	}
