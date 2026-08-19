@@ -528,11 +528,19 @@ func TestGetFileUsage(t *testing.T) {
 func TestGetAllFileUsage(t *testing.T) {
 	setupTestDB(t)
 
-	AddPhoto("gallery.webp", "", 0, 0, 0, 0)                                              //nolint
-	CreatePost("cover-post", "Cover Post", "no mention here", "", "cover.jpg", true, 0)   //nolint
-	CreatePost("body-post", "Body Post", "see inline.jpg embedded here", "", "", true, 0) //nolint
+	AddPhoto("gallery.webp", "", 0, 0, 0, 0)                                                       //nolint
+	CreatePost("cover-post", "Cover Post", "no mention here", "", "cover.jpg", true, 0)            //nolint
+	CreatePost("body-post", "Body Post", "see inline.jpg embedded here", "", "", true, 0)          //nolint
+	CreateSeries("Trip", "trip", "no mention here", "", "series-cover.jpg", false, true)           //nolint
+	CreateSeries("Journal", "journal", "see series-inline.jpg embedded here", "", "", false, true) //nolint
+	SetSetting("home_avatar", "avatar.jpg")                                                        //nolint
+	UpdateResume("see resume-inline.jpg embedded here", "")                                        //nolint
 
-	usage, err := GetAllFileUsage([]string{"gallery.webp", "cover.jpg", "inline.jpg", "orphan.webp"})
+	usage, err := GetAllFileUsage([]string{
+		"gallery.webp", "cover.jpg", "inline.jpg",
+		"series-cover.jpg", "series-inline.jpg", "avatar.jpg", "resume-inline.jpg",
+		"orphan.webp",
+	})
 	if err != nil {
 		t.Fatalf("GetAllFileUsage: %v", err)
 	}
@@ -546,7 +554,59 @@ func TestGetAllFileUsage(t *testing.T) {
 	if len(usage["inline.jpg"].PostTitles) != 1 || usage["inline.jpg"].PostTitles[0] != "Body Post" {
 		t.Errorf("inline.jpg: got %v", usage["inline.jpg"].PostTitles)
 	}
-	if usage["orphan.webp"].InGallery || len(usage["orphan.webp"].PostTitles) != 0 {
+	if len(usage["series-cover.jpg"].SeriesTitles) != 1 || usage["series-cover.jpg"].SeriesTitles[0] != "Trip" {
+		t.Errorf("series-cover.jpg: got %v", usage["series-cover.jpg"].SeriesTitles)
+	}
+	if len(usage["series-inline.jpg"].SeriesTitles) != 1 || usage["series-inline.jpg"].SeriesTitles[0] != "Journal" {
+		t.Errorf("series-inline.jpg: got %v", usage["series-inline.jpg"].SeriesTitles)
+	}
+	if !usage["avatar.jpg"].IsAvatar {
+		t.Error("avatar.jpg: want IsAvatar true")
+	}
+	if !usage["resume-inline.jpg"].InResume {
+		t.Error("resume-inline.jpg: want InResume true")
+	}
+	if usage["orphan.webp"].InUse() {
 		t.Errorf("orphan.webp: want unused, got %+v", usage["orphan.webp"])
+	}
+	for name, u := range usage {
+		if name == "orphan.webp" {
+			continue
+		}
+		if !u.InUse() {
+			t.Errorf("%s: want InUse true, got %+v", name, u)
+		}
+	}
+}
+
+func TestFileUsage_SeriesAvatarResume_GetFileUsage(t *testing.T) {
+	setupTestDB(t)
+
+	CreateSeries("Trip", "trip", "", "", "series-cover.jpg", false, true) //nolint
+	SetSetting("home_avatar", "avatar.jpg")                               //nolint
+	UpdateResume("see resume-inline.jpg here", "")                        //nolint
+
+	seriesUsage, err := GetFileUsage("series-cover.jpg")
+	if err != nil {
+		t.Fatalf("GetFileUsage series cover: %v", err)
+	}
+	if len(seriesUsage.SeriesTitles) != 1 || seriesUsage.SeriesTitles[0] != "Trip" || !seriesUsage.InUse() {
+		t.Errorf("series-cover.jpg: got %+v", seriesUsage)
+	}
+
+	avatarUsage, err := GetFileUsage("avatar.jpg")
+	if err != nil {
+		t.Fatalf("GetFileUsage avatar: %v", err)
+	}
+	if !avatarUsage.IsAvatar || !avatarUsage.InUse() {
+		t.Errorf("avatar.jpg: got %+v", avatarUsage)
+	}
+
+	resumeUsage, err := GetFileUsage("resume-inline.jpg")
+	if err != nil {
+		t.Fatalf("GetFileUsage resume: %v", err)
+	}
+	if !resumeUsage.InResume || !resumeUsage.InUse() {
+		t.Errorf("resume-inline.jpg: got %+v", resumeUsage)
 	}
 }
