@@ -17,7 +17,7 @@ COPY templates ./templates
 COPY static ./static
 
 RUN useradd -r -u 1000 -g root appuser \
-    && mkdir -p /data/uploads \
+    && mkdir -p /data/uploads /data/backups \
     && chown -R appuser:root /data
 
 COPY entrypoint.sh /entrypoint.sh
@@ -25,6 +25,7 @@ RUN chmod +x /entrypoint.sh
 
 ENV DB_PATH=/data/data.db
 ENV UPLOADS_DIR=/data/uploads
+ENV BACKUP_DIR=/data/backups
 ENV PORT=8080
 
 EXPOSE 8080

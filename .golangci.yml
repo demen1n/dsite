@@ -2,7 +2,43 @@ version: "2"
 
 linters:
   default: standard
+  enable:
+    - errorlint
+    - gosec
   settings:
+    gosec:
+      excludes:
+        # Duplicates errcheck, which already governs this codebase's
+        # error-handling policy with documented exceptions (see errcheck
+        # settings below).
+        - G104
+        # ParseMultipartForm calls below already pass an explicit 8<<20
+        # memory-threshold argument; gosec flags the call regardless of it.
+        - G120
+        # Cookies below set Secure/HttpOnly/SameSite explicitly; gosec's
+        # static check doesn't see through the non-literal Secure value.
+        - G124
+        # template.HTML is used deliberately to render pre-sanitized
+        # goldmark output — see "Unsafe HTML allowed for flexibility" in
+        # CLAUDE.md.
+        - G203
+        # All flagged paths are joined from a fixed server-controlled
+        # directory with either a DB-stored filename, a directory listing,
+        # or filepath.Base()-stripped input — no attacker-controlled
+        # traversal is possible.
+        - G304
+        # robots.txt is served as text/plain; Host-derived content there
+        # isn't an XSS sink.
+        - G705
+        # Single-admin, session-authenticated context; CRLF in an uploaded
+        # filename reaching the log is not a meaningful threat here.
+        - G706
+        # Redirect targets are built with %d from an int64 id, never from
+        # attacker-controlled string data.
+        - G710
+        # Pixel/color math in imgproc is bounded by the image format's own
+        # value ranges (0-255, 16-bit color), not by attacker input size.
+        - G115
     errcheck:
       exclude-functions:
         # Deferred/best-effort cleanup: the error, if any, can't change what
@@ -37,6 +73,12 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
+      # Standalone local maintenance CLI (run manually via `go run`), not
+      # part of the served application: cwebp args come from a CLI flag,
+      # not network input, and skip/cleanup errors are non-critical.
+      - path: cmd/recompress/main.go
+        linters:
+          - gosec
 
 formatters:
   enable:

@@ -14,11 +14,11 @@ func jpegOrientation(data []byte) int {
 		return 1
 	}
 	i := 2
-	for i+4 <= len(data) {
-		if data[i] != 0xFF {
+	for i+4 <= len(data) { // loop guard covers data[i..i+3] used below
+		if data[i] != 0xFF { //nolint:gosec // G602: i+1 < len(data) per loop guard
 			break
 		}
-		marker := data[i+1]
+		marker := data[i+1] //nolint:gosec // G602: i+1 < len(data) per loop guard
 		if marker == 0xD8 || marker == 0xD9 || (marker >= 0xD0 && marker <= 0xD7) {
 			i += 2
 			continue
@@ -26,7 +26,7 @@ func jpegOrientation(data []byte) int {
 		if marker == 0xDA { // start of scan: no more metadata segments follow
 			break
 		}
-		segLen := int(data[i+2])<<8 | int(data[i+3])
+		segLen := int(data[i+2])<<8 | int(data[i+3]) //nolint:gosec // G602: i+3 < len(data) per loop guard
 		if segLen < 2 || i+2+segLen > len(data) {
 			break
 		}
@@ -49,7 +49,7 @@ func parseExifOrientation(seg []byte) int {
 		return 0
 	}
 	var bo binary.ByteOrder
-	switch string(tiff[0:2]) {
+	switch string(tiff[0:2]) { //nolint:gosec // G602: len(tiff) >= 8 checked above
 	case "II":
 		bo = binary.LittleEndian
 	case "MM":
@@ -57,17 +57,19 @@ func parseExifOrientation(seg []byte) int {
 	default:
 		return 0
 	}
-	ifdOffset := bo.Uint32(tiff[4:8])
+	ifdOffset := bo.Uint32(tiff[4:8]) //nolint:gosec // G602: len(tiff) >= 8 checked above
 	if int(ifdOffset)+2 > len(tiff) {
 		return 0
 	}
-	p := tiff[ifdOffset:]
-	count := int(bo.Uint16(p[0:2]))
-	p = p[2:]
-	for j := 0; j < count && (j+1)*12 <= len(p); j++ {
-		entry := p[j*12 : j*12+12]
-		if bo.Uint16(entry[0:2]) == 0x0112 {
-			if val := bo.Uint16(entry[8:10]); val >= 1 && val <= 8 {
+	p := tiff[ifdOffset:]                              //nolint:gosec // G602: ifdOffset+2 <= len(tiff) checked above, so len(p) >= 2
+	count := int(bo.Uint16(p[0:2]))                    //nolint:gosec // G602: len(p) >= 2 per the check above
+	p = p[2:]                                          //nolint:gosec // G602: len(p) >= 2 per the check above, so this can't panic
+	for j := 0; j < count && (j+1)*12 <= len(p); j++ { // loop guard covers entry[0:12] below
+		entry := p[j*12 : j*12+12] //nolint:gosec // G602: bounds checked by loop guard
+		// entry is always exactly 12 bytes by construction above, so both
+		// slices below are in bounds.
+		if bo.Uint16(entry[0:2]) == 0x0112 { //nolint:gosec // G602
+			if val := bo.Uint16(entry[8:10]); val >= 1 && val <= 8 { //nolint:gosec // G602
 				return int(val)
 			}
 		}

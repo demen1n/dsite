@@ -25,6 +25,7 @@ Thumbs.db
 
 # Local scratch/backup files
 .backups/
+backups/
 
 # Go
 vendor/
