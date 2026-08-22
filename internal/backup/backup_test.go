@@ -161,11 +161,20 @@ func TestRun_MissingUploadsDirIsNotAnError(t *testing.T) {
 type fakeRemote struct {
 	uploadedPath, uploadedName string
 	err                        error
+
+	prunedKeep  int
+	pruneCalled bool
 }
 
 func (f *fakeRemote) Upload(_ context.Context, localPath, remoteName string) error {
 	f.uploadedPath, f.uploadedName = localPath, remoteName
 	return f.err
+}
+
+func (f *fakeRemote) Prune(_ context.Context, keep int) error {
+	f.pruneCalled = true
+	f.prunedKeep = keep
+	return nil
 }
 
 func TestRun_UploadsToRemote(t *testing.T) {
@@ -186,6 +195,45 @@ func TestRun_UploadsToRemote(t *testing.T) {
 	}
 	if remote.uploadedName != filepath.Base(archivePath) {
 		t.Errorf("remote got name %q, want %q", remote.uploadedName, filepath.Base(archivePath))
+	}
+}
+
+func TestRun_PrunesRemoteAfterUpload(t *testing.T) {
+	setupTestDB(t)
+	remote := &fakeRemote{}
+
+	if _, err := Run(context.Background(), Config{
+		DB:         dsitedb.DB,
+		UploadsDir: t.TempDir(),
+		OutDir:     t.TempDir(),
+		Remote:     remote,
+		RemoteKeep: 5,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !remote.pruneCalled {
+		t.Error("Remote.Prune was never called")
+	}
+	if remote.prunedKeep != 5 {
+		t.Errorf("Prune keep: got %d, want 5", remote.prunedKeep)
+	}
+}
+
+func TestRun_RemoteKeepZeroSkipsPrune(t *testing.T) {
+	setupTestDB(t)
+	remote := &fakeRemote{}
+
+	if _, err := Run(context.Background(), Config{
+		DB:         dsitedb.DB,
+		UploadsDir: t.TempDir(),
+		OutDir:     t.TempDir(),
+		Remote:     remote,
+		RemoteKeep: 0,
+	}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if remote.pruneCalled {
+		t.Error("Remote.Prune should not be called when RemoteKeep is 0")
 	}
 }
 

@@ -7,6 +7,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
+	"strings"
 	"time"
 )
 
@@ -66,6 +68,83 @@ func (y YandexDisk) Upload(ctx context.Context, localPath, remoteName string) er
 	defer resp.Body.Close()
 	if resp.StatusCode >= 300 {
 		return fmt.Errorf("yandex disk upload: unexpected status %s", resp.Status)
+	}
+	return nil
+}
+
+// Prune implements Remote. It lists y.Dir, keeps the newest keep archives
+// matching this package's backup filename pattern, and moves the rest to
+// Yandex Disk's trash (not a permanent delete — a bug here shouldn't be able
+// to destroy the only off-site copy of a backup outright).
+func (y YandexDisk) Prune(ctx context.Context, keep int) error {
+	if keep <= 0 {
+		return nil
+	}
+	names, err := y.list(ctx)
+	if err != nil {
+		return fmt.Errorf("list %s: %w", y.Dir, err)
+	}
+	sort.Strings(names) // timestamp-embedded names sort lexically = chronologically
+	if len(names) <= keep {
+		return nil
+	}
+	for _, n := range names[:len(names)-keep] {
+		if err := y.delete(ctx, y.Dir+"/"+n); err != nil {
+			return fmt.Errorf("delete %s: %w", n, err)
+		}
+	}
+	return nil
+}
+
+func (y YandexDisk) list(ctx context.Context) ([]string, error) {
+	u := yaDiskAPI + "?path=" + url.QueryEscape(y.Dir) + "&fields=_embedded.items.name,_embedded.items.type&limit=1000"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, http.NoBody)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Authorization", "OAuth "+y.Token)
+	resp, err := y.client().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("unexpected status %s", resp.Status)
+	}
+	var body struct {
+		Embedded struct {
+			Items []struct {
+				Name string `json:"name"`
+				Type string `json:"type"`
+			} `json:"items"`
+		} `json:"_embedded"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
+		return nil, err
+	}
+	var names []string
+	for _, item := range body.Embedded.Items {
+		if item.Type == "file" && strings.HasPrefix(item.Name, namePrefix) && strings.HasSuffix(item.Name, nameSuffix) {
+			names = append(names, item.Name)
+		}
+	}
+	return names, nil
+}
+
+func (y YandexDisk) delete(ctx context.Context, path string) error {
+	u := yaDiskAPI + "?path=" + url.QueryEscape(path)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, http.NoBody)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Authorization", "OAuth "+y.Token)
+	resp, err := y.client().Do(req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode >= 300 && resp.StatusCode != http.StatusNotFound {
+		return fmt.Errorf("unexpected status %s", resp.Status)
 	}
 	return nil
 }

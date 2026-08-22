@@ -73,6 +73,7 @@ func main() {
 						OutDir:     cfg.BackupDir,
 						Keep:       cfg.BackupKeep,
 						Remote:     remote,
+						RemoteKeep: cfg.BackupRemoteKeep,
 					})
 					if err != nil {
 						log.Printf("backup: %v", err)
@@ -228,6 +229,7 @@ func runBackupOnce(cfg config.Config) error {
 		OutDir:     cfg.BackupDir,
 		Keep:       cfg.BackupKeep,
 		Remote:     remote,
+		RemoteKeep: cfg.BackupRemoteKeep,
 	})
 	if err != nil {
 		return err

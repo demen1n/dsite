@@ -8,6 +8,9 @@ import (
 // Remote uploads a completed local backup archive to off-site storage.
 type Remote interface {
 	Upload(ctx context.Context, localPath, remoteName string) error
+	// Prune deletes archives beyond the newest keep on the remote, mirroring
+	// the local rotate() behavior. keep <= 0 means keep everything.
+	Prune(ctx context.Context, keep int) error
 }
 
 // NewRemote builds the Remote named by kind. An empty kind means local-only

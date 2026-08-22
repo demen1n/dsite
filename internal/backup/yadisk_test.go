@@ -2,12 +2,14 @@ package backup
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sort"
 	"testing"
 )
 
@@ -83,5 +85,105 @@ func TestYandexDisk_Upload(t *testing.T) {
 	}
 	if string(sawPUTBody) != "archive-bytes" {
 		t.Errorf("uploaded body: got %q, want %q", sawPUTBody, "archive-bytes")
+	}
+}
+
+func TestYandexDisk_Prune(t *testing.T) {
+	const token = "test-token"
+	existing := []string{
+		namePrefix + "20260101-000000" + nameSuffix,
+		namePrefix + "20260102-000000" + nameSuffix,
+		namePrefix + "20260103-000000" + nameSuffix,
+		namePrefix + "20260104-000000" + nameSuffix,
+		"not-a-backup.txt", // must be ignored: doesn't match the naming pattern
+	}
+	var deleted []string
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/disk/resources", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "OAuth "+token {
+			t.Errorf("list auth header: got %q", got)
+		}
+		type item struct {
+			Name string `json:"name"`
+			Type string `json:"type"`
+		}
+		items := make([]item, len(existing))
+		for i, n := range existing {
+			items[i] = item{Name: n, Type: "file"}
+		}
+		body := struct {
+			Embedded struct {
+				Items []item `json:"items"`
+			} `json:"_embedded"`
+		}{}
+		body.Embedded.Items = items
+		_ = json.NewEncoder(w).Encode(body)
+	})
+	mux.HandleFunc("DELETE /v1/disk/resources", func(w http.ResponseWriter, r *http.Request) {
+		if got := r.Header.Get("Authorization"); got != "OAuth "+token {
+			t.Errorf("delete auth header: got %q", got)
+		}
+		if got := r.URL.Query().Get("permanently"); got != "" {
+			t.Errorf("delete should not pass permanently=true, got %q", got)
+		}
+		deleted = append(deleted, r.URL.Query().Get("path"))
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	prevAPI := yaDiskAPI
+	yaDiskAPI = srv.URL + "/v1/disk/resources"
+	t.Cleanup(func() { yaDiskAPI = prevAPI })
+
+	y := YandexDisk{Token: token, Dir: "/dsite-backups", Client: srv.Client()}
+	if err := y.Prune(context.Background(), 2); err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+
+	sort.Strings(deleted)
+	want := []string{
+		"/dsite-backups/" + namePrefix + "20260101-000000" + nameSuffix,
+		"/dsite-backups/" + namePrefix + "20260102-000000" + nameSuffix,
+	}
+	if len(deleted) != len(want) {
+		t.Fatalf("deleted: got %v, want %v", deleted, want)
+	}
+	for i := range want {
+		if deleted[i] != want[i] {
+			t.Errorf("deleted: got %v, want %v", deleted, want)
+			break
+		}
+	}
+}
+
+func TestYandexDisk_Prune_KeepsAllWhenUnderLimit(t *testing.T) {
+	const token = "test-token"
+	deleteCalled := false
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/disk/resources", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{"_embedded": {"items": [{"name": %q, "type": "file"}]}}`, namePrefix+"20260101-000000"+nameSuffix)
+	})
+	mux.HandleFunc("DELETE /v1/disk/resources", func(w http.ResponseWriter, r *http.Request) {
+		deleteCalled = true
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	prevAPI := yaDiskAPI
+	yaDiskAPI = srv.URL + "/v1/disk/resources"
+	t.Cleanup(func() { yaDiskAPI = prevAPI })
+
+	y := YandexDisk{Token: token, Dir: "/dsite-backups", Client: srv.Client()}
+	if err := y.Prune(context.Background(), 5); err != nil {
+		t.Fatalf("Prune: %v", err)
+	}
+	if deleteCalled {
+		t.Error("Prune should not delete anything when the count is under keep")
 	}
 }

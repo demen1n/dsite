@@ -52,6 +52,7 @@ Open http://localhost:8080. On first run, visit `/admin/setup` to create the adm
 | `BACKUP_INTERVAL`   | `24h`            | How often the running server backs up automatically; `0` disables it |
 | `BACKUP_REMOTE`     | —                | Off-site backend to also push archives to: `yadisk` (empty = local only) |
 | `BACKUP_REMOTE_DIR` | `/dsite-backups` | Destination folder on the remote backend |
+| `BACKUP_REMOTE_KEEP` | `30`           | Remote archives to retain; `0` keeps everything |
 | `YADISK_TOKEN`      | —                | Yandex Disk OAuth token (required when `BACKUP_REMOTE=yadisk`) |
 
 ## Docker
@@ -131,8 +132,9 @@ dsite restore ./backups/dsite-backup-20260101-120000.tar.gz
 ```
 
 A local copy is always written. Set `BACKUP_REMOTE=yadisk` and `YADISK_TOKEN`
-to also push each archive to Yandex Disk. The running server can back up on
-its own schedule too — see `BACKUP_INTERVAL` above.
+to also push each archive to Yandex Disk, pruned down to `BACKUP_REMOTE_KEEP`
+archives there too. The running server can back up on its own schedule —
+see `BACKUP_INTERVAL` above.
 
 ## License
 

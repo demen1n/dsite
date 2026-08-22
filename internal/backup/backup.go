@@ -26,6 +26,7 @@ type Config struct {
 	OutDir     string
 	Keep       int    // local archives to retain; 0 keeps all
 	Remote     Remote // optional off-site destination; nil disables it
+	RemoteKeep int    // remote archives to retain via Remote.Prune; 0 keeps all
 }
 
 // Run snapshots the database, bundles it with the uploads directory into a
@@ -57,6 +58,11 @@ func Run(ctx context.Context, cfg Config) (string, error) {
 	if cfg.Remote != nil {
 		if err := cfg.Remote.Upload(ctx, archivePath, filepath.Base(archivePath)); err != nil {
 			return archivePath, fmt.Errorf("upload to remote: %w", err)
+		}
+		if cfg.RemoteKeep > 0 {
+			if err := cfg.Remote.Prune(ctx, cfg.RemoteKeep); err != nil {
+				log.Printf("backup: remote prune: %v", err)
+			}
 		}
 	}
 
