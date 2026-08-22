@@ -121,9 +121,14 @@ static/                    # CSS, JS, vendored HTMX — no build step
 ## Backups
 
 ```bash
-# Snapshots the DB (VACUUM INTO, no downtime) and tars/gzips it with the
-# uploads dir into BACKUP_DIR, rotating old local archives.
+# One-shot backup: snapshots the DB (VACUUM INTO, no downtime) and tars/gzips
+# it with the uploads dir into BACKUP_DIR, rotating old local archives.
 dsite backup
+
+# Restore: the reverse — replaces DB_PATH/UPLOADS_DIR with an archive's
+# contents. Destructive; stop the server first. Prompts for confirmation
+# unless --force is passed.
+dsite restore ./backups/dsite-backup-20260101-120000.tar.gz
 ```
 
 A local copy is always written. Set `BACKUP_REMOTE=yadisk` and `YADISK_TOKEN`
