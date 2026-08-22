@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
+	"flag"
 	"fmt"
 	"github.com/demen1n/dsite/internal/backup"
 	"github.com/demen1n/dsite/internal/config"
@@ -24,6 +26,12 @@ func main() {
 	if len(os.Args) > 1 && os.Args[1] == "backup" {
 		if err := runBackupOnce(cfg); err != nil {
 			log.Fatal("backup: ", err)
+		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "restore" {
+		if err := runRestoreOnce(cfg, os.Args[2:]); err != nil {
+			log.Fatal("restore: ", err)
 		}
 		return
 	}
@@ -225,6 +233,42 @@ func runBackupOnce(cfg config.Config) error {
 		return err
 	}
 	log.Println("backup written to", path)
+	return nil
+}
+
+// runRestoreOnce handles `dsite restore [--force] <archive.tar.gz>`: replaces
+// DB_PATH and UPLOADS_DIR with the contents of a backup archive. Destructive,
+// so it asks for interactive confirmation unless --force is passed, and
+// intentionally doesn't touch db.Init/db.DB — the server (and its DB
+// connection) is expected to be stopped before this runs.
+func runRestoreOnce(cfg config.Config, args []string) error {
+	fs := flag.NewFlagSet("restore", flag.ExitOnError)
+	force := fs.Bool("force", false, "skip the confirmation prompt")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() != 1 {
+		return fmt.Errorf("usage: dsite restore [--force] <archive.tar.gz>")
+	}
+	archivePath := fs.Arg(0)
+
+	if !*force {
+		fmt.Printf("This replaces %s and everything in %s with the contents of %s.\n", cfg.DBPath, cfg.UploadsDir, archivePath)
+		fmt.Print("Make sure the server is stopped first. Type \"yes\" to continue: ")
+		answer, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		if strings.TrimSpace(answer) != "yes" {
+			return fmt.Errorf("aborted")
+		}
+	}
+
+	if err := backup.Restore(backup.RestoreConfig{
+		ArchivePath: archivePath,
+		DBPath:      cfg.DBPath,
+		UploadsDir:  cfg.UploadsDir,
+	}); err != nil {
+		return err
+	}
+	log.Println("restore complete — restart the server to pick up the restored data")
 	return nil
 }
 
