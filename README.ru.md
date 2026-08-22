@@ -47,6 +47,13 @@ INSECURE_COOKIES=true go run ./cmd/dsite
 | `SITE_URL`         | _(автоопределение)_ | Канонический URL (напр. `https://example.com`) для sitemap/robots/фида. В production обязательно. |
 | `INSECURE_COOKIES` | —                | `true` для локального запуска по HTTP           |
 | `TRUSTED_PROXY`    | —                | `true` если сервер за обратным прокси (доверять `X-Forwarded-For` для рейт-лимита логина) |
+| `BACKUP_DIR`        | `./backups`      | Локальная папка для архивов бэкапа (`dsite backup`, см. ниже) |
+| `BACKUP_KEEP`       | `7`              | Сколько локальных архивов хранить; старые удаляются при ротации |
+| `BACKUP_INTERVAL`   | `24h`            | Как часто работающий сервер бэкапится сам; `0` отключает |
+| `BACKUP_REMOTE`     | —                | Куда дополнительно заливать архив: `yadisk` (пусто = только локально) |
+| `BACKUP_REMOTE_DIR` | `/dsite-backups` | Папка назначения на удалённом бэкенде |
+| `BACKUP_REMOTE_KEEP` | `30`           | Сколько архивов хранить на удалённом бэкенде; `0` — хранить всё |
+| `YADISK_TOKEN`      | —                | OAuth-токен Яндекс.Диска (нужен при `BACKUP_REMOTE=yadisk`) |
 
 ## Docker
 
@@ -113,9 +120,16 @@ static/                    # CSS, JS, вендоренный HTMX — без с�
 
 ## Бэкапы
 
-SQLite-файл — единственная копия всего контента. Рекомендуется
-[litestream](https://litestream.io/) со стримингом в S3-совместимое хранилище
-или как минимум cron с `sqlite3 /data/data.db ".backup ..."` и ротацией.
+```bash
+# Снапшот БД (VACUUM INTO, без простоя) + архив с папкой загрузок в
+# BACKUP_DIR, с ротацией старых локальных архивов.
+dsite backup
+```
+
+Локальная копия пишется всегда. `BACKUP_REMOTE=yadisk` + `YADISK_TOKEN`
+дополнительно заливают каждый архив на Яндекс.Диск, там тоже с ротацией —
+до `BACKUP_REMOTE_KEEP` архивов. Работающий сервер может бэкапиться сам по
+расписанию — см. `BACKUP_INTERVAL` выше.
 
 ## Лицензия
 

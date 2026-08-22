@@ -9,7 +9,7 @@ import (
 func TestLoadConfigDefaults(t *testing.T) {
 	for _, k := range []string{
 		"PORT", "DB_PATH", "UPLOADS_DIR", "SITE_TITLE", "SITE_DESC", "INSECURE_COOKIES", "TRUSTED_PROXY",
-		"BACKUP_DIR", "BACKUP_KEEP", "BACKUP_INTERVAL", "BACKUP_REMOTE", "BACKUP_REMOTE_DIR", "YADISK_TOKEN",
+		"BACKUP_DIR", "BACKUP_KEEP", "BACKUP_INTERVAL", "BACKUP_REMOTE", "BACKUP_REMOTE_DIR", "BACKUP_REMOTE_KEEP", "YADISK_TOKEN",
 	} {
 		os.Unsetenv(k)
 	}
@@ -47,6 +47,9 @@ func TestLoadConfigDefaults(t *testing.T) {
 	if c.BackupRemoteDir != "/dsite-backups" {
 		t.Errorf("BackupRemoteDir: got %q, want %q", c.BackupRemoteDir, "/dsite-backups")
 	}
+	if c.BackupRemoteKeep != 30 {
+		t.Errorf("BackupRemoteKeep: got %d, want 30", c.BackupRemoteKeep)
+	}
 }
 
 func TestLoadConfigFromEnv(t *testing.T) {
@@ -60,6 +63,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	os.Setenv("BACKUP_INTERVAL", "6h")
 	os.Setenv("BACKUP_REMOTE", "yadisk")
 	os.Setenv("BACKUP_REMOTE_DIR", "/mybackups")
+	os.Setenv("BACKUP_REMOTE_KEEP", "10")
 	os.Setenv("YADISK_TOKEN", "tok123")
 	t.Cleanup(func() {
 		os.Unsetenv("PORT")
@@ -72,6 +76,7 @@ func TestLoadConfigFromEnv(t *testing.T) {
 		os.Unsetenv("BACKUP_INTERVAL")
 		os.Unsetenv("BACKUP_REMOTE")
 		os.Unsetenv("BACKUP_REMOTE_DIR")
+		os.Unsetenv("BACKUP_REMOTE_KEEP")
 		os.Unsetenv("YADISK_TOKEN")
 	})
 
@@ -105,6 +110,9 @@ func TestLoadConfigFromEnv(t *testing.T) {
 	}
 	if c.BackupRemoteDir != "/mybackups" {
 		t.Errorf("BackupRemoteDir: got %q, want %q", c.BackupRemoteDir, "/mybackups")
+	}
+	if c.BackupRemoteKeep != 10 {
+		t.Errorf("BackupRemoteKeep: got %d, want 10", c.BackupRemoteKeep)
 	}
 	if c.YaDiskToken != "tok123" {
 		t.Errorf("YaDiskToken: got %q, want %q", c.YaDiskToken, "tok123")

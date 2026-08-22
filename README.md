@@ -47,6 +47,13 @@ Open http://localhost:8080. On first run, visit `/admin/setup` to create the adm
 | `SITE_URL`         | _(auto-detect)_  | Canonical base URL (e.g. `https://example.com`), used in sitemap/robots/feed. Set it in production. |
 | `INSECURE_COOKIES` | —                | Set to `true` for local development over HTTP            |
 | `TRUSTED_PROXY`    | —                | Set to `true` when behind a reverse proxy (trusts `X-Forwarded-For` for login rate limiting) |
+| `BACKUP_DIR`        | `./backups`      | Local directory for backup archives (`dsite backup`, see below) |
+| `BACKUP_KEEP`       | `7`              | Local archives to retain; older ones are deleted on rotation |
+| `BACKUP_INTERVAL`   | `24h`            | How often the running server backs up automatically; `0` disables it |
+| `BACKUP_REMOTE`     | —                | Off-site backend to also push archives to: `yadisk` (empty = local only) |
+| `BACKUP_REMOTE_DIR` | `/dsite-backups` | Destination folder on the remote backend |
+| `BACKUP_REMOTE_KEEP` | `30`           | Remote archives to retain; `0` keeps everything |
+| `YADISK_TOKEN`      | —                | Yandex Disk OAuth token (required when `BACKUP_REMOTE=yadisk`) |
 
 ## Docker
 
@@ -113,9 +120,16 @@ static/                    # CSS, JS, vendored HTMX — no build step
 
 ## Backups
 
-The SQLite file is the only copy of all content. Recommended:
-[litestream](https://litestream.io/) streaming to S3-compatible storage, or at
-minimum a cron job running `sqlite3 /data/data.db ".backup ..."` with rotation.
+```bash
+# Snapshots the DB (VACUUM INTO, no downtime) and tars/gzips it with the
+# uploads dir into BACKUP_DIR, rotating old local archives.
+dsite backup
+```
+
+A local copy is always written. Set `BACKUP_REMOTE=yadisk` and `YADISK_TOKEN`
+to also push each archive to Yandex Disk, pruned down to `BACKUP_REMOTE_KEEP`
+archives there too. The running server can back up on its own schedule —
+see `BACKUP_INTERVAL` above.
 
 ## License
 
