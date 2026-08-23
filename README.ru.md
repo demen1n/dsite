@@ -2,7 +2,6 @@
 
 [![CI](https://github.com/demen1n/dsite/actions/workflows/ci.yml/badge.svg)](https://github.com/demen1n/dsite/actions/workflows/ci.yml)
 [![Coverage](https://codecov.io/gh/demen1n/dsite/graph/badge.svg)](https://codecov.io/gh/demen1n/dsite)
-[![Go Report Card](https://goreportcard.com/badge/github.com/demen1n/dsite)](https://goreportcard.com/report/github.com/demen1n/dsite)
 [![Release](https://img.shields.io/github/v/release/demen1n/dsite)](https://github.com/demen1n/dsite/releases)
 [![License: MIT](https://img.shields.io/github/license/demen1n/dsite)](LICENSE)
 
