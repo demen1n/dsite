@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Deployment
 
-Push to `main` → GitHub Actions CI/CD автоматически собирает и деплоит на Beget (demenin.ru). Ручной деплой не нужен — просто `git push`. CI (`.github/workflows/ci.yml`) runs gofmt/vet/tests, golangci-lint (config in `.golangci.yml`), and uploads coverage to Codecov on every push and PR.
+`main` is branch-protected: changes land via PR (0 required approvals, but `test`+`lint` status checks must pass; no direct pushes, even for admins). Merging a PR into `main` → GitHub Actions CI/CD automatically builds and deploys to Beget (demenin.ru). CI (`.github/workflows/ci.yml`) runs gofmt/vet/tests, golangci-lint (config in `.golangci.yml`), and uploads coverage to Codecov on every push and PR.
 
 ## Commands
 
