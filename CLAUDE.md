@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Deployment
 
-`main` is branch-protected: changes land via PR (0 required approvals, but `test`+`lint` status checks must pass; no direct pushes, even for admins). Merging a PR into `main` → GitHub Actions CI/CD automatically builds and deploys to Beget (demenin.ru). CI (`.github/workflows/ci.yml`) runs gofmt/vet/tests, golangci-lint (config in `.golangci.yml`), and uploads coverage to Codecov on every push and PR.
+`main` is branch-protected: changes land via PR (0 required approvals, but `test`+`lint` status checks must pass; no direct pushes, even for admins). Merging a PR into `main` → GitHub Actions CI/CD automatically builds and deploys to Beget (demenin.ru). CI (`.github/workflows/ci.yml`) runs gofmt/vet/tests, golangci-lint (config in `.golangci.yml`), ESLint over `static/*.js` (config in `eslint.config.js`), and uploads coverage to Codecov on every push and PR.
 
 ## Commands
 
@@ -25,6 +25,10 @@ go vet ./...
 
 # Lint (same as CI; config in .golangci.yml)
 golangci-lint run ./...
+
+# Lint JS (same as CI; config in eslint.config.js)
+npm ci
+npm run lint:js
 
 # One-shot backup: snapshots the DB (VACUUM INTO) + tars/gzips it with the
 # uploads dir into BACKUP_DIR, rotating old local archives, and — if

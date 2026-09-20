@@ -98,7 +98,7 @@ bodyTA.addEventListener('drop', async e => {
       let resized;
       try {
         resized = await resizeImage(file, 1600, 0.8);
-      } catch (err) {
+      } catch {
         bodyTA.value = bodyTA.value.replace(placeholder, '');
         alert('Не удалось обработать изображение.\nВозможно, формат не поддерживается (например, HEIC).\nКонвертируйте в JPG или PNG и попробуйте снова.');
         continue;
@@ -217,7 +217,7 @@ let autoSaveTimer;
   const saved = localStorage.getItem(DRAFT_KEY);
   if (!saved) return;
   let draft;
-  try { draft = JSON.parse(saved); } catch(e) { return; }
+  try { draft = JSON.parse(saved); } catch { return; }
 
   const titleEl = document.getElementById('title');
   const bodyEl  = document.getElementById('body');
