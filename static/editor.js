@@ -121,7 +121,7 @@ bodyTA.addEventListener('drop', async e => {
       return null;
     });
     if (!url) continue;
-    const md = `![](${url})`;
+    const md = `![](${url})\n`;
     bodyTA.value = bodyTA.value.replace(placeholder, md);
     htmx.trigger(bodyTA, 'input');
   }
