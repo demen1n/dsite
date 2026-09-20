@@ -30,5 +30,8 @@ backups/
 # Go
 vendor/
 
+# Node (JS lint tooling)
+node_modules/
+
 # Browser traffic dumps
 *.har
