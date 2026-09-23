@@ -33,7 +33,9 @@ func Home(w http.ResponseWriter, r *http.Request) {
 type IndexData struct {
 	Posts      []db.Post
 	Tags       []db.Tag
-	ActiveTag  string
+	ActiveTag  string // slug активного тега, "" — все посты
+	TagName    string // имя активного тега (для заголовка страницы тега)
+	BasePath   string // /blog или /tag/{slug} — база для ссылок пагинации
 	Page       int
 	TotalPages int
 	HasPrev    bool
@@ -42,13 +44,42 @@ type IndexData struct {
 
 // GET /blog
 func Index(w http.ResponseWriter, r *http.Request) {
-	tag := r.URL.Query().Get("tag")
+	// Старые ссылки вида /blog?tag=… — постоянный редирект на /tag/{slug},
+	// чтобы у страницы тега был один адрес. Раньше в ссылки попадало имя тега,
+	// а не slug, поэтому прогоняем значение через TagSlug.
+	if tag := r.URL.Query().Get("tag"); tag != "" {
+		target := "/tag/" + url.PathEscape(db.TagSlug(tag))
+		if p := r.URL.Query().Get("page"); p != "" {
+			target += "?page=" + url.QueryEscape(p)
+		}
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+		return
+	}
+	renderBlog(w, r, nil)
+}
+
+// GET /tag/{slug}
+func TagPosts(w http.ResponseWriter, r *http.Request) {
+	tag, err := db.GetTagBySlug(r.PathValue("slug"))
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+	renderBlog(w, r, &tag)
+}
+
+// renderBlog рисует ленту блога — всю или отфильтрованную по тегу.
+func renderBlog(w http.ResponseWriter, r *http.Request, tag *db.Tag) {
 	pageNum, _ := strconv.Atoi(r.URL.Query().Get("page"))
 	if pageNum < 1 {
 		pageNum = 1
 	}
+	tagSlug, basePath := "", "/blog"
+	if tag != nil {
+		tagSlug, basePath = tag.Slug, "/tag/"+url.PathEscape(tag.Slug)
+	}
 
-	posts, total, err := db.ListPostsPaginated(tag, pageNum, db.PostsPerPage)
+	posts, total, err := db.ListPostsPaginated(tagSlug, pageNum, db.PostsPerPage)
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
@@ -67,14 +98,24 @@ func Index(w http.ResponseWriter, r *http.Request) {
 	data := IndexData{
 		Posts:      posts,
 		Tags:       tags,
-		ActiveTag:  tag,
+		ActiveTag:  tagSlug,
+		BasePath:   basePath,
 		Page:       pageNum,
 		TotalPages: totalPages,
 		HasPrev:    pageNum > 1,
 		HasNext:    pageNum < totalPages,
 	}
 	pd := page("Блог", data)
-	pd.Canonical = baseURL(r) + r.URL.RequestURI()
+	if tag != nil {
+		data.TagName = tag.Name
+		pd = page(tag.Name+" — записи блога", data)
+		pd.OGDescription = "Заметки и фотографии с тегом «" + tag.Name + "»."
+		pd.OGType = "website"
+	}
+	pd.Canonical = baseURL(r) + basePath
+	if pageNum > 1 {
+		pd.Canonical += "?page=" + strconv.Itoa(pageNum)
+	}
 	render(w, "index.html", pd)
 }
 
@@ -405,6 +446,16 @@ func Sitemap(w http.ResponseWriter, r *http.Request) {
 				Loc:        base + "/series/" + s.Slug,
 				ChangeFreq: "monthly",
 				Priority:   "0.7",
+			})
+		}
+	}
+	if tags, err := db.ListPublishedTags(); err == nil {
+		for _, t := range tags {
+			sm.URLs = append(sm.URLs, sitemapURL{
+				Loc:        base + "/tag/" + url.PathEscape(t.Slug),
+				LastMod:    t.LastMod.UTC().Format("2006-01-02"),
+				ChangeFreq: "weekly",
+				Priority:   "0.6",
 			})
 		}
 	}

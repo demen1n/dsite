@@ -105,6 +105,7 @@ func main() {
 	// ── Публичные ──
 	mux.HandleFunc("GET /{$}", handlers.Home)
 	mux.HandleFunc("GET /blog", handlers.Index)
+	mux.HandleFunc("GET /tag/{slug}", handlers.TagPosts)
 	mux.HandleFunc("GET /post/{slug}", handlers.ViewPost)
 	mux.HandleFunc("GET /gallery", handlers.Gallery)
 	mux.HandleFunc("GET /gallery/filter", handlers.GalleryFilter)

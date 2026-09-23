@@ -186,6 +186,45 @@ func TestSetPostTags(t *testing.T) {
 	}
 }
 
+func TestGetTagBySlug(t *testing.T) {
+	setupTestDB(t)
+
+	id, _ := CreatePost("p", "P", "", "", "", true, 0)
+	SetPostTags(int(id), []string{"Комсомольск-на-Амуре"})
+
+	tag, err := GetTagBySlug("комсомольск-на-амуре")
+	if err != nil || tag.Name != "Комсомольск-на-Амуре" {
+		t.Errorf("GetTagBySlug: %+v err=%v", tag, err)
+	}
+	if _, err := GetTagBySlug("nope"); err == nil {
+		t.Error("GetTagBySlug(nope): want error")
+	}
+}
+
+func TestListPublishedTags(t *testing.T) {
+	setupTestDB(t)
+
+	pub, _ := CreatePost("pub", "Pub", "", "", "", true, 0)
+	draft, _ := CreatePost("draft", "Draft", "", "", "", false, 0)
+	SetPostTags(int(pub), []string{"Go", "Shared"})
+	SetPostTags(int(draft), []string{"DraftOnly", "Shared"})
+
+	tags, err := ListPublishedTags()
+	if err != nil {
+		t.Fatalf("ListPublishedTags: %v", err)
+	}
+	var names []string
+	for _, tg := range tags {
+		names = append(names, tg.Name)
+		if tg.LastMod.IsZero() {
+			t.Errorf("tag %q: zero LastMod", tg.Name)
+		}
+	}
+	if fmt.Sprint(names) != "[Go Shared]" {
+		t.Errorf("ListPublishedTags names = %v, want [Go Shared]", names)
+	}
+}
+
 func TestTagSlug(t *testing.T) {
 	cases := []struct{ in, want string }{
 		{"Go", "go"},
@@ -195,8 +234,8 @@ func TestTagSlug(t *testing.T) {
 		{"  trim  ", "trim"},
 	}
 	for _, tc := range cases {
-		if got := tagSlug(tc.in); got != tc.want {
-			t.Errorf("tagSlug(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := TagSlug(tc.in); got != tc.want {
+			t.Errorf("TagSlug(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
