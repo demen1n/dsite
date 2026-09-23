@@ -1,6 +1,6 @@
 {{define "content"}}
 <div class="feed-header" style="display:flex; align-items:baseline; justify-content:space-between; gap:1rem; flex-wrap:wrap;">
-  <h1>Блог</h1>
+  <h1>{{with .Data.TagName}}{{.}}{{else}}Блог{{end}}</h1>
   <form action="/search" method="GET" style="display:flex; gap:0.4rem;">
     <input type="search" name="q" placeholder="Поиск…"
            style="border:1px solid var(--border); border-radius:4px; padding:0.3rem 0.6rem; font-size:0.85rem; font-family:var(--sans); background:var(--bg); color:var(--text); outline:none; width:140px;">
@@ -14,7 +14,7 @@
 <div class="tag-filter">
   <a class="tag-pill{{if eq .ActiveTag ""}} active{{end}}" href="/blog">Все</a>
   {{range .Tags}}
-  <a class="tag-pill{{if eq $.Data.ActiveTag .Slug}} active{{end}}" href="/blog?tag={{.Slug}}">{{.Name}}</a>
+  <a class="tag-pill{{if eq $.Data.ActiveTag .Slug}} active{{end}}" href="/tag/{{.Slug}}">{{.Name}}</a>
   {{end}}
 </div>
 {{end}}
@@ -27,7 +27,7 @@
       <span>{{relDate .CreatedAt}}</span>
       {{if .Tags}}
       <span class="feed-meta-tags">
-        {{range .Tags}}<a href="/blog?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
+        {{range .Tags}}<a href="/tag/{{tagSlug .}}" class="tag-inline">{{.}}</a>{{end}}
       </span>
       {{end}}
       {{if .Views}}<span class="feed-views">{{.Views}} просм.</span>{{end}}
@@ -49,13 +49,13 @@
 {{if gt .TotalPages 1}}
 <nav class="pagination">
   {{if .HasPrev}}
-  <a href="/blog?page={{sub .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">← Позднее</a>
+  <a href="{{.BasePath}}?page={{sub .Page 1}}" class="page-btn">← Позднее</a>
   {{else}}
   <span class="page-btn page-btn--off"></span>
   {{end}}
 
   {{if .HasNext}}
-  <a href="/blog?page={{add .Page 1}}{{if .ActiveTag}}&tag={{.ActiveTag}}{{end}}" class="page-btn">Ранее →</a>
+  <a href="{{.BasePath}}?page={{add .Page 1}}" class="page-btn">Ранее →</a>
   {{else}}
   <span class="page-btn page-btn--off"></span>
   {{end}}

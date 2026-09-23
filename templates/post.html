@@ -7,7 +7,8 @@
   "description": "{{.OGDescription}}",
   "url": "{{.Canonical}}"{{with .Data}},
   "datePublished": "{{.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}",
-  "dateModified": "{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}"{{end}}{{if .OGImage}},
+  "dateModified": "{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}"{{if .Tags}},
+  "keywords": {{.Tags}}{{end}}{{end}}{{if .OGImage}},
   "image": "{{.OGImage}}"{{end}},
   "author": {"@type": "Person", "name": "{{.SiteTitle}}"},
   "publisher": {"@type": "Person", "name": "{{.SiteTitle}}"}
@@ -27,7 +28,7 @@
     {{if .Views}}<span>{{.Views}} просм.</span>{{end}}
     {{if .Tags}}
     <span class="post-tags">
-      {{range .Tags}}<a href="/blog?tag={{.}}" class="tag-inline">{{.}}</a>{{end}}
+      {{range .Tags}}<a href="/tag/{{tagSlug .}}" class="tag-inline">{{.}}</a>{{end}}
     </span>
     {{end}}
     {{if and .SeriesSlug (not .FromSeries)}}

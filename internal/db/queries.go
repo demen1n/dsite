@@ -742,7 +742,7 @@ type Tag struct {
 // постам (post_tags каскадно) — используется для чистки опечаток из
 // автодополнения тегов.
 func DeleteTagByName(name string) error {
-	_, err := DB.Exec(`DELETE FROM tags WHERE slug=?`, tagSlug(name))
+	_, err := DB.Exec(`DELETE FROM tags WHERE slug=?`, TagSlug(name))
 	return err
 }
 
@@ -764,6 +764,48 @@ func ListAllTags() ([]Tag, error) {
 	return tags, rows.Err()
 }
 
+// GetTagBySlug возвращает тег по slug (sql.ErrNoRows, если такого нет).
+func GetTagBySlug(slug string) (Tag, error) {
+	var t Tag
+	err := DB.QueryRow(`SELECT id, name, slug FROM tags WHERE slug=?`, slug).
+		Scan(&t.ID, &t.Name, &t.Slug)
+	return t, err
+}
+
+// TagWithLastMod — тег и время последнего обновления его опубликованных постов.
+type TagWithLastMod struct {
+	Tag
+	LastMod time.Time
+}
+
+// ListPublishedTags возвращает теги, у которых есть хотя бы один
+// опубликованный пост, — для sitemap (страницы тегов с одними черновиками
+// пустые, индексировать их незачем).
+func ListPublishedTags() ([]TagWithLastMod, error) {
+	rows, err := DB.Query(`
+		SELECT t.id, t.name, t.slug, MAX(p.updated_at)
+		FROM tags t
+		JOIN post_tags pt ON pt.tag_id = t.id
+		JOIN posts p ON p.id = pt.post_id AND p.published = 1
+		GROUP BY t.id
+		ORDER BY t.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []TagWithLastMod
+	for rows.Next() {
+		var t TagWithLastMod
+		var ua string
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug, &ua); err != nil {
+			return nil, err
+		}
+		t.LastMod, _ = time.Parse("2006-01-02 15:04:05", ua)
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
 // SetPostTags заменяет теги поста. names — список имён тегов (могут быть новые).
 func SetPostTags(postID int, names []string) error {
 	tx, err := DB.Begin()
@@ -779,7 +821,7 @@ func SetPostTags(postID int, names []string) error {
 		if name == "" {
 			continue
 		}
-		slug := tagSlug(name)
+		slug := TagSlug(name)
 		if _, err := tx.Exec(`INSERT OR IGNORE INTO tags (name, slug) VALUES (?,?)`, name, slug); err != nil {
 			tx.Rollback()
 			return err
@@ -797,8 +839,8 @@ func SetPostTags(postID int, names []string) error {
 	return tx.Commit()
 }
 
-// tagSlug делает slug из имени тега (lowercase, пробелы → дефис).
-func tagSlug(s string) string {
+// TagSlug делает slug из имени тега (lowercase, пробелы → дефис).
+func TagSlug(s string) string {
 	s = strings.ToLower(s)
 	var b strings.Builder
 	for _, r := range s {
