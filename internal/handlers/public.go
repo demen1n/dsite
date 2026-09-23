@@ -104,6 +104,41 @@ func fromSeriesPage(r *http.Request) bool {
 	return strings.HasPrefix(u.Path, "/series/")
 }
 
+// botUAMarkers — подстроки (в нижнем регистре) User-Agent поисковых
+// роботов, генераторов превью ссылок и HTTP-клиентов/мониторингов.
+var botUAMarkers = []string{
+	"bot", "crawl", "spider", "slurp", "preview", "fetcher",
+	"facebookexternalhit", "vkshare", "whatsapp", "embedly", "lighthouse",
+	"headless", "curl", "wget", "python", "go-http-client", "okhttp",
+	"java/", "libwww", "httpclient", "axios", "node-fetch", "uptime",
+}
+
+func isBot(ua string) bool {
+	ua = strings.ToLower(ua)
+	if ua == "" {
+		return true
+	}
+	for _, m := range botUAMarkers {
+		if strings.Contains(ua, m) {
+			return true
+		}
+	}
+	return false
+}
+
+// countsAsView решает, засчитывать ли запрос как просмотр поста:
+// не считаем HEAD (паттерн "GET" в ServeMux ловит и его), ботов и
+// самого админа.
+func countsAsView(r *http.Request) bool {
+	if r.Method != http.MethodGet {
+		return false
+	}
+	if isBot(r.UserAgent()) {
+		return false
+	}
+	return !IsAuthed(r)
+}
+
 // GET /post/{slug}
 func ViewPost(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
@@ -116,7 +151,9 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 		return
 	}
-	db.IncrementViews(post.ID)
+	if countsAsView(r) {
+		db.IncrementViews(post.ID)
+	}
 
 	vd := PostViewData{Post: post}
 	if post.SeriesID != 0 {

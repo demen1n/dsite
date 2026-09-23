@@ -263,3 +263,55 @@ func TestLoginRateLimiterIndependentIPs(t *testing.T) {
 		t.Error("r2 should not be affected by r1 lockout")
 	}
 }
+
+// ───── View counting ─────
+
+func TestIsBot(t *testing.T) {
+	bots := []string{
+		"",
+		"Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+		"Mozilla/5.0 (compatible; YandexBot/3.0; +http://yandex.com/bots)",
+		"TelegramBot (like TwitterBot)",
+		"facebookexternalhit/1.1",
+		"curl/8.4.0",
+		"Go-http-client/1.1",
+		"python-requests/2.31.0",
+	}
+	for _, ua := range bots {
+		if !isBot(ua) {
+			t.Errorf("isBot(%q) = false, want true", ua)
+		}
+	}
+	humans := []string{
+		"Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15",
+		"Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 YaBrowser/24.7.0.0 Safari/537.36",
+		"Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1",
+	}
+	for _, ua := range humans {
+		if isBot(ua) {
+			t.Errorf("isBot(%q) = true, want false", ua)
+		}
+	}
+}
+
+func TestCountsAsView(t *testing.T) {
+	const browser = "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0"
+
+	r := httptest.NewRequest(http.MethodGet, "/post/x", nil)
+	r.Header.Set("User-Agent", browser)
+	if !countsAsView(r) {
+		t.Error("GET from browser without session: want counted")
+	}
+
+	r = httptest.NewRequest(http.MethodHead, "/post/x", nil)
+	r.Header.Set("User-Agent", browser)
+	if countsAsView(r) {
+		t.Error("HEAD: want not counted")
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/post/x", nil)
+	r.Header.Set("User-Agent", "Mozilla/5.0 (compatible; bingbot/2.0)")
+	if countsAsView(r) {
+		t.Error("bot: want not counted")
+	}
+}
