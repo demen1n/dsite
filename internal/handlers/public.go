@@ -284,7 +284,7 @@ func SeriesView(w http.ResponseWriter, r *http.Request) {
 			vd.Photos = append(vd.Photos, allImageSrcs(p.BodyHTML)...)
 		}
 		if series.ShufflePhotos {
-			rand.Shuffle(len(vd.Photos), func(i, j int) {
+			rand.Shuffle(len(vd.Photos), func(i, j int) { //nolint:gosec // порядок фото, не безопасность
 				vd.Photos[i], vd.Photos[j] = vd.Photos[j], vd.Photos[i]
 			})
 		}
