@@ -567,13 +567,13 @@ func TestGetFileUsage(t *testing.T) {
 func TestGetAllFileUsage(t *testing.T) {
 	setupTestDB(t)
 
-	AddPhoto("gallery.webp", "", 0, 0, 0, 0)                                                       //nolint
-	CreatePost("cover-post", "Cover Post", "no mention here", "", "cover.jpg", true, 0)            //nolint
-	CreatePost("body-post", "Body Post", "see inline.jpg embedded here", "", "", true, 0)          //nolint
-	CreateSeries("Trip", "trip", "no mention here", "", "series-cover.jpg", false, true)           //nolint
-	CreateSeries("Journal", "journal", "see series-inline.jpg embedded here", "", "", false, true) //nolint
-	SetSetting("home_avatar", "avatar.jpg")                                                        //nolint
-	UpdateResume("see resume-inline.jpg embedded here", "")                                        //nolint
+	AddPhoto("gallery.webp", "", 0, 0, 0, 0)                                                              //nolint
+	CreatePost("cover-post", "Cover Post", "no mention here", "", "cover.jpg", true, 0)                   //nolint
+	CreatePost("body-post", "Body Post", "see inline.jpg embedded here", "", "", true, 0)                 //nolint
+	CreateSeries("Trip", "trip", "no mention here", "", "series-cover.jpg", false, true, false)           //nolint
+	CreateSeries("Journal", "journal", "see series-inline.jpg embedded here", "", "", false, true, false) //nolint
+	SetSetting("home_avatar", "avatar.jpg")                                                               //nolint
+	UpdateResume("see resume-inline.jpg embedded here", "")                                               //nolint
 
 	usage, err := GetAllFileUsage([]string{
 		"gallery.webp", "cover.jpg", "inline.jpg",
@@ -621,9 +621,9 @@ func TestGetAllFileUsage(t *testing.T) {
 func TestFileUsage_SeriesAvatarResume_GetFileUsage(t *testing.T) {
 	setupTestDB(t)
 
-	CreateSeries("Trip", "trip", "", "", "series-cover.jpg", false, true) //nolint
-	SetSetting("home_avatar", "avatar.jpg")                               //nolint
-	UpdateResume("see resume-inline.jpg here", "")                        //nolint
+	CreateSeries("Trip", "trip", "", "", "series-cover.jpg", false, true, false) //nolint
+	SetSetting("home_avatar", "avatar.jpg")                                      //nolint
+	UpdateResume("see resume-inline.jpg here", "")                               //nolint
 
 	seriesUsage, err := GetFileUsage("series-cover.jpg")
 	if err != nil {
@@ -647,5 +647,54 @@ func TestFileUsage_SeriesAvatarResume_GetFileUsage(t *testing.T) {
 	}
 	if !resumeUsage.InResume || !resumeUsage.InUse() {
 		t.Errorf("resume-inline.jpg: got %+v", resumeUsage)
+	}
+}
+
+// ───── Hidden series ─────
+
+func TestHiddenSeries(t *testing.T) {
+	setupTestDB(t)
+
+	visibleID, err := CreateSeries("Seoul", "seoul", "", "", "", false, true, false)
+	if err != nil {
+		t.Fatalf("CreateSeries visible: %v", err)
+	}
+	hiddenID, err := CreateSeries("Osaka", "osaka", "", "", "", false, true, true)
+	if err != nil {
+		t.Fatalf("CreateSeries hidden: %v", err)
+	}
+
+	s, err := GetSeriesBySlug("osaka")
+	if err != nil || !s.Hidden {
+		t.Fatalf("GetSeriesBySlug osaka: hidden=%v, err=%v", s != nil && s.Hidden, err)
+	}
+
+	all, _ := ListSeries()
+	if len(all) != 2 {
+		t.Errorf("ListSeries: got %d, want 2 (admin sees hidden too)", len(all))
+	}
+	visible, err := ListVisibleSeries()
+	if err != nil {
+		t.Fatalf("ListVisibleSeries: %v", err)
+	}
+	if len(visible) != 1 || visible[0].ID != int(visibleID) {
+		t.Errorf("ListVisibleSeries: got %+v, want only Seoul", visible)
+	}
+
+	postID, err := CreatePost("day-1", "Day 1", "b", "<p>b</p>", "", true, int(hiddenID))
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	p, err := GetPostByID(int(postID))
+	if err != nil || !p.SeriesHidden {
+		t.Errorf("post in hidden series: SeriesHidden=%v, err=%v", p != nil && p.SeriesHidden, err)
+	}
+
+	// Снимаем флаг — серия снова видна.
+	if err := UpdateSeries(int(hiddenID), "Osaka", "osaka", "", "", "", false, true, false); err != nil {
+		t.Fatalf("UpdateSeries: %v", err)
+	}
+	if visible, _ := ListVisibleSeries(); len(visible) != 2 {
+		t.Errorf("after unhide: got %d visible, want 2", len(visible))
 	}
 }

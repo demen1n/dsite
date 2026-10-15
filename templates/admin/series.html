@@ -21,12 +21,12 @@
       {{range .Data}}
       <tr data-series-id="{{.ID}}" draggable="true" style="cursor:grab">
         <td style="color:var(--muted); width:1.2rem">⠿</td>
-        <td><strong>{{.Name}}</strong></td>
+        <td><strong>{{.Name}}</strong>{{if .Hidden}} <span class="badge badge-gray">скрыта</span>{{end}}</td>
         <td><code style="font-size:0.82rem; color:var(--muted)">/series/{{.Slug}}</code></td>
         <td style="color:var(--muted); text-align:right">{{.PostCount}}</td>
         <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .CreatedAt}}</td>
         <td style="white-space:nowrap; text-align:right">
-          <a class="btn btn-secondary btn-sm" href="/series/{{.Slug}}" target="_blank">Открыть ↗</a>
+          {{if not .Hidden}}<a class="btn btn-secondary btn-sm" href="/series/{{.Slug}}" target="_blank">Открыть ↗</a>{{end}}
           <a class="btn btn-secondary btn-sm" href="/admin/series/{{.ID}}/edit">Редактировать</a>
           <form method="POST" action="/admin/series/{{.ID}}/delete" style="display:inline"
                 onsubmit="return confirm('Удалить серию «{{.Name}}»? Посты останутся, но потеряют привязку к серии.')">

@@ -196,6 +196,12 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		db.IncrementViews(post.ID)
 	}
 
+	// Скрытая серия публично не существует (её страница — 404), так что пост
+	// показывается как обычный: без бейджа-ссылки на серию и навигации по ней.
+	if post.SeriesHidden {
+		post.SeriesID, post.SeriesName, post.SeriesSlug = 0, "", ""
+	}
+
 	vd := PostViewData{Post: post}
 	if post.SeriesID != 0 {
 		vd.FromSeries = fromSeriesPage(r)
@@ -234,7 +240,7 @@ type SeriesIndexData struct {
 
 // GET /series
 func SeriesIndex(w http.ResponseWriter, r *http.Request) {
-	list, err := db.ListSeries()
+	list, err := db.ListVisibleSeries()
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
@@ -262,7 +268,7 @@ type SeriesViewData struct {
 func SeriesView(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	series, err := db.GetSeriesBySlug(slug)
-	if err != nil {
+	if err != nil || series.Hidden {
 		NotFound(w, r)
 		return
 	}
@@ -440,7 +446,7 @@ func Sitemap(w http.ResponseWriter, r *http.Request) {
 	if !ResumeHidden() {
 		sm.URLs = append(sm.URLs, sitemapURL{Loc: base + "/resume", ChangeFreq: "monthly", Priority: "0.5"})
 	}
-	if series, err := db.ListSeries(); err == nil {
+	if series, err := db.ListVisibleSeries(); err == nil {
 		for _, s := range series {
 			sm.URLs = append(sm.URLs, sitemapURL{
 				Loc:        base + "/series/" + s.Slug,

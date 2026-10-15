@@ -54,6 +54,9 @@ type Post struct {
 	SeriesID   int // 0 = not part of a series
 	SeriesName string
 	SeriesSlug string
+	// SeriesHidden — серия поста скрыта (см. Series.Hidden); заполняется
+	// только GetPostBySlug/GetPostByID.
+	SeriesHidden bool
 }
 
 const PostsPerPage = 10
@@ -193,9 +196,10 @@ func GetPostBySlug(slug string) (*Post, error) {
 	var ca, ua, tagsStr string
 	var seriesID sql.NullInt64
 	var seriesName, seriesSlug sql.NullString
+	var seriesHidden sql.NullInt64
 	err := DB.QueryRow(`
 		SELECT p.id, p.slug, p.title, p.body_md, p.body_html, p.cover, p.published, p.views,
-		       p.created_at, p.updated_at, p.series_id, s.name, s.slug,
+		       p.created_at, p.updated_at, p.series_id, s.name, s.slug, s.hidden,
 		       COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
 		FROM posts p
 		LEFT JOIN post_tags pt ON pt.post_id = p.id
@@ -203,7 +207,7 @@ func GetPostBySlug(slug string) (*Post, error) {
 		LEFT JOIN series s ON s.id = p.series_id
 		WHERE p.slug=? GROUP BY p.id`, slug).
 		Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &tagsStr)
+			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &seriesHidden, &tagsStr)
 	if err != nil {
 		return nil, err
 	}
@@ -213,6 +217,7 @@ func GetPostBySlug(slug string) (*Post, error) {
 	p.SeriesID = int(seriesID.Int64)
 	p.SeriesName = seriesName.String
 	p.SeriesSlug = seriesSlug.String
+	p.SeriesHidden = seriesHidden.Int64 == 1
 	if tagsStr != "" {
 		p.Tags = strings.Split(tagsStr, ",")
 	}
@@ -225,9 +230,10 @@ func GetPostByID(id int) (*Post, error) {
 	var ca, ua, tagsStr string
 	var seriesID sql.NullInt64
 	var seriesName, seriesSlug sql.NullString
+	var seriesHidden sql.NullInt64
 	err := DB.QueryRow(`
 		SELECT p.id, p.slug, p.title, p.body_md, p.body_html, p.cover, p.published, p.views,
-		       p.created_at, p.updated_at, p.series_id, s.name, s.slug,
+		       p.created_at, p.updated_at, p.series_id, s.name, s.slug, s.hidden,
 		       COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
 		FROM posts p
 		LEFT JOIN post_tags pt ON pt.post_id = p.id
@@ -235,7 +241,7 @@ func GetPostByID(id int) (*Post, error) {
 		LEFT JOIN series s ON s.id = p.series_id
 		WHERE p.id=? GROUP BY p.id`, id).
 		Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &tagsStr)
+			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &seriesHidden, &tagsStr)
 	if err != nil {
 		return nil, err
 	}
@@ -245,6 +251,7 @@ func GetPostByID(id int) (*Post, error) {
 	p.SeriesID = int(seriesID.Int64)
 	p.SeriesName = seriesName.String
 	p.SeriesSlug = seriesSlug.String
+	p.SeriesHidden = seriesHidden.Int64 == 1
 	if tagsStr != "" {
 		p.Tags = strings.Split(tagsStr, ",")
 	}
@@ -328,6 +335,7 @@ type Series struct {
 	Cover           string
 	CollectPhotos   bool // true = страница серии показывает все фото из постов галереей, а не плитками постов
 	ShowCover       bool // false = не показывать обложку-баннер на странице самой серии
+	Hidden          bool // true = серии нет в /series и sitemap, её страница отдаёт 404
 	PostCount       int
 	CreatedAt       time.Time
 }
@@ -336,7 +344,7 @@ type Series struct {
 // от новых к старым.
 func ListSeries() ([]Series, error) {
 	rows, err := DB.Query(`
-		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.collect_photos, s.show_cover, s.created_at,
+		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.collect_photos, s.show_cover, s.hidden, s.created_at,
 		       COUNT(p.id) FILTER (WHERE p.published=1) as post_count
 		FROM series s
 		LEFT JOIN posts p ON p.series_id = s.id
@@ -349,77 +357,101 @@ func ListSeries() ([]Series, error) {
 	var list []Series
 	for rows.Next() {
 		var s Series
-		var cp, sc int
+		var cp, sc, hd int
 		var ca string
-		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &ca, &s.PostCount); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &ca, &s.PostCount); err != nil {
 			return nil, err
 		}
 		s.CollectPhotos = cp == 1
 		s.ShowCover = sc == 1
+		s.Hidden = hd == 1
 		s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		list = append(list, s)
 	}
 	return list, rows.Err()
 }
 
+// ListVisibleSeries — ListSeries без скрытых серий (для /series и sitemap).
+func ListVisibleSeries() ([]Series, error) {
+	all, err := ListSeries()
+	if err != nil {
+		return nil, err
+	}
+	var list []Series
+	for _, s := range all {
+		if !s.Hidden {
+			list = append(list, s)
+		}
+	}
+	return list, nil
+}
+
 func GetSeriesBySlug(slug string) (*Series, error) {
 	var s Series
-	var cp, sc int
+	var cp, sc, hd int
 	var ca string
-	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, created_at
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden, created_at
 	                     FROM series WHERE slug=?`, slug).
-		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &ca)
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &ca)
 	if err != nil {
 		return nil, err
 	}
 	s.CollectPhotos = cp == 1
 	s.ShowCover = sc == 1
+	s.Hidden = hd == 1
 	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	return &s, nil
 }
 
 func GetSeriesByID(id int) (*Series, error) {
 	var s Series
-	var cp, sc int
+	var cp, sc, hd int
 	var ca string
-	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, created_at
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden, created_at
 	                     FROM series WHERE id=?`, id).
-		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &ca)
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &ca)
 	if err != nil {
 		return nil, err
 	}
 	s.CollectPhotos = cp == 1
 	s.ShowCover = sc == 1
+	s.Hidden = hd == 1
 	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	return &s, nil
 }
 
-func CreateSeries(name, slug, descMD, descHTML, cover string, collectPhotos, showCover bool) (int64, error) {
-	cp, sc := 0, 0
+func CreateSeries(name, slug, descMD, descHTML, cover string, collectPhotos, showCover, hidden bool) (int64, error) {
+	cp, sc, hd := 0, 0, 0
 	if collectPhotos {
 		cp = 1
 	}
 	if showCover {
 		sc = 1
 	}
-	res, err := DB.Exec(`INSERT INTO series (name, slug, description_md, description_html, cover, collect_photos, show_cover)
-	                      VALUES (?,?,?,?,?,?,?)`, name, slug, descMD, descHTML, cover, cp, sc)
+	if hidden {
+		hd = 1
+	}
+	res, err := DB.Exec(`INSERT INTO series (name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden)
+	                      VALUES (?,?,?,?,?,?,?,?)`, name, slug, descMD, descHTML, cover, cp, sc, hd)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPhotos, showCover bool) error {
-	cp, sc := 0, 0
+func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPhotos, showCover, hidden bool) error {
+	cp, sc, hd := 0, 0, 0
 	if collectPhotos {
 		cp = 1
 	}
 	if showCover {
 		sc = 1
 	}
-	_, err := DB.Exec(`UPDATE series SET name=?, slug=?, description_md=?, description_html=?, cover=?, collect_photos=?, show_cover=? WHERE id=?`,
-		name, slug, descMD, descHTML, cover, cp, sc, id)
+	if hidden {
+		hd = 1
+	}
+	_, err := DB.Exec(`UPDATE series SET name=?, slug=?, description_md=?, description_html=?, cover=?, collect_photos=?, show_cover=?, hidden=? WHERE id=?`,
+		name, slug, descMD, descHTML, cover, cp, sc, hd, id)
 	return err
 }
 
