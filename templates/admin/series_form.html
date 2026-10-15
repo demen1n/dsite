@@ -62,6 +62,16 @@
 
   <div class="form-group">
     <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:400">
+      <input type="checkbox" name="hidden" value="1" {{with .Data}}{{if .Hidden}}checked{{end}}{{end}} style="width:auto; accent-color:var(--accent)">
+      Скрыть серию
+    </label>
+    <div style="font-size:0.8rem; color:var(--muted); margin-top:0.3rem">
+      Серии не будет в списке /series и sitemap, а её страница будет отдавать 404. Посты серии остаются в ленте как обычные, но без ссылки на серию.
+    </div>
+  </div>
+
+  <div class="form-group">
+    <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:400">
       <input type="checkbox" name="collect_photos" value="1" {{with .Data}}{{if .CollectPhotos}}checked{{end}}{{end}} style="width:auto; accent-color:var(--accent)">
       Собирать фото со всех постов в галерею
     </label>

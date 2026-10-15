@@ -157,6 +157,9 @@ func migrateSeries() error {
 	DB.Exec(`ALTER TABLE series ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`UPDATE series SET sort_order = id WHERE sort_order = 0`)
 	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_series_sort_order ON series(sort_order)`)
+	// hidden: серия не показывается в /series и sitemap, а её страница
+	// отдаёт 404. Посты серии остаются в ленте как обычные.
+	DB.Exec(`ALTER TABLE series ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`)
 	return nil
 }
 

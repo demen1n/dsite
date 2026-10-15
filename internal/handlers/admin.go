@@ -346,7 +346,8 @@ func CreateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	collectPhotos := r.FormValue("collect_photos") == "1"
 	showCover := r.FormValue("show_cover") == "1"
-	id, err := db.CreateSeries(name, slug, descMD, descHTML, cover, collectPhotos, showCover)
+	hidden := r.FormValue("hidden") == "1"
+	id, err := db.CreateSeries(name, slug, descMD, descHTML, cover, collectPhotos, showCover, hidden)
 	if err != nil {
 		http.Error(w, "Internal Server Error", 500)
 		return
@@ -415,7 +416,8 @@ func UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	}
 	collectPhotos := r.FormValue("collect_photos") == "1"
 	showCover := r.FormValue("show_cover") == "1"
-	if err := db.UpdateSeries(id, name, slug, descMD, descHTML, cover, collectPhotos, showCover); err != nil {
+	hidden := r.FormValue("hidden") == "1"
+	if err := db.UpdateSeries(id, name, slug, descMD, descHTML, cover, collectPhotos, showCover, hidden); err != nil {
 		http.Error(w, "DB error", 500)
 		return
 	}

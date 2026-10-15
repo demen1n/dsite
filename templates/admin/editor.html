@@ -233,7 +233,7 @@
       <option value="0">— нет —</option>
       {{$curSeries := 0}}{{with .Data}}{{$curSeries = .SeriesID}}{{end}}
       {{range .AllSeries}}
-      <option value="{{.ID}}" {{if eq $curSeries .ID}}selected{{end}}>{{.Name}}</option>
+      <option value="{{.ID}}" {{if eq $curSeries .ID}}selected{{end}}>{{.Name}}{{if .Hidden}} (скрыта){{end}}</option>
       {{end}}
     </select>
     <a href="/admin/series/new" target="_blank" style="font-size:0.8rem; color:var(--muted)">+ новая</a>

@@ -142,3 +142,36 @@ func TestSitemapIncludesPublishedTags(t *testing.T) {
 		t.Error("sitemap contains draft-only tag")
 	}
 }
+
+func TestHiddenSeriesIsNotPublic(t *testing.T) {
+	setupPublic(t)
+	sid, err := db.CreateSeries("Secret Trip", "secret-trip", "", "", "", false, true, true)
+	if err != nil {
+		t.Fatalf("CreateSeries: %v", err)
+	}
+	if _, err := db.CreatePost("secret-day", "Secret day", "b", "<p>b</p>", "", true, int(sid)); err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+
+	if rec := serve(SeriesView, "GET /series/{slug}", "/series/secret-trip"); rec.Code != 404 {
+		t.Errorf("hidden series page: status = %d, want 404", rec.Code)
+	}
+	if rec := serve(SeriesIndex, "GET /series", "/series"); strings.Contains(rec.Body.String(), "secret-trip") {
+		t.Error("hidden series listed on /series")
+	}
+	if rec := serve(Sitemap, "GET /sitemap.xml", "/sitemap.xml"); strings.Contains(rec.Body.String(), "secret-trip") {
+		t.Error("hidden series in sitemap")
+	}
+
+	// Пост остаётся доступен, но без ссылки на скрытую серию.
+	rec := serve(ViewPost, "GET /post/{slug}", "/post/secret-day")
+	if rec.Code != 200 {
+		t.Fatalf("post in hidden series: status = %d, want 200", rec.Code)
+	}
+	if body := rec.Body.String(); strings.Contains(body, "/series/secret-trip") || strings.Contains(body, "Secret Trip") {
+		t.Error("post page links to hidden series")
+	}
+	if rec := serve(Index, "GET /blog", "/blog"); !strings.Contains(rec.Body.String(), "/post/secret-day") {
+		t.Error("post in hidden series missing from /blog")
+	}
+}
