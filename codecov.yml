@@ -1,0 +1,15 @@
+# Покрытие — для информации, а не гейт: статусы project/patch никогда не
+# краснеют (иначе механические правки старого непокрытого кода, вроде
+# замены http.NotFound по всем хендлерам, выглядят как провал).
+coverage:
+  status:
+    project:
+      default:
+        informational: true
+    patch:
+      default:
+        informational: true
+
+# Комментировать PR, только если общее покрытие изменилось.
+comment:
+  require_changes: true
