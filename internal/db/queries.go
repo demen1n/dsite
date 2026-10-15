@@ -336,6 +336,7 @@ type Series struct {
 	CollectPhotos   bool // true = страница серии показывает все фото из постов галереей, а не плитками постов
 	ShowCover       bool // false = не показывать обложку-баннер на странице самой серии
 	Hidden          bool // true = серии нет в /series и sitemap, её страница отдаёт 404
+	ShufflePhotos   bool // true = при CollectPhotos фото идут в случайном порядке, а не по порядку постов
 	PostCount       int
 	CreatedAt       time.Time
 }
@@ -344,7 +345,7 @@ type Series struct {
 // от новых к старым.
 func ListSeries() ([]Series, error) {
 	rows, err := DB.Query(`
-		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.collect_photos, s.show_cover, s.hidden, s.created_at,
+		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.collect_photos, s.show_cover, s.hidden, s.shuffle_photos, s.created_at,
 		       COUNT(p.id) FILTER (WHERE p.published=1) as post_count
 		FROM series s
 		LEFT JOIN posts p ON p.series_id = s.id
@@ -357,14 +358,15 @@ func ListSeries() ([]Series, error) {
 	var list []Series
 	for rows.Next() {
 		var s Series
-		var cp, sc, hd int
+		var cp, sc, hd, sh int
 		var ca string
-		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &ca, &s.PostCount); err != nil {
+		if err := rows.Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &sh, &ca, &s.PostCount); err != nil {
 			return nil, err
 		}
 		s.CollectPhotos = cp == 1
 		s.ShowCover = sc == 1
 		s.Hidden = hd == 1
+		s.ShufflePhotos = sh == 1
 		s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		list = append(list, s)
 	}
@@ -388,40 +390,42 @@ func ListVisibleSeries() ([]Series, error) {
 
 func GetSeriesBySlug(slug string) (*Series, error) {
 	var s Series
-	var cp, sc, hd int
+	var cp, sc, hd, sh int
 	var ca string
-	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden, created_at
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden, shuffle_photos, created_at
 	                     FROM series WHERE slug=?`, slug).
-		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &ca)
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &sh, &ca)
 	if err != nil {
 		return nil, err
 	}
 	s.CollectPhotos = cp == 1
 	s.ShowCover = sc == 1
 	s.Hidden = hd == 1
+	s.ShufflePhotos = sh == 1
 	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	return &s, nil
 }
 
 func GetSeriesByID(id int) (*Series, error) {
 	var s Series
-	var cp, sc, hd int
+	var cp, sc, hd, sh int
 	var ca string
-	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden, created_at
+	err := DB.QueryRow(`SELECT id, name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden, shuffle_photos, created_at
 	                     FROM series WHERE id=?`, id).
-		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &ca)
+		Scan(&s.ID, &s.Name, &s.Slug, &s.DescriptionMD, &s.DescriptionHTML, &s.Cover, &cp, &sc, &hd, &sh, &ca)
 	if err != nil {
 		return nil, err
 	}
 	s.CollectPhotos = cp == 1
 	s.ShowCover = sc == 1
 	s.Hidden = hd == 1
+	s.ShufflePhotos = sh == 1
 	s.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 	return &s, nil
 }
 
-func CreateSeries(name, slug, descMD, descHTML, cover string, collectPhotos, showCover, hidden bool) (int64, error) {
-	cp, sc, hd := 0, 0, 0
+func CreateSeries(name, slug, descMD, descHTML, cover string, collectPhotos, showCover, hidden, shufflePhotos bool) (int64, error) {
+	cp, sc, hd, sh := 0, 0, 0, 0
 	if collectPhotos {
 		cp = 1
 	}
@@ -431,16 +435,19 @@ func CreateSeries(name, slug, descMD, descHTML, cover string, collectPhotos, sho
 	if hidden {
 		hd = 1
 	}
-	res, err := DB.Exec(`INSERT INTO series (name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden)
-	                      VALUES (?,?,?,?,?,?,?,?)`, name, slug, descMD, descHTML, cover, cp, sc, hd)
+	if shufflePhotos {
+		sh = 1
+	}
+	res, err := DB.Exec(`INSERT INTO series (name, slug, description_md, description_html, cover, collect_photos, show_cover, hidden, shuffle_photos)
+	                      VALUES (?,?,?,?,?,?,?,?,?)`, name, slug, descMD, descHTML, cover, cp, sc, hd, sh)
 	if err != nil {
 		return 0, err
 	}
 	return res.LastInsertId()
 }
 
-func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPhotos, showCover, hidden bool) error {
-	cp, sc, hd := 0, 0, 0
+func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPhotos, showCover, hidden, shufflePhotos bool) error {
+	cp, sc, hd, sh := 0, 0, 0, 0
 	if collectPhotos {
 		cp = 1
 	}
@@ -450,8 +457,11 @@ func UpdateSeries(id int, name, slug, descMD, descHTML, cover string, collectPho
 	if hidden {
 		hd = 1
 	}
-	_, err := DB.Exec(`UPDATE series SET name=?, slug=?, description_md=?, description_html=?, cover=?, collect_photos=?, show_cover=?, hidden=? WHERE id=?`,
-		name, slug, descMD, descHTML, cover, cp, sc, hd, id)
+	if shufflePhotos {
+		sh = 1
+	}
+	_, err := DB.Exec(`UPDATE series SET name=?, slug=?, description_md=?, description_html=?, cover=?, collect_photos=?, show_cover=?, hidden=?, shuffle_photos=? WHERE id=?`,
+		name, slug, descMD, descHTML, cover, cp, sc, hd, sh, id)
 	return err
 }
 
