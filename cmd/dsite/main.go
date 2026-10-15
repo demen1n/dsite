@@ -130,7 +130,7 @@ func main() {
 
 	// ── Admin (защищено) ──
 	mux.HandleFunc("GET /admin", handlers.RequireAuth(handlers.AdminIndex))
-	mux.HandleFunc("GET /admin/", handlers.RequireAuth(handlers.AdminIndex))
+	mux.HandleFunc("GET /admin/{$}", handlers.RequireAuth(handlers.AdminIndex))
 
 	mux.HandleFunc("GET /admin/posts/new", handlers.RequireAuth(handlers.NewPost))
 	mux.HandleFunc("POST /admin/posts/new", handlers.RequireAuth(handlers.CreatePost))
@@ -176,6 +176,13 @@ func main() {
 
 	mux.HandleFunc("GET /admin/uploads", handlers.RequireAuth(handlers.AdminUploads))
 	mux.HandleFunc("POST /admin/uploads/{filename}/delete", handlers.RequireAuth(handlers.DeleteUploadFile))
+
+	// ── 404 ──
+	// Всё, что не совпало ни с одним маршрутом. Неизвестные /admin/* — за
+	// RequireAuth, как и остальная админка: аноним уходит на логин, а не
+	// узнаёт, какие пути там есть.
+	mux.HandleFunc("/admin/", handlers.RequireAuth(handlers.NotFound))
+	mux.HandleFunc("/", handlers.NotFound)
 
 	srv := &http.Server{
 		Addr:              ":" + cfg.Port,
@@ -300,7 +307,7 @@ func cacheControl(value string) func(http.Handler) http.Handler {
 func noListing(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.HasSuffix(r.URL.Path, "/") {
-			http.NotFound(w, r)
+			handlers.NotFound(w, r)
 			return
 		}
 		next.ServeHTTP(w, r)

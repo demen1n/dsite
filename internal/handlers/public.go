@@ -20,7 +20,7 @@ import (
 // GET /
 func Home(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	pd := page("", nil)
@@ -62,7 +62,7 @@ func Index(w http.ResponseWriter, r *http.Request) {
 func TagPosts(w http.ResponseWriter, r *http.Request) {
 	tag, err := db.GetTagBySlug(r.PathValue("slug"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	renderBlog(w, r, &tag)
@@ -185,11 +185,11 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	post, err := db.GetPostBySlug(slug)
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	if !post.Published {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	if countsAsView(r) {
@@ -263,7 +263,7 @@ func SeriesView(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	series, err := db.GetSeriesBySlug(slug)
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	posts, err := db.PostsInSeries(series.ID)
@@ -364,7 +364,7 @@ func GalleryFilter(w http.ResponseWriter, r *http.Request) {
 // GET /resume
 func Resume(w http.ResponseWriter, r *http.Request) {
 	if ResumeHidden() {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	resume, err := db.GetResume()

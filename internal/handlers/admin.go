@@ -200,12 +200,12 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 func EditPostForm(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	post, err := db.GetPostByID(id)
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	pd := page("Редактировать пост", post)
@@ -218,7 +218,7 @@ func EditPostForm(w http.ResponseWriter, r *http.Request) {
 func UpdatePost(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
@@ -268,7 +268,7 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 func DeletePost(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	if err := db.DeletePost(id); err != nil {
@@ -358,12 +358,12 @@ func CreateSeries(w http.ResponseWriter, r *http.Request) {
 func EditSeriesForm(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	series, err := db.GetSeriesByID(id)
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	render(w, "admin/series_form.html", page("Редактировать серию", series))
@@ -373,7 +373,7 @@ func EditSeriesForm(w http.ResponseWriter, r *http.Request) {
 func UpdateSeries(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, 50<<20)
@@ -426,7 +426,7 @@ func UpdateSeries(w http.ResponseWriter, r *http.Request) {
 func DeleteSeries(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	if err := db.DeleteSeries(id); err != nil {
@@ -453,7 +453,7 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 	// Проверяем что файл реально существует в uploads
 	path := filepath.Join(uploadsDir, filename)
 	if _, err := os.Stat(path); err != nil {
-		http.Error(w, "file not found", 404)
+		NotFound(w, r)
 		return
 	}
 	var pw, ph int
@@ -715,12 +715,12 @@ func ReorderPhotos(w http.ResponseWriter, r *http.Request) {
 func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	filename, err := db.DeletePhoto(id)
 	if err != nil {
-		http.Error(w, "not found", 404)
+		NotFound(w, r)
 		return
 	}
 	if err := os.Remove(filepath.Join(uploadsDir, filename)); err != nil {
@@ -771,7 +771,7 @@ func CreatePlace(w http.ResponseWriter, r *http.Request) {
 func DeletePlace(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	if err := db.DeletePlace(id); err != nil {
@@ -789,7 +789,7 @@ func DeletePlace(w http.ResponseWriter, r *http.Request) {
 func UpdatePhotoPlace(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	placeID, _ := strconv.Atoi(r.FormValue("place_id"))
@@ -990,7 +990,7 @@ func CreateCategory(w http.ResponseWriter, r *http.Request) {
 func DeleteCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	if err := db.DeleteCategory(id); err != nil {
@@ -1087,7 +1087,7 @@ func DeleteUploadFile(w http.ResponseWriter, r *http.Request) {
 func UpdatePhotoCategory(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
-		http.NotFound(w, r)
+		NotFound(w, r)
 		return
 	}
 	categoryID, _ := strconv.Atoi(r.FormValue("category_id"))

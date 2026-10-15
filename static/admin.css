@@ -54,3 +54,10 @@ textarea { resize: vertical; }
 .preview-pane code { background: #f0f0ee; padding: 0.1em 0.35em; border-radius: 4px; font-size: 0.87em; }
 .preview-pane pre { background: #1e1e2e; color: #cdd6f4; padding: 1rem; border-radius: 6px; overflow-x: auto; }
 .preview-pane blockquote { border-left: 3px solid var(--border); padding-left: 1rem; color: var(--muted); }
+
+/* ── 404 ── */
+.not-found { text-align: center; padding: 4rem 1rem; }
+.not-found-code { font-size: 4.5rem; font-weight: 700; line-height: 1; color: var(--border); margin-bottom: 1rem; }
+.not-found h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.75rem; }
+.not-found-text { color: var(--muted); max-width: 28rem; margin: 0 auto 2rem; }
+.not-found-actions { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem; }
