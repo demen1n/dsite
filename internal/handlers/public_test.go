@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
 	"regexp"
+	"slices"
 	"strings"
 	"testing"
 
@@ -145,7 +147,7 @@ func TestSitemapIncludesPublishedTags(t *testing.T) {
 
 func TestHiddenSeriesIsNotPublic(t *testing.T) {
 	setupPublic(t)
-	sid, err := db.CreateSeries("Secret Trip", "secret-trip", "", "", "", false, true, true)
+	sid, err := db.CreateSeries("Secret Trip", "secret-trip", "", "", "", false, true, true, false)
 	if err != nil {
 		t.Fatalf("CreateSeries: %v", err)
 	}
@@ -173,5 +175,63 @@ func TestHiddenSeriesIsNotPublic(t *testing.T) {
 	}
 	if rec := serve(Index, "GET /blog", "/blog"); !strings.Contains(rec.Body.String(), "/post/secret-day") {
 		t.Error("post in hidden series missing from /blog")
+	}
+}
+
+// seriesPhotoOrder рендерит страницу серии и возвращает src фото в порядке
+// вывода.
+func seriesPhotoOrder(t *testing.T, slug string) []string {
+	t.Helper()
+	rec := serve(SeriesView, "GET /series/{slug}", "/series/"+slug)
+	if rec.Code != 200 {
+		t.Fatalf("series %s: status = %d", slug, rec.Code)
+	}
+	var srcs []string
+	for _, m := range regexp.MustCompile(`<img src="(/uploads/p\d+\.jpg)"`).FindAllStringSubmatch(rec.Body.String(), -1) {
+		srcs = append(srcs, m[1])
+	}
+	return srcs
+}
+
+func TestSeriesPhotoOrder(t *testing.T) {
+	setupPublic(t)
+	var body strings.Builder
+	var want []string
+	for i := range 8 {
+		src := fmt.Sprintf("/uploads/p%d.jpg", i)
+		fmt.Fprintf(&body, `<p><img src="%s" alt=""></p>`, src)
+		want = append(want, src)
+	}
+	for _, s := range []struct {
+		slug    string
+		shuffle bool
+	}{{"ordered", false}, {"shuffled", true}} {
+		sid, err := db.CreateSeries(s.slug, s.slug, "", "", "", true, false, false, s.shuffle)
+		if err != nil {
+			t.Fatalf("CreateSeries: %v", err)
+		}
+		if _, err := db.CreatePost("post-"+s.slug, "Post", "", body.String(), "", true, int(sid)); err != nil {
+			t.Fatalf("CreatePost: %v", err)
+		}
+	}
+
+	if got := seriesPhotoOrder(t, "ordered"); !slices.Equal(got, want) {
+		t.Errorf("ordered series: got %v, want %v", got, want)
+	}
+
+	// Перемешанная серия: тот же набор фото, и порядок хоть раз отличается от
+	// исходного (шанс, что 20 перестановок из 8! совпадут с исходной, ничтожен).
+	reordered := false
+	for range 20 {
+		got := seriesPhotoOrder(t, "shuffled")
+		if sorted := slices.Sorted(slices.Values(got)); !slices.Equal(sorted, want) {
+			t.Fatalf("shuffled series: photo set changed: %v", got)
+		}
+		if !slices.Equal(got, want) {
+			reordered = true
+		}
+	}
+	if !reordered {
+		t.Error("shuffled series: photos always in original order")
 	}
 }

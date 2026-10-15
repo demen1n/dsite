@@ -78,6 +78,13 @@
     <div style="font-size:0.8rem; color:var(--muted); margin-top:0.3rem">
       Вместо плиток постов страница серии покажет все картинки из их текста одной галереей — как раздел «Галерея».
     </div>
+    <label style="display:flex; align-items:center; gap:0.6rem; cursor:pointer; font-weight:400; margin-top:0.6rem">
+      <input type="checkbox" name="shuffle_photos" value="1" {{with .Data}}{{if .ShufflePhotos}}checked{{end}}{{end}} style="width:auto; accent-color:var(--accent)">
+      Показывать фото в случайном порядке
+    </label>
+    <div style="font-size:0.8rem; color:var(--muted); margin-top:0.3rem">
+      Только для режима галереи: порядок перемешивается заново при каждой загрузке страницы. Выключено — фото идут по порядку постов и по порядку внутри поста.
+    </div>
   </div>
 
   <div class="editor-layout">

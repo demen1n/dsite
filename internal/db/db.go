@@ -160,6 +160,9 @@ func migrateSeries() error {
 	// hidden: серия не показывается в /series и sitemap, а её страница
 	// отдаёт 404. Посты серии остаются в ленте как обычные.
 	DB.Exec(`ALTER TABLE series ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`)
+	// shuffle_photos: в режиме collect_photos показывать фото в случайном
+	// порядке (новом при каждой загрузке), а не по порядку постов.
+	DB.Exec(`ALTER TABLE series ADD COLUMN shuffle_photos INTEGER NOT NULL DEFAULT 0`)
 	return nil
 }
 
