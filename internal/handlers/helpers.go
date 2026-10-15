@@ -269,6 +269,14 @@ func loadStaticVersions(dir string) {
 // Мы клонируем базу и парсим файл страницы в клон — {{define}} переопределяет {{block}}.
 // Standalone-шаблоны (login, setup) не используют базу, исполняются по имени define.
 func render(w http.ResponseWriter, name string, data any) {
+	renderStatus(w, http.StatusOK, name, data)
+}
+
+// renderStatus — render с произвольным HTTP-статусом (например, 404).
+// Страница исполняется в буфер, чтобы статус уходил только после успешного
+// рендера: иначе ошибка шаблона посреди ответа дала бы обрывок страницы
+// с кодом 200 вместо чистого 500.
+func renderStatus(w http.ResponseWriter, status int, name string, data any) {
 	pageFile := filepath.Join(templatesDir, filepath.FromSlash(name))
 
 	var base *template.Template
@@ -293,11 +301,36 @@ func render(w http.ResponseWriter, name string, data any) {
 		return
 	}
 
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if err = t.ExecuteTemplate(w, entrypoint, data); err != nil {
+	var buf bytes.Buffer
+	if err = t.ExecuteTemplate(&buf, entrypoint, data); err != nil {
 		log.Printf("execute %s (%s): %v", name, entrypoint, err)
 		http.Error(w, "Internal Server Error", 500)
+		return
 	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	w.WriteHeader(status)
+	_, _ = buf.WriteTo(w) // ошибка тут — оборванное клиентом соединение, делать с ней нечего
+}
+
+// NotFound отдаёт оформленную страницу 404: в админке (для залогиненного) —
+// в админском лэйауте, иначе — в публичном. HTMX-запросам уходит plain text:
+// htmx по умолчанию не свапает 4xx, а целая страница внутри фрагмента
+// всё равно была бы не к месту.
+func NotFound(w http.ResponseWriter, r *http.Request) {
+	if r.Header.Get("HX-Request") != "" {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
+	pd := page("Страница не найдена", nil)
+	if isAdminPath(r.URL.Path) && IsAuthed(r) {
+		renderStatus(w, http.StatusNotFound, "admin/404.html", pd)
+		return
+	}
+	renderStatus(w, http.StatusNotFound, "404.html", pd)
+}
+
+func isAdminPath(path string) bool {
+	return path == "/admin" || strings.HasPrefix(path, "/admin/")
 }
 
 // renderFragment рендерит отдельный шаблон без базового лэйаута.

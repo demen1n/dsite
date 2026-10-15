@@ -1,0 +1,18 @@
+{{define "head"}}<meta name="robots" content="noindex">{{end}}
+{{define "content"}}
+<div class="not-found">
+  <p class="not-found-code">404</p>
+  <h1>Страница не найдена</h1>
+  <p class="not-found-text">Такой страницы нет: возможно, её удалили или переименовали, а может, в ссылке опечатка.</p>
+  <form class="not-found-search" action="/search" method="GET">
+    <input type="search" name="q" placeholder="Поиск по постам…" aria-label="Поиск по постам">
+    <button type="submit">Найти</button>
+  </form>
+  <nav class="not-found-links">
+    <a href="/">Главная</a>
+    <a href="/blog">Блог</a>
+    <a href="/gallery">Галерея</a>
+    <a href="/series">Серии</a>
+  </nav>
+</div>
+{{end}}

@@ -172,3 +172,15 @@ footer a:hover { color: var(--text); }
   .prose pre { font-size: 0.8rem; padding: 1rem; }
   .prose img { width: 100%; max-width: 100%; margin-left: 0; margin-right: 0; }
 }
+
+/* ── 404 ── */
+.not-found { text-align: center; padding: 3rem 0 2rem; font-family: var(--sans); }
+.not-found-code { font-size: 4.5rem; font-weight: 700; line-height: 1; color: var(--border); letter-spacing: -0.03em; margin-bottom: 1rem; }
+.not-found-text { color: var(--muted); max-width: 28rem; margin: 0 auto 2rem; font-size: 0.95rem; }
+.not-found-search { display: flex; gap: 0.5rem; max-width: 24rem; margin: 0 auto 2rem; }
+.not-found-search input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem; font-size: 1rem; font-family: var(--sans); background: var(--bg); color: var(--text); outline: none; }
+.not-found-search input:focus { border-color: var(--muted); }
+.not-found-search button { padding: 0.5rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--text); color: var(--bg); font-family: var(--sans); font-size: 0.9rem; cursor: pointer; }
+.not-found-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.9rem; }
+.not-found-links a { color: var(--muted); text-decoration: none; }
+.not-found-links a:hover { color: var(--text); }
