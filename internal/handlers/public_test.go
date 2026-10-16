@@ -275,7 +275,7 @@ func TestRenderMDTypography(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "<p>Он сказал «привет» — и ушёл.</p>\n<p><code>&quot;код&quot;</code></p>\n"
+	want := "<p>Он\u00a0сказал «привет»\u00a0— и\u00a0ушёл.</p>\n<p><code>&quot;код&quot;</code></p>\n"
 	if got != want {
 		t.Errorf("RenderMD:\n got %q\nwant %q", got, want)
 	}
@@ -315,5 +315,17 @@ func TestRerenderMarkdownDBError(t *testing.T) {
 	db.DB.Close()
 	if err := RerenderMarkdown(); err == nil {
 		t.Error("want an error with the database closed")
+	}
+}
+
+func TestRenderMDFigure(t *testing.T) {
+	setupPublic(t)
+	got, err := RenderMD(`![Река](/uploads/r.jpg "Вид на \"реку\" - вечер")`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "<figure><img src=\"/uploads/r.jpg\" alt=\"Река\"><figcaption>Вид на\u00a0«реку»\u00a0— вечер</figcaption></figure>\n"
+	if got != want {
+		t.Errorf("RenderMD:\n got %q\nwant %q", got, want)
 	}
 }

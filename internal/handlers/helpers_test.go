@@ -315,3 +315,29 @@ func TestCountsAsView(t *testing.T) {
 		t.Error("bot: want not counted")
 	}
 }
+
+// ───── figures ─────
+
+func TestFigures(t *testing.T) {
+	cases := []struct{ name, in, want string }{
+		{"titled image",
+			`<p><img src="/a.jpg" alt="A" title="Сеул, &quot;вечер&quot;"></p>`,
+			`<figure><img src="/a.jpg" alt="A"><figcaption>Сеул, &quot;вечер&quot;</figcaption></figure>`},
+		{"untitled image untouched",
+			`<p><img src="/a.jpg" alt="A"></p>`,
+			`<p><img src="/a.jpg" alt="A"></p>`},
+		{"image paragraph with one caption is split",
+			"<p><img src=\"/a.jpg\" alt=\"\">\n<img src=\"/b.jpg\" alt=\"\" title=\"Б\"></p>",
+			"<p><img src=\"/a.jpg\" alt=\"\"></p>\n<figure><img src=\"/b.jpg\" alt=\"\"><figcaption>Б</figcaption></figure>"},
+		{"image inside text untouched",
+			`<p>Текст <img src="/a.jpg" alt="" title="T"> ещё</p>`,
+			`<p>Текст <img src="/a.jpg" alt="" title="T"> ещё</p>`},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := figures(tc.in); got != tc.want {
+				t.Errorf("figures:\n got %q\nwant %q", got, tc.want)
+			}
+		})
+	}
+}
