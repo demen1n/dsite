@@ -124,20 +124,46 @@ function layout(grid, items, imgs) {
     items.forEach((item, i) => {
       const h = Math.round(W / ratios[i]);
       item.style.cssText = `width:${W}px; height:${h}px; flex:none; overflow:hidden; cursor:pointer;`;
-      imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
+      imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover;`;
       applySrcset(imgs[i], W);
     });
     setupFadeIn(imgs);
+    revealNear(items, imgs);
     return;
   }
 
   const sized = packJustified(ratios, W, GAP, TARGET_H);
   items.forEach((item, i) => {
     item.style.cssText = `width:${sized[i].width}px; height:${sized[i].height}px; flex:none; overflow:hidden; cursor:pointer;`;
-    imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
+    imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover;`;
     applySrcset(imgs[i], sized[i].width);
   });
   setupFadeIn(imgs);
+  revealNear(items, imgs);
+}
+
+// revealNear показывает картинку плитки (класс shown → display:block), когда
+// плитка подходит к экрану. Скрытые ленивые картинки браузер не грузит,
+// поэтому грузятся видимые плитки и небольшой запас вокруг, а не всё в
+// пределах родного запаса ленивой загрузки (1250–2500px): на медленном
+// канале видимые фото иначе делили бы его с десятком соседних.
+let revealIO = null;
+function revealNear(items, imgs) {
+  if (revealIO) revealIO.disconnect();
+  if (!('IntersectionObserver' in window)) {
+    imgs.forEach(img => img.classList.add('shown'));
+    return;
+  }
+  revealIO = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      entry.target.querySelector('img').classList.add('shown');
+      revealIO.unobserve(entry.target);
+    });
+  }, { rootMargin: '400px 0px' });
+  items.forEach((item, i) => {
+    if (!imgs[i].classList.contains('shown')) revealIO.observe(item);
+  });
 }
 
 // ── Series post-card tiles: same justified-packing algorithm as the photo
@@ -187,6 +213,7 @@ function layoutCards(grid, cards, covers) {
     cards.forEach((card, i) => {
       card.style.cssText = `width:100%; flex:none;`;
       covers[i].style.height = Math.round(W / ratios[i]) + 'px';
+      covers[i].style.display = 'block';
       if (covers[i].tagName === 'IMG') applySrcset(covers[i], W);
     });
     setupFadeIn(covers.filter(c => c.tagName === 'IMG'));
@@ -197,14 +224,49 @@ function layoutCards(grid, cards, covers) {
   cards.forEach((card, i) => {
     card.style.cssText = `width:${sized[i].width}px; flex:none;`;
     covers[i].style.height = sized[i].height + 'px';
+    covers[i].style.display = 'block';
     if (covers[i].tagName === 'IMG') applySrcset(covers[i], sized[i].width);
   });
   setupFadeIn(covers.filter(c => c.tagName === 'IMG'));
 }
 
+// ── Позиция прокрутки при обновлении страницы и возврате назад ──
+// Сетку раскладывает JS, и до раскладки браузер считает страницу прокрученной
+// в начало: ленивые картинки сверху встают в очередь раньше, чем он
+// восстановит позицию, и фото на месте прокрутки ждут, пока догрузятся
+// верхние. Поэтому картинки сетки скрыты (display:none в style.css — такие
+// ленивые картинки браузер не грузит), показывает их revealNear по мере
+// приближения к экрану, а позицию восстанавливаем сами сразу после раскладки —
+// плитки «подходят к экрану» уже на правильном месте.
+function scrollKey() {
+  return 'scroll:' + location.pathname + location.search;
+}
+
+function restoreScroll() {
+  if (!document.querySelector('.gallery-grid-inner, .series-grid')) return;
+  if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
+  window.addEventListener('pagehide', () => {
+    try {
+      sessionStorage.setItem(scrollKey(), String(Math.round(window.scrollY)));
+    } catch {
+      // приватный режим / хранилище недоступно — просто не восстановим
+    }
+  });
+  const nav = performance.getEntriesByType('navigation')[0];
+  if (!nav || (nav.type !== 'reload' && nav.type !== 'back_forward')) return;
+  let y;
+  try {
+    y = sessionStorage.getItem(scrollKey());
+  } catch {
+    return;
+  }
+  if (y !== null) window.scrollTo(0, Number(y));
+}
+
 setupGalleryLightbox();
 justify();
 justifySeriesCards();
+restoreScroll();
 
 window.addEventListener('load', () => { justify(); justifySeriesCards(); });
 
