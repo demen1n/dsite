@@ -808,3 +808,14 @@ func TestMigratePostsPublishedAtBackfill(t *testing.T) {
 		t.Errorf("draft PublishedAt = %v, want zero", p.PublishedAt)
 	}
 }
+
+func TestPostDate(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	published := time.Date(2025, 6, 7, 8, 9, 10, 0, time.UTC)
+	if got := (Post{CreatedAt: created, PublishedAt: published}).Date(); !got.Equal(published) {
+		t.Errorf("published post: Date = %v, want PublishedAt", got)
+	}
+	if got := (Post{CreatedAt: created}).Date(); !got.Equal(created) {
+		t.Errorf("never-published draft: Date = %v, want CreatedAt", got)
+	}
+}
