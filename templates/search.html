@@ -18,7 +18,7 @@
     {{range .Results}}
     <article class="feed-entry">
       <div class="feed-meta">
-        <span>{{relDate .CreatedAt}}</span>
+        <span>{{relDate .Date}}</span>
       </div>
       <h2 class="feed-title"><a href="/post/{{.Slug}}">{{.Title}}</a></h2>
       {{if .Cover}}

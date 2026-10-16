@@ -30,7 +30,7 @@
           {{end}}
         </td>
         <td style="color:var(--muted); text-align:right">{{if .Views}}{{.Views}}{{else}}—{{end}}</td>
-        <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .CreatedAt}}</td>
+        <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .Date}}</td>
         <td class="td-actions">
           <a class="btn btn-secondary btn-sm" href="/admin/posts/{{.ID}}/edit">Редактировать</a>
           <form method="POST" action="/admin/posts/{{.ID}}/delete" style="display:inline"

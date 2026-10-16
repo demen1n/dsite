@@ -6,7 +6,7 @@
   "headline": "{{.Title}}",
   "description": "{{.OGDescription}}",
   "url": "{{.Canonical}}"{{with .Data}},
-  "datePublished": "{{.CreatedAt.Format "2006-01-02T15:04:05Z07:00"}}",
+  "datePublished": "{{.Date.Format "2006-01-02T15:04:05Z07:00"}}",
   "dateModified": "{{.UpdatedAt.Format "2006-01-02T15:04:05Z07:00"}}"{{if .Tags}},
   "keywords": {{.Tags}}{{end}}{{end}}{{if .OGImage}},
   "image": "{{.OGImage}}"{{end}},
@@ -24,7 +24,7 @@
     {{else}}
     <a href="/blog" style="color:var(--muted)">← Блог</a>
     {{end}}
-    <span>{{relDate .CreatedAt}}</span>
+    <span>{{relDate .Date}}</span>
     {{if .Views}}<span>{{.Views}} просм.</span>{{end}}
     {{if .Tags}}
     <span class="post-tags">

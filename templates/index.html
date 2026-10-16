@@ -24,7 +24,7 @@
   {{range .Posts}}
   <article class="feed-entry">
     <div class="feed-meta">
-      <span>{{relDate .CreatedAt}}</span>
+      <span>{{relDate .Date}}</span>
       {{if .Tags}}
       <span class="feed-meta-tags">
         {{range .Tags}}<a href="/tag/{{tagSlug .}}" class="tag-inline">{{.}}</a>{{end}}

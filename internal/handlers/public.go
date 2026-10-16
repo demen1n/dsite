@@ -609,12 +609,13 @@ type atomLink struct {
 }
 
 type atomEntry struct {
-	Title   string      `xml:"title"`
-	Link    atomLink    `xml:"link"`
-	ID      string      `xml:"id"`
-	Updated string      `xml:"updated"`
-	Summary string      `xml:"summary"`
-	Content atomContent `xml:"content"`
+	Title     string      `xml:"title"`
+	Link      atomLink    `xml:"link"`
+	ID        string      `xml:"id"`
+	Published string      `xml:"published"`
+	Updated   string      `xml:"updated"`
+	Summary   string      `xml:"summary"`
+	Content   atomContent `xml:"content"`
 }
 
 type atomContent struct {
@@ -647,12 +648,13 @@ func Feed(w http.ResponseWriter, r *http.Request) {
 	for _, p := range posts {
 		link := base + "/post/" + p.Slug
 		feed.Entries = append(feed.Entries, atomEntry{
-			Title:   p.Title,
-			Link:    atomLink{Href: link},
-			ID:      link,
-			Updated: p.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"),
-			Summary: excerpt(p.BodyHTML),
-			Content: atomContent{Type: "html", Content: p.BodyHTML},
+			Title:     p.Title,
+			Link:      atomLink{Href: link},
+			ID:        link,
+			Published: p.Date().UTC().Format("2006-01-02T15:04:05Z"),
+			Updated:   p.UpdatedAt.UTC().Format("2006-01-02T15:04:05Z"),
+			Summary:   excerpt(p.BodyHTML),
+			Content:   atomContent{Type: "html", Content: p.BodyHTML},
 		})
 	}
 

@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/demen1n/dsite/internal/db"
 )
@@ -233,5 +234,37 @@ func TestSeriesPhotoOrder(t *testing.T) {
 	}
 	if !reordered {
 		t.Error("shuffled series: photos always in original order")
+	}
+}
+
+func TestFeedAndPostUsePublishedAt(t *testing.T) {
+	setupPublic(t)
+	id, err := db.CreatePost("dated", "Dated", "", "<p>x</p>", "", true, 0)
+	if err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	if err := db.SetPostPublishedAt(int(id), time.Date(2021, 7, 8, 9, 10, 11, 0, time.UTC)); err != nil {
+		t.Fatalf("SetPostPublishedAt: %v", err)
+	}
+
+	if body := serve(Feed, "GET /feed.xml", "/feed.xml").Body.String(); !strings.Contains(body, "<published>2021-07-08T09:10:11Z</published>") {
+		t.Errorf("feed missing <published> from published_at:\n%s", body)
+	}
+	if body := serve(ViewPost, "GET /post/{slug}", "/post/dated").Body.String(); !strings.Contains(body, `"datePublished": "2021-07-08T09:10:11Z"`) {
+		t.Error("post JSON-LD datePublished not from published_at")
+	}
+}
+
+func TestParsePublishedAt(t *testing.T) {
+	if got, err := parsePublishedAt(""); err != nil || !got.IsZero() {
+		t.Errorf("empty: got %v, %v", got, err)
+	}
+	// Ровно то, что шлёт editor.js: Date.toISOString() с миллисекундами.
+	got, err := parsePublishedAt("2026-10-16T01:30:00.000Z")
+	if err != nil || !got.Equal(time.Date(2026, 10, 16, 1, 30, 0, 0, time.UTC)) {
+		t.Errorf("toISOString: got %v, %v", got, err)
+	}
+	if _, err := parsePublishedAt("16.10.2026"); err == nil {
+		t.Error("garbage: want error")
 	}
 }
