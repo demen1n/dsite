@@ -1184,4 +1184,9 @@ func TestRelatedPosts(t *testing.T) {
 	if got, _ := RelatedPosts(me, 0, 1); slugs(got) != "[same-series]" {
 		t.Errorf("no series = %s", slugs(got))
 	}
+
+	DB.Close()
+	if _, err := RelatedPosts(me, 0, 3); err == nil {
+		t.Error("want an error with the database closed")
+	}
 }

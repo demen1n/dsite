@@ -383,10 +383,25 @@ func TestViewPostRelated(t *testing.T) {
 	createTaggedPost(t, "main", true, "Сеул")
 	createTaggedPost(t, "neighbour", true, "Сеул")
 	createTaggedPost(t, "stranger", true, "Токио")
+	withCover, err := db.CreatePost("with-cover", "C", "", "", "c.jpg", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	withImage, err := db.CreatePost("with-image", "I", "", `<p><img src="/uploads/i.jpg"></p>`, "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	db.SetPostTags(int(withCover), []string{"Сеул"})
+	db.SetPostTags(int(withImage), []string{"Сеул"})
 
 	body := serve(ViewPost, "GET /post/{slug}", "/post/main").Body.String()
 	if !strings.Contains(body, "Похожие записи") || !strings.Contains(body, `href="/post/neighbour"`) {
 		t.Error("related block with the post sharing a tag is missing")
+	}
+	for _, src := range []string{`src="/uploads/c.jpg"`, `src="/uploads/i.jpg"`} {
+		if !strings.Contains(body, src) {
+			t.Errorf("related card image %s missing", src)
+		}
 	}
 	if strings.Contains(body, `href="/post/stranger"`) {
 		t.Error("a post without shared tags is listed as related")
