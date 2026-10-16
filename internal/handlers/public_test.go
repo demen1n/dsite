@@ -268,3 +268,52 @@ func TestParsePublishedAt(t *testing.T) {
 		t.Error("garbage: want error")
 	}
 }
+
+func TestRenderMDTypography(t *testing.T) {
+	setupPublic(t)
+	got, err := RenderMD("Он сказал \"привет\" - и ушёл.\n\n`\"код\"`")
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := "<p>Он сказал «привет» — и ушёл.</p>\n<p><code>&quot;код&quot;</code></p>\n"
+	if got != want {
+		t.Errorf("RenderMD:\n got %q\nwant %q", got, want)
+	}
+}
+
+func TestRerenderMarkdownOnVersionChange(t *testing.T) {
+	setupPublic(t)
+	id, err := db.CreatePost("p", "P", `"Цитата"`, `<p>&quot;Цитата&quot;</p>`, "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := RerenderMarkdown(); err != nil {
+		t.Fatal(err)
+	}
+	p, _ := db.GetPostByID(int(id))
+	if p.BodyHTML != "<p>«Цитата»</p>\n" {
+		t.Errorf("body_html = %q", p.BodyHTML)
+	}
+	if v := db.GetAllSettings()["markdown_version"]; v != markdownVersion {
+		t.Errorf("markdown_version = %q", v)
+	}
+
+	// Версия совпадает — сохранённый HTML не трогаем.
+	if _, err := db.DB.Exec(`UPDATE posts SET body_html=? WHERE id=?`, "<p>manual</p>", id); err != nil {
+		t.Fatal(err)
+	}
+	if err := RerenderMarkdown(); err != nil {
+		t.Fatal(err)
+	}
+	if p, _ := db.GetPostByID(int(id)); p.BodyHTML != "<p>manual</p>" {
+		t.Errorf("re-rendered despite same version: %q", p.BodyHTML)
+	}
+}
+
+func TestRerenderMarkdownDBError(t *testing.T) {
+	setupPublic(t)
+	db.DB.Close()
+	if err := RerenderMarkdown(); err == nil {
+		t.Error("want an error with the database closed")
+	}
+}

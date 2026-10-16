@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -1240,4 +1241,62 @@ func UpsertThumbnail(t Thumbnail) error {
 func DeleteThumbnail(filename string) error {
 	_, err := DB.Exec(`DELETE FROM thumbnails WHERE filename=?`, filename)
 	return err
+}
+
+// ───────────────────────── Markdown re-render ─────────────────────────
+
+// RerenderMarkdown перегенерирует сохранённый HTML всех markdown-полей
+// (тела постов, описания серий, резюме) функцией render — нужно, когда
+// меняется сам рендерер (типографика и т. п.), а markdown остаётся прежним.
+// updated_at постов не трогает: содержание поста не менялось. Всё в одной
+// транзакции — при ошибке рендера база остаётся как была.
+func RerenderMarkdown(render func(string) (string, error)) (int, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	n := 0
+	for _, t := range []struct{ table, sel, upd string }{
+		{"posts", `SELECT id, body_md, body_html FROM posts`, `UPDATE posts SET body_html=? WHERE id=?`},
+		{"series", `SELECT id, description_md, description_html FROM series`, `UPDATE series SET description_html=? WHERE id=?`},
+		{"resume", `SELECT id, body_md, body_html FROM resume`, `UPDATE resume SET body_html=? WHERE id=?`},
+	} {
+		rows, err := tx.Query(t.sel)
+		if err != nil {
+			return 0, err
+		}
+		type row struct {
+			id       int
+			md, html string
+		}
+		var all []row
+		for rows.Next() {
+			var r row
+			if err := rows.Scan(&r.id, &r.md, &r.html); err != nil {
+				rows.Close()
+				return 0, err
+			}
+			all = append(all, r)
+		}
+		rows.Close()
+		if err := rows.Err(); err != nil {
+			return 0, err
+		}
+		for _, r := range all {
+			html, err := render(r.md)
+			if err != nil {
+				return 0, fmt.Errorf("%s %d: %w", t.table, r.id, err)
+			}
+			if html == r.html {
+				continue
+			}
+			if _, err := tx.Exec(t.upd, html, r.id); err != nil {
+				return 0, err
+			}
+			n++
+		}
+	}
+	return n, tx.Commit()
 }

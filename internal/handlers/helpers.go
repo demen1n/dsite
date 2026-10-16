@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"github.com/demen1n/dsite/internal/db"
 	"github.com/demen1n/dsite/internal/imgproc"
+	"github.com/demen1n/dsite/internal/typo"
 	"html/template"
 	"log"
 	"net"
@@ -359,12 +360,33 @@ func renderFragment(w http.ResponseWriter, file, fragmentName string, data any) 
 	}
 }
 
+// markdownVersion — версия рендерера RenderMD. Сохранённый HTML постов,
+// серий и резюме сделан тем рендерером, что был на момент сохранения;
+// поднимите версию, когда меняется вывод RenderMD (новое расширение,
+// правило типографа), — RerenderMarkdown на старте перегенерирует его.
+const markdownVersion = "2"
+
+// RenderMD превращает markdown в HTML и применяет к нему типографику.
 func RenderMD(src string) (string, error) {
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(src), &buf); err != nil {
 		return "", err
 	}
-	return buf.String(), nil
+	return typo.HTML(buf.String()), nil
+}
+
+// RerenderMarkdown перегенерирует сохранённый HTML, если он сделан
+// рендерером другой версии (см. markdownVersion). Вызывать после Init.
+func RerenderMarkdown() error {
+	if db.GetAllSettings()["markdown_version"] == markdownVersion {
+		return nil
+	}
+	n, err := db.RerenderMarkdown(RenderMD)
+	if err != nil {
+		return err
+	}
+	log.Printf("markdown: re-rendered %d item(s) for renderer version %s", n, markdownVersion)
+	return db.SetSetting("markdown_version", markdownVersion)
 }
 
 type PageData struct {
