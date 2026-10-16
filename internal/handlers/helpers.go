@@ -364,15 +364,47 @@ func renderFragment(w http.ResponseWriter, file, fragmentName string, data any) 
 // серий и резюме сделан тем рендерером, что был на момент сохранения;
 // поднимите версию, когда меняется вывод RenderMD (новое расширение,
 // правило типографа), — RerenderMarkdown на старте перегенерирует его.
-const markdownVersion = "2"
+const markdownVersion = "3"
 
-// RenderMD превращает markdown в HTML и применяет к нему типографику.
+// RenderMD превращает markdown в HTML, оформляет картинки с подписью
+// (см. figures) и применяет типографику.
 func RenderMD(src string) (string, error) {
 	var buf bytes.Buffer
 	if err := md.Convert([]byte(src), &buf); err != nil {
 		return "", err
 	}
-	return typo.HTML(buf.String()), nil
+	return typo.HTML(figures(buf.String())), nil
+}
+
+var (
+	reImgPara  = regexp.MustCompile(`<p>((?:<img\s[^>]*>\s*)+)</p>`)
+	reImgInPar = regexp.MustCompile(`<img\s[^>]*>`)
+	reImgTitle = regexp.MustCompile(`\stitle="([^"]*)"`)
+)
+
+// figures превращает картинки с title — ![](фото.jpg "Подпись") — в
+// <figure> с <figcaption>. Подпись берётся из title, а не из alt: alt —
+// текст для незрячих и поисковиков, его не обязательно показывать.
+// Картинки, идущие подряд строками, markdown кладёт в один абзац; такой
+// абзац, если в нём есть подписанная картинка, разбирается на отдельные
+// блоки (<figure> внутри <p> — невалидный HTML).
+func figures(html string) string {
+	return reImgPara.ReplaceAllStringFunc(html, func(para string) string {
+		if !reImgTitle.MatchString(para) {
+			return para
+		}
+		imgs := reImgInPar.FindAllString(para, -1)
+		for i, img := range imgs {
+			m := reImgTitle.FindStringSubmatchIndex(img)
+			if m == nil {
+				imgs[i] = "<p>" + img + "</p>"
+				continue
+			}
+			caption := img[m[2]:m[3]]
+			imgs[i] = "<figure>" + img[:m[0]] + img[m[1]:] + "<figcaption>" + caption + "</figcaption></figure>"
+		}
+		return strings.Join(imgs, "\n")
+	})
 }
 
 // RerenderMarkdown перегенерирует сохранённый HTML, если он сделан
