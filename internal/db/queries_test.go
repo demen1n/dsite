@@ -972,3 +972,71 @@ func TestRerenderMarkdown(t *testing.T) {
 		t.Error("want an error with the database closed")
 	}
 }
+
+// ───── Slug history ─────
+
+func TestSlugHistory(t *testing.T) {
+	setupTestDB(t)
+	id, err := CreatePost("old", "T", "", "", "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rename := func(slug string) {
+		t.Helper()
+		if err := UpdatePost(int(id), slug, "T", "", "", "", true, 0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rename("mid")
+	rename("new")
+	for _, s := range []string{"old", "mid"} {
+		if got, ok := OldSlugTarget("post", s); !ok || got != int(id) {
+			t.Errorf("OldSlugTarget(%q) = %d, %v", s, got, ok)
+		}
+	}
+	if _, ok := OldSlugTarget("post", "new"); ok {
+		t.Error("live slug is in history")
+	}
+	if _, ok := OldSlugTarget("series", "old"); ok {
+		t.Error("post slug leaked into series history")
+	}
+
+	// Возврат к старому slug убирает его из истории.
+	rename("old")
+	if _, ok := OldSlugTarget("post", "old"); ok {
+		t.Error("slug renamed back is still in history")
+	}
+
+	// Новый пост со slug из истории — запись истории удаляется.
+	if _, err := CreatePost("mid", "Other", "", "", "", true, 0); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := OldSlugTarget("post", "mid"); ok {
+		t.Error("slug reused by a new post is still in history")
+	}
+
+	// Удаление поста чистит его историю.
+	if err := DeletePost(int(id)); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := OldSlugTarget("post", "new"); ok {
+		t.Error("history of a deleted post survived")
+	}
+
+	sid, err := CreateSeries("S", "s-old", "", "", "", false, true, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateSeries(int(sid), "S", "s-new", "", "", "", false, true, false, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := OldSlugTarget("series", "s-old"); !ok || got != int(sid) {
+		t.Errorf("series OldSlugTarget = %d, %v", got, ok)
+	}
+	if err := DeleteSeries(int(sid)); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := OldSlugTarget("series", "s-old"); ok {
+		t.Error("history of a deleted series survived")
+	}
+}

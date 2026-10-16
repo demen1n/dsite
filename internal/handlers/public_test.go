@@ -329,3 +329,51 @@ func TestRenderMDFigure(t *testing.T) {
 		t.Errorf("RenderMD:\n got %q\nwant %q", got, want)
 	}
 }
+
+func TestOldSlugRedirects(t *testing.T) {
+	setupPublic(t)
+	id, err := db.CreatePost("старый", "T", "b", "<p>b</p>", "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdatePost(int(id), "новый", "T", "b", "<p>b</p>", "", true, 0); err != nil {
+		t.Fatal(err)
+	}
+	rec := serve(ViewPost, "GET /post/{slug}", "/post/"+url.PathEscape("старый")+"?from=x")
+	if rec.Code != http.StatusMovedPermanently {
+		t.Fatalf("status = %d, want 301", rec.Code)
+	}
+	if loc, want := rec.Header().Get("Location"), "/post/"+url.PathEscape("новый")+"?from=x"; loc != want {
+		t.Errorf("Location = %q, want %q", loc, want)
+	}
+
+	// Снятый с публикации пост по старому адресу — 404, а не редирект.
+	if err := db.UpdatePost(int(id), "новый", "T", "b", "<p>b</p>", "", false, 0); err != nil {
+		t.Fatal(err)
+	}
+	if rec := serve(ViewPost, "GET /post/{slug}", "/post/"+url.PathEscape("старый")); rec.Code != 404 {
+		t.Errorf("unpublished: status = %d, want 404", rec.Code)
+	}
+	if rec := serve(ViewPost, "GET /post/{slug}", "/post/never"); rec.Code != 404 {
+		t.Errorf("unknown: status = %d, want 404", rec.Code)
+	}
+
+	sid, err := db.CreateSeries("S", "seoul", "", "", "", false, true, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdateSeries(int(sid), "S", "seoul-2026", "", "", "", false, true, false, false); err != nil {
+		t.Fatal(err)
+	}
+	rec = serve(SeriesView, "GET /series/{slug}", "/series/seoul")
+	if rec.Code != http.StatusMovedPermanently || rec.Header().Get("Location") != "/series/seoul-2026" {
+		t.Errorf("series: status = %d, Location = %q", rec.Code, rec.Header().Get("Location"))
+	}
+	// Скрытая серия не существует — и по старому адресу тоже.
+	if err := db.UpdateSeries(int(sid), "S", "seoul-2026", "", "", "", false, true, true, false); err != nil {
+		t.Fatal(err)
+	}
+	if rec := serve(SeriesView, "GET /series/{slug}", "/series/seoul"); rec.Code != 404 {
+		t.Errorf("hidden series: status = %d, want 404", rec.Code)
+	}
+}

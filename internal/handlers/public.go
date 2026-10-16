@@ -43,6 +43,14 @@ type IndexData struct {
 	HasNext    bool
 }
 
+// redirectPermanent — 301 на path с сохранением query-строки запроса.
+func redirectPermanent(w http.ResponseWriter, r *http.Request, path string) {
+	if r.URL.RawQuery != "" {
+		path += "?" + r.URL.RawQuery
+	}
+	http.Redirect(w, r, path, http.StatusMovedPermanently)
+}
+
 // GET /blog
 func Index(w http.ResponseWriter, r *http.Request) {
 	// Старые ссылки вида /blog?tag=… — постоянный редирект на /tag/{slug},
@@ -186,6 +194,13 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	post, err := db.GetPostBySlug(slug)
 	if err != nil {
+		// Пост переименовали — ведём со старого адреса на новый.
+		if id, ok := db.OldSlugTarget("post", slug); ok {
+			if p, err := db.GetPostByID(id); err == nil && p.Published {
+				redirectPermanent(w, r, "/post/"+url.PathEscape(p.Slug))
+				return
+			}
+		}
 		NotFound(w, r)
 		return
 	}
@@ -269,7 +284,17 @@ type SeriesViewData struct {
 func SeriesView(w http.ResponseWriter, r *http.Request) {
 	slug := r.PathValue("slug")
 	series, err := db.GetSeriesBySlug(slug)
-	if err != nil || series.Hidden {
+	if err != nil {
+		if id, ok := db.OldSlugTarget("series", slug); ok {
+			if s, err := db.GetSeriesByID(id); err == nil && !s.Hidden {
+				redirectPermanent(w, r, "/series/"+url.PathEscape(s.Slug))
+				return
+			}
+		}
+		NotFound(w, r)
+		return
+	}
+	if series.Hidden {
 		NotFound(w, r)
 		return
 	}
