@@ -909,3 +909,61 @@ func TestPhotoThumb(t *testing.T) {
 		t.Errorf("DeletePhoto = %q, %q, %v", filename, thumb, err)
 	}
 }
+
+// ───── Markdown re-render ─────
+
+func TestRerenderMarkdown(t *testing.T) {
+	setupTestDB(t)
+	postID, err := CreatePost("p", "P", "post md", "<old>", "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, _ := GetPostByID(int(postID))
+	seriesID, err := CreateSeries("S", "s", "series md", "<old>", "", false, true, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateResume("resume md", "<old>"); err != nil {
+		t.Fatal(err)
+	}
+
+	render := func(md string) (string, error) { return "<new>" + md, nil }
+	n, err := RerenderMarkdown(render)
+	if err != nil || n != 3 {
+		t.Fatalf("RerenderMarkdown = %d, %v; want 3, nil", n, err)
+	}
+	p, _ := GetPostByID(int(postID))
+	if p.BodyHTML != "<new>post md" {
+		t.Errorf("post html = %q", p.BodyHTML)
+	}
+	if !p.UpdatedAt.Equal(before.UpdatedAt) {
+		t.Errorf("updated_at changed: %v → %v", before.UpdatedAt, p.UpdatedAt)
+	}
+	s, _ := GetSeriesBySlug("s")
+	if s.ID != int(seriesID) || s.DescriptionHTML != "<new>series md" {
+		t.Errorf("series html = %q", s.DescriptionHTML)
+	}
+	r, _ := GetResume()
+	if r.BodyHTML != "<new>resume md" {
+		t.Errorf("resume html = %q", r.BodyHTML)
+	}
+
+	// Повторный прогон ничего не меняет.
+	if n, err := RerenderMarkdown(render); err != nil || n != 0 {
+		t.Errorf("second run = %d, %v; want 0, nil", n, err)
+	}
+
+	// Ошибка рендера откатывает всё.
+	failing := func(md string) (string, error) {
+		if md == "series md" {
+			return "", fmt.Errorf("boom")
+		}
+		return "<fail>", nil
+	}
+	if _, err := RerenderMarkdown(failing); err == nil {
+		t.Fatal("want error")
+	}
+	if p, _ := GetPostByID(int(postID)); p.BodyHTML != "<new>post md" {
+		t.Errorf("post html after rollback = %q", p.BodyHTML)
+	}
+}

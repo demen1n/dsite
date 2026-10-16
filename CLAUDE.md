@@ -99,7 +99,7 @@ templates/
 
 **Slugs**: `slugify()` in `helpers.go` supports Cyrillic — transliterates to Latin before slugifying, so Russian category/post names work correctly.
 
-**Markdown**: `github.com/yuin/goldmark` with GFM extensions (tables, strikethrough). Unsafe HTML allowed for flexibility. Markdown is stored alongside pre-rendered HTML in the posts table.
+**Markdown**: `github.com/yuin/goldmark` with GFM extensions (tables, strikethrough). Unsafe HTML allowed for flexibility. Markdown is stored alongside pre-rendered HTML in the posts table. `RenderMD` then runs the HTML through `internal/typo` (Russian typography: «ёлочки»/„лапки“ quotes, em dashes, ellipsis, non-breaking spaces after short words and numbers; text inside `<pre>`/`<code>`, tags and attributes is left alone). Because HTML is stored pre-rendered, bump `markdownVersion` in `helpers.go` whenever `RenderMD`'s output changes — on startup `RerenderMarkdown` regenerates the stored HTML of posts, series descriptions and the resume when the `markdown_version` setting differs.
 
 **Frontend**: CSS lives in `/static/style.css` (public) and `/static/admin.css` (admin), served with a 1-hour `Cache-Control`. HTMX is vendored and served from `/static/htmx.min.js` (not loaded from a CDN). No build step.
 

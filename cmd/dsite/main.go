@@ -90,6 +90,9 @@ func main() {
 		"home_bio":   `Пишу в [блоге](/blog), фотографирую — смотри [галерею](/gallery).`,
 	})
 	handlers.Init("./templates", cfg.UploadsDir, cfg.SiteTitle, cfg.SiteDesc, cfg.SiteURL, cfg.SecureCookies, cfg.TrustedProxy)
+	if err := handlers.RerenderMarkdown(); err != nil {
+		log.Printf("RerenderMarkdown: %v", err)
+	}
 	handlers.LoadSettings()
 	if data, err := os.ReadFile("./static/favicon.png"); err == nil {
 		handlers.SetFaviconPNG(data)
