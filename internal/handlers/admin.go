@@ -596,14 +596,20 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r)
 		return
 	}
+	release := imgproc.Reserve() // для превью (imgproc.Process)
+	defer release()
 	var pw, ph int
-	if data, err := os.ReadFile(path); err == nil {
+	data, err := os.ReadFile(path)
+	if err == nil {
 		pw, ph, _ = imgproc.Dimensions(data)
 	}
 	caption := r.FormValue("caption")
 	if err := db.AddPhoto(filename, caption, 0, 0, pw, ph); err != nil {
 		http.Error(w, "DB error", 500)
 		return
+	}
+	if data != nil {
+		saveThumb(filename, data, pw)
 	}
 	fmt.Fprint(w, "✓ Добавлено в галерею")
 }
@@ -679,16 +685,16 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 
 			var filename string
 			var pw, ph int
+			stored := data     // то, что легло на диск, — из него и превью
 			if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
 				filename, err = saveUpload(data, ext)
 				if err == nil {
 					pw, ph, _ = imgproc.Dimensions(data)
 				}
 			} else {
-				var processed []byte
-				processed, pw, ph, err = imgproc.Process(data, uploadMaxWidth, 0, uploadQuality)
+				stored, pw, ph, err = imgproc.Process(data, uploadMaxWidth, 0, uploadQuality)
 				if err == nil {
-					filename, err = saveUpload(processed, ".jpg")
+					filename, err = saveUpload(stored, ".jpg")
 				}
 			}
 			if err != nil {
@@ -697,7 +703,9 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 			}
 			if err := db.AddPhoto(filename, caption, categoryID, placeID, pw, ph); err != nil {
 				log.Printf("AddPhoto %s: %v", filename, err)
+				return
 			}
+			saveThumb(filename, stored, pw)
 		}()
 	}
 
@@ -858,7 +866,7 @@ func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r)
 		return
 	}
-	filename, err := db.DeletePhoto(id)
+	filename, thumb, err := db.DeletePhoto(id)
 	if err != nil {
 		NotFound(w, r)
 		return
@@ -866,6 +874,7 @@ func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 	if err := os.Remove(filepath.Join(uploadsDir, filename)); err != nil {
 		log.Printf("remove photo %s: %v", filename, err)
 	}
+	removeThumb(filename, thumb)
 
 	photos, _ := db.ListPhotos("", "")
 	cats, _ := db.ListCategories()

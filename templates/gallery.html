@@ -98,9 +98,14 @@
 <div class="gallery-grid-inner">
   {{range .Data.Photos}}
   <div class="gallery-item"{{if and .Width .Height}} data-ratio="{{.Width}}/{{.Height}}" style="aspect-ratio: {{.Width}} / {{.Height}};"{{end}}>
-    <img src="/uploads/{{.Filename}}" alt="{{.Caption}}"
+    {{/* src — превью (или оригинал, пока превью нет); data-srcset
+         gallery.js включает после раскладки, проставив sizes по реальной
+         ширине плитки; data-full — оригинал для лайтбокса. */}}
+    <img src="/uploads/{{or .Thumb .Filename}}" alt="{{.Caption}}"
+         {{if and .Thumb (ne .Thumb .Filename) .Width}}data-srcset="/uploads/{{.Thumb}} {{thumbWidth}}w, /uploads/{{.Filename}} {{.Width}}w"{{end}}
+         data-full="/uploads/{{.Filename}}"
          {{if and .Width .Height}}width="{{.Width}}" height="{{.Height}}"{{end}}
-         decoding="async">
+         loading="lazy" decoding="async">
     {{if .Caption}}<div class="gallery-item-caption">{{.Caption}}</div>{{end}}
   </div>
   {{end}}

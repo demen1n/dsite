@@ -312,7 +312,7 @@ func TestPhotoCRUD(t *testing.T) {
 		t.Errorf("after update: width=%d", photos[0].Width)
 	}
 
-	filename, err := DeletePhoto(id)
+	filename, _, err := DeletePhoto(id)
 	if err != nil || filename != "test.webp" {
 		t.Errorf("DeletePhoto: filename=%q err=%v", filename, err)
 	}
@@ -878,5 +878,34 @@ func TestBulkSeries(t *testing.T) {
 		if p.ID == int(p1) && (p.SeriesID != int(b) || p.SeriesName != "B") {
 			t.Errorf("ListPostsMeta p1: series %d %q, want %d B", p.SeriesID, p.SeriesName, b)
 		}
+	}
+}
+
+func TestPhotoThumb(t *testing.T) {
+	setupTestDB(t)
+	AddPhoto("big.jpg", "", 0, 0, 1600, 1067) //nolint
+	AddPhoto("small.jpg", "", 0, 0, 640, 480) //nolint
+
+	pending, err := PhotosWithoutThumb()
+	if err != nil || len(pending) != 2 {
+		t.Fatalf("PhotosWithoutThumb: %d, %v; want 2", len(pending), err)
+	}
+	if pending[0].Filename != "big.jpg" || pending[0].Width != 1600 {
+		t.Errorf("pending[0] = %+v", pending[0])
+	}
+
+	SetPhotoThumb("big.jpg", "thumbs/big.jpg") //nolint
+	SetPhotoThumb("small.jpg", "small.jpg")    //nolint
+	if pending, _ := PhotosWithoutThumb(); len(pending) != 0 {
+		t.Errorf("after SetPhotoThumb: %d pending, want 0", len(pending))
+	}
+	photos, _ := ListPhotos("", "")
+	if photos[0].Thumb != "thumbs/big.jpg" || photos[1].Thumb != "small.jpg" {
+		t.Errorf("ListPhotos thumbs: %q %q", photos[0].Thumb, photos[1].Thumb)
+	}
+
+	filename, thumb, err := DeletePhoto(photos[0].ID)
+	if err != nil || filename != "big.jpg" || thumb != "thumbs/big.jpg" {
+		t.Errorf("DeletePhoto = %q, %q, %v", filename, thumb, err)
 	}
 }

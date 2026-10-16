@@ -187,6 +187,10 @@ func migratePostsPublishedAt() error {
 func migratePhotoDimensions() error {
 	DB.Exec(`ALTER TABLE photos ADD COLUMN width INTEGER NOT NULL DEFAULT 0`)
 	DB.Exec(`ALTER TABLE photos ADD COLUMN height INTEGER NOT NULL DEFAULT 0`)
+	// thumb: превью для сетки галереи, путь относительно uploads/ (обычно
+	// thumbs/<имя>.jpg; для узких фото и GIF — сам оригинал). Пусто — ещё
+	// не сгенерировано: шаблон показывает оригинал, BackfillThumbs догенерит.
+	DB.Exec(`ALTER TABLE photos ADD COLUMN thumb TEXT NOT NULL DEFAULT ''`)
 	return nil
 }
 

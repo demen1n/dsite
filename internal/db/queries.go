@@ -614,6 +614,7 @@ type Photo struct {
 	PlaceName    string
 	Width        int
 	Height       int
+	Thumb        string // превью для сетки (см. migratePhotoDimensions); пусто — нет
 	CreatedAt    time.Time
 }
 
@@ -623,7 +624,7 @@ func ListPhotos(categorySlug, placeSlug string) ([]Photo, error) {
 	q := `SELECT p.id, p.filename, p.caption, p.sort_order,
 	             COALESCE(p.category_id, 0), COALESCE(c.name, ''),
 	             COALESCE(p.place_id, 0), COALESCE(pl.name, ''),
-	             p.width, p.height, p.created_at
+	             p.width, p.height, p.thumb, p.created_at
 	      FROM photos p
 	      LEFT JOIN categories c ON c.id = p.category_id
 	      LEFT JOIN places pl ON pl.id = p.place_id`
@@ -653,7 +654,7 @@ func ListPhotos(categorySlug, placeSlug string) ([]Photo, error) {
 		var ca string
 		if err := rows.Scan(&p.ID, &p.Filename, &p.Caption, &p.SortOrder,
 			&p.CategoryID, &p.CategoryName, &p.PlaceID, &p.PlaceName,
-			&p.Width, &p.Height, &ca); err != nil {
+			&p.Width, &p.Height, &p.Thumb, &ca); err != nil {
 			return nil, err
 		}
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
@@ -758,14 +759,39 @@ func UpdatePhotoPlace(id, placeID int) error {
 	return err
 }
 
-func DeletePhoto(id int) (string, error) {
-	var filename string
-	err := DB.QueryRow(`SELECT filename FROM photos WHERE id=?`, id).Scan(&filename)
+// DeletePhoto удаляет запись и возвращает имена файлов оригинала и превью,
+// чтобы вызывающий удалил их с диска.
+func DeletePhoto(id int) (filename, thumb string, err error) {
+	err = DB.QueryRow(`SELECT filename, thumb FROM photos WHERE id=?`, id).Scan(&filename, &thumb)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 	_, err = DB.Exec(`DELETE FROM photos WHERE id=?`, id)
-	return filename, err
+	return filename, thumb, err
+}
+
+// SetPhotoThumb запоминает превью для всех записей галереи с этим файлом.
+func SetPhotoThumb(filename, thumb string) error {
+	_, err := DB.Exec(`UPDATE photos SET thumb=? WHERE filename=?`, thumb, filename)
+	return err
+}
+
+// PhotosWithoutThumb — фото галереи, для которых превью ещё не делали.
+func PhotosWithoutThumb() ([]Photo, error) {
+	rows, err := DB.Query(`SELECT id, filename, width FROM photos WHERE thumb='' ORDER BY id`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var photos []Photo
+	for rows.Next() {
+		var p Photo
+		if err := rows.Scan(&p.ID, &p.Filename, &p.Width); err != nil {
+			return nil, err
+		}
+		photos = append(photos, p)
+	}
+	return photos, rows.Err()
 }
 
 // ───────────────────────── Places ─────────────────────────

@@ -1,6 +1,10 @@
 function setupGalleryLightbox() {
   const items = [...document.querySelectorAll('.gallery-item')];
-  const srcs = items.map(el => el.querySelector('img').getAttribute('src'));
+  // В плитке может стоять превью — в лайтбокс отдаём оригинал (data-full).
+  const srcs = items.map(el => {
+    const img = el.querySelector('img');
+    return img.dataset.full || img.getAttribute('src');
+  });
   items.forEach((item, i) => {
     item.onclick = () => openLightbox(srcs[i], srcs);
   });
@@ -90,6 +94,18 @@ function setupFadeIn(imgs) {
   });
 }
 
+// applySrcset включает у плитки srcset (превью + оригинал) с sizes по её
+// реальной ширине: браузер сам выберет файл под ширину и плотность экрана.
+// Плотность выше 2x не учитываем (sizes занижаем пропорционально): на 3x
+// телефоне разницы с 2x на фото не видно, а оригинал весит в разы больше.
+// Сначала sizes, потом srcset — иначе выбор успеет пройти по sizes=100vw.
+function applySrcset(img, width) {
+  if (!img.dataset.srcset) return;
+  const dpr = window.devicePixelRatio || 1;
+  img.sizes = Math.round(dpr > 2 ? width * 2 / dpr : width) + 'px';
+  if (!img.srcset) img.srcset = img.dataset.srcset;
+}
+
 function layout(grid, items, imgs) {
   const W = grid.clientWidth;
   const GAP = 3;
@@ -109,6 +125,7 @@ function layout(grid, items, imgs) {
       const h = Math.round(W / ratios[i]);
       item.style.cssText = `width:${W}px; height:${h}px; flex:none; overflow:hidden; cursor:pointer;`;
       imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
+      applySrcset(imgs[i], W);
     });
     setupFadeIn(imgs);
     return;
@@ -118,6 +135,7 @@ function layout(grid, items, imgs) {
   items.forEach((item, i) => {
     item.style.cssText = `width:${sized[i].width}px; height:${sized[i].height}px; flex:none; overflow:hidden; cursor:pointer;`;
     imgs[i].style.cssText = `width:100%; height:100%; object-fit:cover; display:block;`;
+    applySrcset(imgs[i], sized[i].width);
   });
   setupFadeIn(imgs);
 }
