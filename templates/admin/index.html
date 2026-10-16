@@ -17,40 +17,42 @@
     </select>
     <button type="submit" class="btn btn-secondary btn-sm bulk-submit" disabled>Перенести в серию</button>
   </form>
-  <table>
+  <table class="posts-table">
     <thead>
       <tr>
         <th class="td-check"><input type="checkbox" class="bulk-all" title="Выбрать все"></th>
         <th>Заголовок</th>
-        <th>Серия</th>
-        <th>Slug</th>
-        <th>Статус</th>
-        <th>Просмотры</th>
-        <th>Дата</th>
+        <th class="col-series">Серия</th>
+        <th class="col-status">Статус</th>
+        <th class="col-views">Просм.</th>
+        <th class="col-date">Дата</th>
         <th></th>
       </tr>
     </thead>
     <tbody>
       {{range .Data}}
       <tr>
-        <td class="td-check"><input type="checkbox" class="bulk-item" name="post_ids" value="{{.ID}}" form="bulk-form"></td>
-        <td><strong>{{.Title}}</strong></td>
-        <td style="color:var(--muted)">{{if .SeriesName}}{{.SeriesName}}{{else}}—{{end}}</td>
-        <td class="td-truncate" title="/post/{{.Slug}}"><code style="font-size:0.82rem; color:var(--muted)">/post/{{.Slug}}</code></td>
-        <td>
+        <td class="td-check"><input type="checkbox" class="bulk-item" name="post_ids" value="{{.ID}}" form="bulk-form" aria-label="Выбрать «{{.Title}}»"></td>
+        <td class="col-title">
+          <a class="post-title" href="/admin/posts/{{.ID}}/edit">{{.Title}}</a>
+          <code class="post-slug" title="/post/{{.Slug}}">/post/{{.Slug}}</code>
+        </td>
+        <td class="col-series">{{if .SeriesName}}{{.SeriesName}}{{else}}<span class="muted-dash">—</span>{{end}}</td>
+        <td class="col-status">
           {{if .Published}}
           <span class="badge badge-green">Опубликован</span>
           {{else}}
           <span class="badge badge-gray">Черновик</span>
           {{end}}
         </td>
-        <td style="color:var(--muted); text-align:right">{{if .Views}}{{.Views}}{{else}}—{{end}}</td>
-        <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .Date}}</td>
+        <td class="col-views">{{if .Views}}{{.Views}}{{else}}<span class="muted-dash">—</span>{{end}}</td>
+        <td class="col-date">{{fmtDateShort .Date}}</td>
         <td class="td-actions">
-          <a class="btn btn-secondary btn-sm" href="/admin/posts/{{.ID}}/edit">Редактировать</a>
-          <form method="POST" action="/admin/posts/{{.ID}}/delete" style="display:inline"
+          <a class="icon-btn" href="/admin/posts/{{.ID}}/edit" title="Редактировать" aria-label="Редактировать">✎</a>
+          {{if .Published}}<a class="icon-btn" href="/post/{{.Slug}}" target="_blank" title="Открыть на сайте" aria-label="Открыть на сайте">↗</a>{{end}}
+          <form method="POST" action="/admin/posts/{{.ID}}/delete"
                 onsubmit="return confirm('Удалить пост «{{.Title}}»?')">
-            <button type="submit" class="btn btn-danger btn-sm">Удалить</button>
+            <button type="submit" class="icon-btn icon-btn-danger" title="Удалить" aria-label="Удалить">✕</button>
           </form>
         </td>
       </tr>

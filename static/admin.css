@@ -18,7 +18,9 @@ a:hover { text-decoration: underline; }
 .sidebar-bottom { margin-top: auto; padding: 1rem 0.75rem 0; }
 .sidebar-bottom form button { width: 100%; padding: 0.5rem; border: 1px solid var(--border); border-radius: 6px; background: none; cursor: pointer; color: var(--muted); font-size: 0.88rem; }
 .sidebar-bottom form button:hover { background: var(--bg); }
-.admin-content { flex: 1; padding: 2rem 2.5rem; max-width: 1100px; }
+/* min-width: 0 — иначе flex-элемент не сжимается уже своего содержимого
+   и широкая таблица распирает страницу вместо скролла внутри .table-wrap. */
+.admin-content { flex: 1; min-width: 0; padding: 2rem 2.5rem; max-width: 1400px; }
 .admin-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; }
 .admin-header h1 { font-size: 1.6rem; font-weight: 700; }
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow-x: auto; }
@@ -74,3 +76,66 @@ textarea { resize: vertical; }
 .bulk-section h2 { font-size: 1.15rem; font-weight: 700; margin: 1.75rem 0 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
 .bulk-section-count { font-size: 0.8rem; font-weight: 600; color: var(--muted); background: var(--border); border-radius: 20px; padding: 0.1em 0.6em; }
 .bulk-empty { color: var(--muted); font-size: 0.9rem; }
+
+/* ── Таблица постов ── */
+/* width:100% + max-width:0 — колонка заголовка забирает всё оставшееся место
+   и не распирает таблицу: длинный slug обрезается многоточием. */
+.posts-table .col-title { width: 100%; max-width: 0; min-width: 12rem; }
+.post-title { display: block; color: var(--text); font-weight: 600; line-height: 1.35; }
+.post-title:hover { color: var(--accent); text-decoration: none; }
+.post-slug { display: block; margin-top: 0.2rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 0.78rem; color: var(--muted); }
+.posts-table .col-series { color: var(--muted); white-space: nowrap; }
+.posts-table .col-views { color: var(--muted); text-align: right; }
+.posts-table .col-status, .posts-table .col-views, .posts-table .col-date { white-space: nowrap; }
+.posts-table .col-date { color: var(--muted); }
+.muted-dash { color: var(--border); }
+
+/* Компактные кнопки-иконки в строках таблиц */
+.td-actions form { display: inline; }
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 2rem; height: 2rem; border: 1px solid transparent; border-radius: 6px; background: none; color: var(--muted); font-size: 1rem; line-height: 1; cursor: pointer; text-decoration: none; }
+.icon-btn:hover { background: var(--bg); border-color: var(--border); color: var(--text); text-decoration: none; }
+.icon-btn-danger:hover { background: #fef2f2; border-color: #fecaca; color: var(--danger); }
+
+/* ── Адаптивность ── */
+
+/* Средние экраны: прячем второстепенное */
+@media (max-width: 1100px) {
+  .admin-content { padding: 1.75rem 1.5rem; }
+  .posts-table .col-views { display: none; }
+}
+
+/* Планшет: сайдбар становится полосой сверху */
+@media (max-width: 860px) {
+  body { flex-direction: column; }
+  .sidebar { width: auto; height: auto; min-height: 0; position: static; flex-direction: row; align-items: center; gap: 0.5rem; padding: 0.5rem 0.75rem; border-right: none; border-bottom: 1px solid var(--border); overflow: visible; }
+  .sidebar-logo { padding: 0 0.5rem; white-space: nowrap; }
+  .sidebar nav { flex-direction: row; flex: 1; min-width: 0; overflow-x: auto; padding: 0; scrollbar-width: none; }
+  .sidebar nav a { white-space: nowrap; padding: 0.45rem 0.65rem; }
+  .sidebar nav a[target] { margin-top: 0 !important; }
+  .sidebar-bottom { margin-top: 0; padding: 0; }
+  .sidebar-bottom form button { width: auto; padding: 0.4rem 0.75rem; }
+  .admin-content { padding: 1.25rem 1rem; }
+  .admin-header { gap: 1rem; flex-wrap: wrap; }
+  .editor-layout { grid-template-columns: 1fr; }
+  .posts-table .col-series { display: none; }
+}
+
+/* Телефон: строки таблицы постов — карточки */
+@media (max-width: 640px) {
+  .admin-header h1 { font-size: 1.35rem; }
+  .sidebar-logo { display: none; }
+  .posts-table thead { display: none; }
+  .posts-table, .posts-table tbody { display: block; }
+  .posts-table tr { display: grid; grid-template-columns: auto auto 1fr auto; grid-template-areas: "check title title title" "check status date actions"; align-items: center; column-gap: 0.5rem; row-gap: 0.35rem; padding: 0.75rem 0.5rem 0.6rem; border-top: 1px solid var(--border); }
+  .posts-table td { display: block; border-top: none; padding: 0; }
+  .posts-table .td-check { grid-area: check; padding: 0.1rem 0.5rem 0; align-self: start; }
+  .posts-table .col-title { grid-area: title; width: auto; max-width: none; min-width: 0; }
+  .posts-table .td-actions { grid-area: actions; display: flex; align-items: center; }
+  /* статус и дата — строкой под заголовком */
+  .posts-table .col-status { grid-area: status; }
+  .posts-table .col-date { grid-area: date; font-size: 0.82rem; }
+  .posts-table tr:hover td { background: none; }
+  .bulk-bar-top { gap: 0.5rem; }
+  .bulk-count { min-width: 0; width: 100%; }
+  .bulk-select { flex: 1; min-width: 0; }
+}
