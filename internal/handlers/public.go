@@ -204,7 +204,7 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r)
 		return
 	}
-	if !post.Published {
+	if !post.Live() {
 		NotFound(w, r)
 		return
 	}

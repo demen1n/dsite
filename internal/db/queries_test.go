@@ -1040,3 +1040,87 @@ func TestSlugHistory(t *testing.T) {
 		t.Error("history of a deleted series survived")
 	}
 }
+
+// ───── Scheduled posts ─────
+
+func TestScheduledPostsHidden(t *testing.T) {
+	setupTestDB(t)
+	sid, err := CreateSeries("S", "s", "", "", "", false, true, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mk := func(slug string, at time.Time) int {
+		t.Helper()
+		id, err := CreatePost(slug, "Сеул "+slug, "сеул", "<p>сеул</p>", "", true, int(sid))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := SetPostPublishedAt(int(id), at); err != nil {
+			t.Fatal(err)
+		}
+		if err := SetPostTags(int(id), []string{"tag-" + slug}); err != nil {
+			t.Fatal(err)
+		}
+		return int(id)
+	}
+	mk("past", time.Now().Add(-time.Hour))
+	futureID := mk("future", time.Now().Add(time.Hour))
+
+	p, err := GetPostByID(futureID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !p.Scheduled() || p.Live() {
+		t.Errorf("future post: Scheduled=%v Live=%v", p.Scheduled(), p.Live())
+	}
+
+	slugs := func(posts []Post) []string {
+		var s []string
+		for _, p := range posts {
+			s = append(s, p.Slug)
+		}
+		return s
+	}
+	want := "[past]"
+	if got, _ := ListPosts(true); fmt.Sprint(slugs(got)) != want {
+		t.Errorf("ListPosts(true) = %v", slugs(got))
+	}
+	if got, _ := ListPosts(false); len(got) != 2 {
+		t.Errorf("ListPosts(false) = %v, want both", slugs(got))
+	}
+	if got, _ := ListPostsMeta(true); fmt.Sprint(slugs(got)) != want {
+		t.Errorf("ListPostsMeta(true) = %v", slugs(got))
+	}
+	if got, _ := ListPostsMeta(false); len(got) != 2 {
+		t.Errorf("ListPostsMeta(false) = %v, want both", slugs(got))
+	}
+	if got, total, _ := ListPostsPaginated("", 1, 10); fmt.Sprint(slugs(got)) != want || total != 1 {
+		t.Errorf("ListPostsPaginated = %v, %d", slugs(got), total)
+	}
+	if got, total, _ := ListPostsPaginated("tag-future", 1, 10); len(got) != 0 || total != 0 {
+		t.Errorf("ListPostsPaginated(tag-future) = %v, %d", slugs(got), total)
+	}
+	if got, _ := PostsInSeries(int(sid)); fmt.Sprint(slugs(got)) != want {
+		t.Errorf("PostsInSeries = %v", slugs(got))
+	}
+	if series, _ := ListSeries(); len(series) != 1 || series[0].PostCount != 1 {
+		t.Errorf("ListSeries post count = %+v", series)
+	}
+	if got, _ := SearchPosts("сеул"); fmt.Sprint(slugs(got)) != want {
+		t.Errorf("SearchPosts = %v", slugs(got))
+	}
+	tags, _ := ListPublishedTags()
+	for _, tg := range tags {
+		if tg.Name == "tag-future" {
+			t.Error("ListPublishedTags includes a tag used only by a scheduled post")
+		}
+	}
+
+	// Дата наступила — пост появляется.
+	if err := SetPostPublishedAt(futureID, time.Now().Add(-time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := ListPosts(true); len(got) != 2 {
+		t.Errorf("after the date: ListPosts(true) = %v", slugs(got))
+	}
+}

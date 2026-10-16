@@ -47,6 +47,7 @@ textarea { resize: vertical; }
 .badge { display: inline-block; padding: 0.2em 0.6em; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
 .badge-green { background: #d1fae5; color: #065f46; }
 .badge-gray { background: #f0f0ee; color: #6b7280; }
+.badge-blue { background: #dbeafe; color: #1e40af; }
 .editor-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
 .editor-layout textarea { min-height: 460px; font-family: 'Menlo', 'Consolas', monospace; font-size: 0.88rem; line-height: 1.6; }
 .preview-pane { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1.5rem; overflow-y: auto; min-height: 460px; }

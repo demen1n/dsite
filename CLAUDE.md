@@ -95,6 +95,8 @@ templates/
 
 **Old slugs redirect**: renaming a post or series slug keeps the old one in `slug_history` (maintained by triggers in `migrateSlugHistory`, so no Go code on the update paths), and `ViewPost`/`SeriesView` answer 301 from an old slug to the current one — unless the post is unpublished or the series hidden, which stay 404.
 
+**Scheduled posts**: a published post whose `published_at` is in the future is scheduled — it isn't on the site (feed, tags, series, search, sitemap, direct link → 404) until that moment. In SQL use the `livePosts`/`livePostsP` conditions from `queries.go` rather than a bare `published=1`; in Go/templates use `Post.Live()`/`Post.Scheduled()`.
+
 **Sessions**: Stored in SQLite (`sessions` table). 30-day expiry. Expired sessions cleaned on startup and hourly. Single admin user.
 
 **Images**: Server-side resize/re-encode via `internal/imgproc` (EXIF-corrected, max 1600px wide, JPEG output) — replaced the old browser-side canvas resize. GIFs are stored as-is (unprocessed) to preserve animation. Server stores with a random hex filename. Upload validation checks both file extension (allowlist) and magic bytes (MIME content). `imgproc.Process` no longer self-throttles concurrency — callers must hold an `imgproc.Reserve()` slot for the duration of the call (see `internal/imgproc/imgproc.go`).

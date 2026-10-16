@@ -74,6 +74,26 @@ func (p Post) Date() time.Time {
 	return p.CreatedAt
 }
 
+// Scheduled — пост опубликован с датой публикации в будущем: на сайте
+// он появится в эту дату, до тех пор его нет ни в ленте, ни по прямой ссылке.
+func (p Post) Scheduled() bool {
+	return p.Published && p.PublishedAt.After(time.Now())
+}
+
+// Live — пост виден на сайте: опубликован и дата публикации уже наступила.
+func (p Post) Live() bool {
+	return p.Published && !p.Scheduled()
+}
+
+// livePosts / livePostsP — SQL-условие «пост виден на сайте» (см. Post.Live)
+// для таблицы posts без алиаса и с алиасом p. published_at хранится в том же
+// формате, что отдаёт datetime('now') (dbTimeLayout), так что строки
+// сравниваются как даты.
+const (
+	livePosts  = `published=1 AND (published_at IS NULL OR published_at <= datetime('now'))`
+	livePostsP = `p.published=1 AND (p.published_at IS NULL OR p.published_at <= datetime('now'))`
+)
+
 // dbTimeLayout — формат, в котором SQLite отдаёт datetime('now') (UTC).
 const dbTimeLayout = "2006-01-02 15:04:05"
 
@@ -91,7 +111,7 @@ func ListPosts(onlyPublished bool) ([]Post, error) {
 	q := `SELECT id, slug, title, body_md, body_html, cover, published, views, created_at, updated_at, published_at
 	      FROM posts`
 	if onlyPublished {
-		q += ` WHERE published=1`
+		q += ` WHERE ` + livePosts
 	}
 	q += ` ORDER BY COALESCE(published_at, created_at) DESC`
 	rows, err := DB.Query(q)
@@ -129,7 +149,7 @@ func ListPostsMeta(onlyPublished bool) ([]Post, error) {
 	      FROM posts p
 	      LEFT JOIN series s ON s.id = p.series_id`
 	if onlyPublished {
-		q += ` WHERE p.published=1`
+		q += ` WHERE ` + livePostsP
 	}
 	q += ` ORDER BY COALESCE(p.published_at, p.created_at) DESC`
 	rows, err := DB.Query(q)
@@ -169,7 +189,7 @@ func ListPostsPaginated(tagSlug string, page, perPage int) ([]Post, int, error) 
 		            JOIN tags t ON t.id = pt.tag_id AND t.slug = ?`
 		args = append(args, tagSlug)
 	}
-	countQ += ` WHERE p.published=1`
+	countQ += ` WHERE ` + livePostsP
 	if err := DB.QueryRow(countQ, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
@@ -183,12 +203,12 @@ func ListPostsPaginated(tagSlug string, page, perPage int) ([]Post, int, error) 
 	      LEFT JOIN post_tags pt ON pt.post_id = p.id
 	      LEFT JOIN tags t ON t.id = pt.tag_id`
 	if tagSlug != "" {
-		q += ` WHERE p.published=1 AND p.id IN (
+		q += ` WHERE ` + livePostsP + ` AND p.id IN (
 		           SELECT pt2.post_id FROM post_tags pt2
 		           JOIN tags t2 ON t2.id = pt2.tag_id AND t2.slug = ?)`
 		args2 = append(args2, tagSlug)
 	} else {
-		q += ` WHERE p.published=1`
+		q += ` WHERE ` + livePostsP
 	}
 	q += ` GROUP BY p.id ORDER BY COALESCE(p.published_at, p.created_at) DESC LIMIT ? OFFSET ?`
 	args2 = append(args2, perPage, offset)
@@ -391,7 +411,7 @@ func PostsInSeries(seriesID int) ([]Post, error) {
 	rows, err := DB.Query(`
 		SELECT p.id, p.slug, p.title, p.cover, p.body_html, p.published, p.views, p.created_at, p.updated_at, p.published_at
 		FROM posts p
-		WHERE p.series_id=? AND p.published=1
+		WHERE p.series_id=? AND `+livePostsP+`
 		ORDER BY COALESCE(p.published_at, p.created_at) ASC`, seriesID)
 	if err != nil {
 		return nil, err
@@ -437,7 +457,7 @@ type Series struct {
 func ListSeries() ([]Series, error) {
 	rows, err := DB.Query(`
 		SELECT s.id, s.name, s.slug, s.description_md, s.description_html, s.cover, s.collect_photos, s.show_cover, s.hidden, s.shuffle_photos, s.created_at,
-		       COUNT(p.id) FILTER (WHERE p.published=1) as post_count
+		       COUNT(p.id) FILTER (WHERE ` + livePostsP + `) as post_count
 		FROM series s
 		LEFT JOIN posts p ON p.series_id = s.id
 		GROUP BY s.id
@@ -694,7 +714,7 @@ func SearchPosts(q string) ([]Post, error) {
 		SELECT p.id, p.slug, p.title, p.body_html, p.cover, p.created_at, p.published_at
 		FROM posts_fts f
 		JOIN posts p ON p.id = f.rowid
-		WHERE posts_fts MATCH ? AND p.published = 1
+		WHERE posts_fts MATCH ? AND `+livePostsP+`
 		ORDER BY rank
 		LIMIT 20
 	`, strings.Join(terms, " "))
@@ -947,7 +967,7 @@ func ListPublishedTags() ([]TagWithLastMod, error) {
 		SELECT t.id, t.name, t.slug, MAX(p.updated_at)
 		FROM tags t
 		JOIN post_tags pt ON pt.tag_id = t.id
-		JOIN posts p ON p.id = pt.post_id AND p.published = 1
+		JOIN posts p ON p.id = pt.post_id AND ` + livePostsP + `
 		GROUP BY t.id
 		ORDER BY t.name`)
 	if err != nil {

@@ -11,7 +11,10 @@ autoResize(document.getElementById('title'));
 
 function updatePublishLabel() {
   const checked = document.getElementById('published-toggle').checked;
-  document.getElementById('publish-label').textContent = checked ? 'Опубликован' : 'Черновик';
+  const at = document.getElementById('published-at').value;
+  const scheduled = checked && at && new Date(at) > new Date();
+  document.getElementById('publish-label').textContent =
+    scheduled ? 'Запланирован' : checked ? 'Опубликован' : 'Черновик';
 }
 
 // Дата публикации: сервер хранит и принимает UTC (RFC 3339, скрытое поле
@@ -30,6 +33,7 @@ function updatePublishLabel() {
   local.addEventListener('change', () => {
     // Пустое поле — дату не трогаем (сервер оставит текущую).
     hidden.value = local.value ? new Date(local.value).toISOString() : '';
+    updatePublishLabel();
   });
 })();
 
