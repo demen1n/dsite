@@ -228,6 +228,17 @@ func TestScheduledPost(t *testing.T) {
 	if rec := serve(ViewPost, "GET /post/{slug}", "/post/zavtra"); rec.Code != 404 {
 		t.Errorf("scheduled post page: status = %d, want 404", rec.Code)
 	}
+	// И по старому адресу — 404, а не редирект на ещё не вышедший пост.
+	p, err := db.GetPostBySlug("zavtra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdatePost(p.ID, "zavtra-2", p.Title, p.BodyMD, p.BodyHTML, "", true, 0); err != nil {
+		t.Fatal(err)
+	}
+	if rec := serve(ViewPost, "GET /post/{slug}", "/post/zavtra"); rec.Code != 404 {
+		t.Errorf("old slug of a scheduled post: status = %d, want 404", rec.Code)
+	}
 	for _, pg := range []struct {
 		path string
 		h    http.HandlerFunc
