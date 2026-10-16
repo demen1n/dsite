@@ -377,3 +377,21 @@ func TestOldSlugRedirects(t *testing.T) {
 		t.Errorf("hidden series: status = %d, want 404", rec.Code)
 	}
 }
+
+func TestViewPostRelated(t *testing.T) {
+	setupPublic(t)
+	createTaggedPost(t, "main", true, "Сеул")
+	createTaggedPost(t, "neighbour", true, "Сеул")
+	createTaggedPost(t, "stranger", true, "Токио")
+
+	body := serve(ViewPost, "GET /post/{slug}", "/post/main").Body.String()
+	if !strings.Contains(body, "Похожие записи") || !strings.Contains(body, `href="/post/neighbour"`) {
+		t.Error("related block with the post sharing a tag is missing")
+	}
+	if strings.Contains(body, `href="/post/stranger"`) {
+		t.Error("a post without shared tags is listed as related")
+	}
+	if body := serve(ViewPost, "GET /post/{slug}", "/post/stranger").Body.String(); strings.Contains(body, "Похожие записи") {
+		t.Error("related block shown with nothing to show")
+	}
+}

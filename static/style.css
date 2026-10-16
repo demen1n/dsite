@@ -131,6 +131,11 @@ a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
 .series-postnav-dir { display: block; font-size: 0.75rem; color: var(--muted); margin-bottom: 0.2rem; }
 .series-postnav-next { text-align: right; margin-left: auto; }
 
+/* ── Похожие записи (низ поста) ── */
+.related { margin-top: 2.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); }
+.related-heading { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 1rem; }
+.related-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 1rem; }
+
 /* ── Gallery ── */
 .gallery-grid-inner { display: flex; flex-wrap: wrap; gap: 3px; }
 .gallery-item { overflow: hidden; cursor: pointer; }

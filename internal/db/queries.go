@@ -371,6 +371,41 @@ func OldSlugTarget(kind, slug string) (int, bool) {
 	return id, err == nil
 }
 
+// RelatedPosts подбирает до limit видимых на сайте постов, похожих на пост
+// id: по числу общих тегов, при равенстве — более новые. Посты серии
+// seriesID (0 — без серии) не предлагаются: для них на странице поста есть
+// навигация по серии.
+func RelatedPosts(id, seriesID, limit int) ([]Post, error) {
+	rows, err := DB.Query(`
+		SELECT p.id, p.slug, p.title, p.cover, p.body_html, p.created_at, p.published_at
+		FROM post_tags mine
+		JOIN post_tags pt ON pt.tag_id = mine.tag_id AND pt.post_id <> mine.post_id
+		JOIN posts p ON p.id = pt.post_id
+		WHERE mine.post_id = ? AND `+livePostsP+`
+		  AND (? = 0 OR p.series_id IS NULL OR p.series_id <> ?)
+		GROUP BY p.id
+		ORDER BY COUNT(*) DESC, COALESCE(p.published_at, p.created_at) DESC
+		LIMIT ?`, id, seriesID, seriesID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var posts []Post
+	for rows.Next() {
+		var p Post
+		var ca string
+		var pa sql.NullString
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &p.BodyHTML, &ca, &pa); err != nil {
+			return nil, err
+		}
+		p.Published = true
+		p.PublishedAt = parseNullTime(pa)
+		p.CreatedAt, _ = time.Parse(dbTimeLayout, ca)
+		posts = append(posts, p)
+	}
+	return posts, rows.Err()
+}
+
 func DeletePost(id int) error {
 	_, err := DB.Exec(`DELETE FROM posts WHERE id=?`, id)
 	return err
