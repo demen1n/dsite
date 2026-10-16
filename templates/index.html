@@ -25,12 +25,12 @@
   <article class="feed-entry">
     <div class="feed-meta">
       <span>{{relDate .Date}}</span>
+      {{if .Views}}<span class="feed-views">{{.Views}} просм.</span>{{end}}
       {{if .Tags}}
       <span class="feed-meta-tags">
         {{range .Tags}}<a href="/tag/{{tagSlug .}}" class="tag-inline">{{.}}</a>{{end}}
       </span>
       {{end}}
-      {{if .Views}}<span class="feed-views">{{.Views}} просм.</span>{{end}}
     </div>
     <h2 class="feed-title"><a href="/post/{{.Slug}}">{{.Title}}</a></h2>
     {{if .Cover}}

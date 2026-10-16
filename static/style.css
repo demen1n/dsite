@@ -64,7 +64,9 @@ p { margin-bottom: 1rem; }
 .feed-entry { padding: 1.75rem 0; border-top: 1px solid var(--border); }
 .feed-entry:last-child { border-bottom: 1px solid var(--border); }
 .feed-meta { font-family: var(--sans); font-size: 0.8rem; color: var(--muted); margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; }
-.feed-views { margin-left: auto; }
+/* На десктопе просмотры прижаты вправо; в разметке они сразу за датой —
+   так на телефоне (см. Mobile) они остаются рядом с ней. */
+.feed-views { order: 1; margin-left: auto; }
 .feed-title { font-family: var(--sans); font-size: 1.2rem; font-weight: 600; margin-bottom: 0.6rem; line-height: 1.35; }
 .feed-title a { color: var(--text); text-decoration: none; }
 .feed-title a:hover { text-decoration: underline; }
@@ -185,6 +187,10 @@ footer a:hover { color: var(--text); }
   .gallery-cats { padding: 0 1rem 1rem !important; }
   .prose pre { font-size: 0.8rem; padding: 1rem; }
   .prose img { width: 100%; max-width: 100%; margin-left: 0; margin-right: 0; }
+  /* Дата и просмотры — одной строкой, теги — всегда отдельной: иначе
+     длинные теги выталкивали счётчик на свою строку, прижатым вправо. */
+  .feed-views { order: 0; margin-left: 0; }
+  .post-tags, .feed-meta-tags { flex-basis: 100%; border-left: 0; padding-left: 0; }
 }
 
 /* ── 404 ── */
