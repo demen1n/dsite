@@ -40,6 +40,10 @@ func TestHTML(t *testing.T) {
 		{"lone less-than is text", `<p>a < b - c</p>`, n(`<p>a < b~— c</p>`)},
 		{"soft line break glued", "<p>в\nлес</p>", n("<p>в~лес</p>")},
 		{"br resets word", `<p>abc<br>в лес</p>`, n(`<p>abc<br>в~лес</p>`)},
+		{"nbsp entity counts as space", `<p>"а"&nbsp;- б</p>`, `<p>«а»&nbsp;— б</p>`},
+		{"mixed letters and digits are not words", `<p>5км и a5 в лес</p>`, n(`<p>5км и~a5 в~лес</p>`)},
+		{"unterminated comment", `<p>а</p><!-- "x" - y`, `<p>а</p><!-- "x" - y`},
+		{"unterminated tag", `<p>"а" <a href="x`, `<p>«а» <a href="x`},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

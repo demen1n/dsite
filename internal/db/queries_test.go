@@ -966,4 +966,9 @@ func TestRerenderMarkdown(t *testing.T) {
 	if p, _ := GetPostByID(int(postID)); p.BodyHTML != "<new>post md" {
 		t.Errorf("post html after rollback = %q", p.BodyHTML)
 	}
+
+	DB.Close()
+	if _, err := RerenderMarkdown(render); err == nil {
+		t.Error("want an error with the database closed")
+	}
 }

@@ -309,3 +309,11 @@ func TestRerenderMarkdownOnVersionChange(t *testing.T) {
 		t.Errorf("re-rendered despite same version: %q", p.BodyHTML)
 	}
 }
+
+func TestRerenderMarkdownDBError(t *testing.T) {
+	setupPublic(t)
+	db.DB.Close()
+	if err := RerenderMarkdown(); err == nil {
+		t.Error("want an error with the database closed")
+	}
+}
