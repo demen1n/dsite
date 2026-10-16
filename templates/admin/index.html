@@ -4,12 +4,25 @@
   <a class="btn btn-primary" href="/admin/posts/new">+ Новый пост</a>
 </div>
 
-<div class="table-wrap">
+<div class="table-wrap" data-bulk>
   {{if .Data}}
+  <!-- Массовый перенос в серию (#27, вариант B). Чекбоксы в строках
+       привязаны к форме через form="bulk-form": форму нельзя обернуть вокруг
+       таблицы, внутри уже есть формы удаления. -->
+  <form id="bulk-form" method="POST" action="/admin/posts/series" class="bulk-bar bulk-bar-top">
+    <span class="bulk-count">Ничего не выбрано</span>
+    <select name="series_id" class="bulk-select">
+      {{range .AllSeries}}<option value="{{.ID}}">{{.Name}}{{if .Hidden}} (скрыта){{end}}</option>{{end}}
+      <option value="0">— убрать из серии —</option>
+    </select>
+    <button type="submit" class="btn btn-secondary btn-sm bulk-submit" disabled>Перенести в серию</button>
+  </form>
   <table>
     <thead>
       <tr>
+        <th class="td-check"><input type="checkbox" class="bulk-all" title="Выбрать все"></th>
         <th>Заголовок</th>
+        <th>Серия</th>
         <th>Slug</th>
         <th>Статус</th>
         <th>Просмотры</th>
@@ -20,7 +33,9 @@
     <tbody>
       {{range .Data}}
       <tr>
+        <td class="td-check"><input type="checkbox" class="bulk-item" name="post_ids" value="{{.ID}}" form="bulk-form"></td>
         <td><strong>{{.Title}}</strong></td>
+        <td style="color:var(--muted)">{{if .SeriesName}}{{.SeriesName}}{{else}}—{{end}}</td>
         <td class="td-truncate" title="/post/{{.Slug}}"><code style="font-size:0.82rem; color:var(--muted)">/post/{{.Slug}}</code></td>
         <td>
           {{if .Published}}
@@ -48,4 +63,5 @@
   </div>
   {{end}}
 </div>
+<script src="{{static "admin-bulk.js"}}"></script>
 {{end}}

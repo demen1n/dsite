@@ -5,7 +5,9 @@ import (
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,5 +82,91 @@ func TestEditorPublishedAt(t *testing.T) {
 	}
 	if p, _ := db.GetPostByID(p.ID); p.Title != "Post" {
 		t.Errorf("garbage date: post changed to %q", p.Title)
+	}
+}
+
+// postURLForm шлёт обычную (urlencoded) форму — так браузер отправляет
+// формы массовых действий.
+func postURLForm(h http.HandlerFunc, pattern, target string, form url.Values) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("POST", target, strings.NewReader(form.Encode()))
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	mux := http.NewServeMux()
+	mux.HandleFunc(pattern, h)
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestBulkSeriesHandlers(t *testing.T) {
+	setupPublic(t)
+	sid, _ := db.CreateSeries("Trip", "trip", "", "", "", false, true, false, false)
+	other, _ := db.CreateSeries("Other", "other", "", "", "", false, true, false, false)
+	p1, _ := db.CreatePost("p1", "First post", "", "", "", true, 0)
+	p2, _ := db.CreatePost("p2", "Second post", "", "", "", false, 0)
+	p3, _ := db.CreatePost("p3", "Third post", "", "", "", true, int(other))
+	ids := func(ids ...int64) []string {
+		var s []string
+		for _, id := range ids {
+			s = append(s, strconv.FormatInt(id, 10))
+		}
+		return s
+	}
+	seriesOf := func(id int64) int {
+		p, _ := db.GetPostByID(int(id))
+		return p.SeriesID
+	}
+	sPath := "/admin/series/" + strconv.FormatInt(sid, 10)
+
+	// Вариант A: добавить со страницы серии.
+	rec := postURLForm(AddPostsToSeries, "POST /admin/series/{id}/posts", sPath+"/posts",
+		url.Values{"post_ids": ids(p1, p2)})
+	if rec.Code != http.StatusFound || seriesOf(p1) != int(sid) || seriesOf(p2) != int(sid) {
+		t.Fatalf("add: status %d, p1=%d p2=%d", rec.Code, seriesOf(p1), seriesOf(p2))
+	}
+
+	// Страница серии: посты серии и кандидаты (с текущей серией) на месте.
+	page := serve(EditSeriesForm, "GET /admin/series/{id}/edit", sPath+"/edit").Body.String()
+	for _, want := range []string{"First post", "Second post", "Third post", "Other", sPath + "/posts/remove"} {
+		if !strings.Contains(page, want) {
+			t.Errorf("series edit page missing %q", want)
+		}
+	}
+
+	// Вариант A: убрать — p3 не в этой серии, его не трогаем.
+	rec = postURLForm(RemovePostsFromSeries, "POST /admin/series/{id}/posts/remove", sPath+"/posts/remove",
+		url.Values{"post_ids": ids(p2, p3)})
+	if rec.Code != http.StatusFound || seriesOf(p2) != 0 || seriesOf(p3) != int(other) || seriesOf(p1) != int(sid) {
+		t.Errorf("remove: status %d, p1=%d p2=%d p3=%d", rec.Code, seriesOf(p1), seriesOf(p2), seriesOf(p3))
+	}
+
+	// Вариант B: из списка постов — перенести и убрать.
+	rec = postURLForm(BulkSetPostsSeries, "POST /admin/posts/series", "/admin/posts/series",
+		url.Values{"post_ids": ids(p1, p3), "series_id": {strconv.FormatInt(other, 10)}})
+	if rec.Code != http.StatusFound || seriesOf(p1) != int(other) || seriesOf(p3) != int(other) {
+		t.Errorf("bulk move: status %d, p1=%d p3=%d", rec.Code, seriesOf(p1), seriesOf(p3))
+	}
+	rec = postURLForm(BulkSetPostsSeries, "POST /admin/posts/series", "/admin/posts/series",
+		url.Values{"post_ids": ids(p1), "series_id": {"0"}})
+	if rec.Code != http.StatusFound || seriesOf(p1) != 0 {
+		t.Errorf("bulk clear: status %d, p1=%d", rec.Code, seriesOf(p1))
+	}
+
+	// Несуществующая серия — 400, ничего не меняется.
+	rec = postURLForm(BulkSetPostsSeries, "POST /admin/posts/series", "/admin/posts/series",
+		url.Values{"post_ids": ids(p3), "series_id": {"9999"}})
+	if rec.Code != http.StatusBadRequest || seriesOf(p3) != int(other) {
+		t.Errorf("unknown series: status %d, p3=%d", rec.Code, seriesOf(p3))
+	}
+	if rec := postURLForm(AddPostsToSeries, "POST /admin/series/{id}/posts", "/admin/series/9999/posts",
+		url.Values{"post_ids": ids(p1)}); rec.Code != http.StatusNotFound {
+		t.Errorf("add to unknown series: status %d, want 404", rec.Code)
+	}
+
+	// Список постов: колонка серии и форма массового переноса.
+	index := serve(AdminIndex, "GET /admin", "/admin").Body.String()
+	for _, want := range []string{`action="/admin/posts/series"`, `form="bulk-form"`, "Other"} {
+		if !strings.Contains(index, want) {
+			t.Errorf("admin index missing %q", want)
+		}
 	}
 }

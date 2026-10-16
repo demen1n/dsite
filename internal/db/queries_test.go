@@ -819,3 +819,64 @@ func TestPostDate(t *testing.T) {
 		t.Errorf("never-published draft: Date = %v, want CreatedAt", got)
 	}
 }
+
+// ───── Bulk series ─────
+
+func TestBulkSeries(t *testing.T) {
+	setupTestDB(t)
+	a, _ := CreateSeries("A", "a", "", "", "", false, true, false, false)
+	b, _ := CreateSeries("B", "b", "", "", "", false, true, false, false)
+	p1, _ := CreatePost("p1", "P1", "", "", "", true, 0)
+	p2, _ := CreatePost("p2", "P2", "", "", "", false, int(b))
+	p3, _ := CreatePost("p3", "P3", "", "", "", true, 0)
+
+	seriesOf := func(id int64) int {
+		p, err := GetPostByID(int(id))
+		if err != nil {
+			t.Fatalf("GetPostByID %d: %v", id, err)
+		}
+		return p.SeriesID
+	}
+
+	// Добавление: p1 без серии, p2 переезжает из B; p3 не выбран.
+	if err := SetPostsSeries([]int{int(p1), int(p2)}, int(a)); err != nil {
+		t.Fatalf("SetPostsSeries: %v", err)
+	}
+	if seriesOf(p1) != int(a) || seriesOf(p2) != int(a) || seriesOf(p3) != 0 {
+		t.Errorf("after add: p1=%d p2=%d p3=%d, want %d %d 0", seriesOf(p1), seriesOf(p2), seriesOf(p3), a, a)
+	}
+
+	// Удаление из A трогает только посты A: p3 переносим в B и тоже «удаляем».
+	SetPostsSeries([]int{int(p3)}, int(b)) //nolint
+	if err := RemovePostsFromSeries(int(a), []int{int(p1), int(p3)}); err != nil {
+		t.Fatalf("RemovePostsFromSeries: %v", err)
+	}
+	if seriesOf(p1) != 0 || seriesOf(p2) != int(a) || seriesOf(p3) != int(b) {
+		t.Errorf("after remove: p1=%d p2=%d p3=%d, want 0 %d %d", seriesOf(p1), seriesOf(p2), seriesOf(p3), a, b)
+	}
+
+	// seriesID=0 — убрать из любой серии.
+	if err := SetPostsSeries([]int{int(p2), int(p3)}, 0); err != nil {
+		t.Fatalf("SetPostsSeries 0: %v", err)
+	}
+	if seriesOf(p2) != 0 || seriesOf(p3) != 0 {
+		t.Errorf("after clear: p2=%d p3=%d, want 0 0", seriesOf(p2), seriesOf(p3))
+	}
+
+	// Пустой список — no-op без ошибки.
+	if err := SetPostsSeries(nil, int(a)); err != nil {
+		t.Errorf("SetPostsSeries(nil): %v", err)
+	}
+	if err := RemovePostsFromSeries(int(a), nil); err != nil {
+		t.Errorf("RemovePostsFromSeries(nil): %v", err)
+	}
+
+	// ListPostsMeta отдаёт серию поста для админ-списка.
+	SetPostsSeries([]int{int(p1)}, int(b)) //nolint
+	posts, _ := ListPostsMeta(false)
+	for _, p := range posts {
+		if p.ID == int(p1) && (p.SeriesID != int(b) || p.SeriesName != "B") {
+			t.Errorf("ListPostsMeta p1: series %d %q, want %d B", p.SeriesID, p.SeriesName, b)
+		}
+	}
+}
