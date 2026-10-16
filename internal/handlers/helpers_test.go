@@ -126,8 +126,17 @@ func TestRelDate(t *testing.T) {
 	}
 
 	old := time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC)
-	if got := relDate(old); got != "15 Jun 2020" {
+	if got := relDate(old); got != "15 июня 2020" {
 		t.Errorf("relDate(old): got %q", got)
+	}
+}
+
+func TestRuDate(t *testing.T) {
+	cases := map[time.Month]string{time.January: "1 января 2026", time.May: "1 мая 2026", time.December: "1 декабря 2026"}
+	for m, want := range cases {
+		if got := ruDate(time.Date(2026, m, 1, 12, 0, 0, 0, time.UTC)); got != want {
+			t.Errorf("ruDate(%v) = %q, want %q", m, got, want)
+		}
 	}
 }
 

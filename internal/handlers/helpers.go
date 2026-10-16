@@ -181,7 +181,7 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 
 	funcMap = template.FuncMap{
 		"safeHTML":     func(s string) template.HTML { return template.HTML(s) },
-		"fmtDate":      func(t time.Time) string { return t.Format("2 January 2006") },
+		"fmtDate":      ruDate,
 		"fmtDateShort": func(t time.Time) string { return t.Format("02.01.2006") },
 		"relDate":      relDate,
 		"excerpt":      excerpt,
@@ -670,8 +670,17 @@ func relDate(t time.Time) string {
 		w := days / 7
 		return fmt.Sprintf("%d %s назад", w, weekWord(w))
 	default:
-		return t.Format("2 Jan 2006")
+		return ruDate(t)
 	}
+}
+
+var ruMonths = [...]string{"января", "февраля", "марта", "апреля", "мая", "июня",
+	"июля", "августа", "сентября", "октября", "ноября", "декабря"}
+
+// ruDate — дата по-русски: «15 июня 2026». time.Format знает только
+// английские названия месяцев.
+func ruDate(t time.Time) string {
+	return fmt.Sprintf("%d %s %d", t.Day(), ruMonths[t.Month()-1], t.Year())
 }
 
 func dayWord(n int) string {
