@@ -8,6 +8,7 @@ import (
 	"image"
 	"image/color"
 	"image/png"
+	"log"
 	"math"
 	"math/rand/v2"
 	"net/http"
@@ -137,8 +138,12 @@ type PostViewData struct {
 	SeriesPosts []db.Post
 	PrevPost    *db.Post
 	NextPost    *db.Post
-	FromSeries  bool // true если пришли по ссылке со страницы серии
+	FromSeries  bool       // true если пришли по ссылке со страницы серии
+	Related     []PostCard // «Похожие записи» внизу поста
 }
+
+// relatedLimit — сколько похожих записей показывать под постом.
+const relatedLimit = 3
 
 // fromSeriesPage сообщает, что реферер запроса — страница серии на этом же
 // сайте (а не блог, поиск или внешняя ссылка).
@@ -238,6 +243,12 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	if related, err := db.RelatedPosts(post.ID, post.SeriesID, relatedLimit); err == nil {
+		vd.Related = postCards(related)
+	} else {
+		log.Printf("RelatedPosts for post %d: %v", post.ID, err)
+	}
+
 	pd := page(post.Title, vd)
 	pd.OGDescription = excerpt(post.BodyHTML)
 	base := baseURL(r)
@@ -266,18 +277,30 @@ func SeriesIndex(w http.ResponseWriter, r *http.Request) {
 	render(w, "series_index.html", pd)
 }
 
-// SeriesPostCard — пост в сетке страницы серии. DisplayCover уже готов для
-// вставки в <img src>: либо обложка поста, либо первая картинка из тела
-// (если своей обложки нет), либо пусто.
-type SeriesPostCard struct {
+// PostCard — пост-плитка (сетка серии, похожие записи). DisplayCover уже
+// готов для вставки в <img src>: либо обложка поста, либо первая картинка
+// из тела (если своей обложки нет), либо пусто.
+type PostCard struct {
 	db.Post
 	DisplayCover string
 }
 
+func postCards(posts []db.Post) []PostCard {
+	cards := make([]PostCard, len(posts))
+	for i, p := range posts {
+		cover := firstImageSrc(p.BodyHTML)
+		if p.Cover != "" {
+			cover = "/uploads/" + p.Cover
+		}
+		cards[i] = PostCard{Post: p, DisplayCover: cover}
+	}
+	return cards
+}
+
 type SeriesViewData struct {
 	*db.Series
-	Posts  []SeriesPostCard // плитки постов — когда CollectPhotos выключен
-	Photos []string         // src всех картинок из постов — когда CollectPhotos включен
+	Posts  []PostCard // плитки постов — когда CollectPhotos выключен
+	Photos []string   // src всех картинок из постов — когда CollectPhotos включен
 }
 
 // GET /series/{slug}
@@ -314,18 +337,7 @@ func SeriesView(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 	} else {
-		cards := make([]SeriesPostCard, len(posts))
-		for i, p := range posts {
-			cover := ""
-			switch {
-			case p.Cover != "":
-				cover = "/uploads/" + p.Cover
-			default:
-				cover = firstImageSrc(p.BodyHTML)
-			}
-			cards[i] = SeriesPostCard{Post: p, DisplayCover: cover}
-		}
-		vd.Posts = cards
+		vd.Posts = postCards(posts)
 	}
 	pd := page(series.Name, vd)
 	base := baseURL(r)

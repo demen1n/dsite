@@ -53,6 +53,28 @@
     {{end}}
   </nav>
   {{end}}
+  {{if .Related}}
+  <section class="related">
+    <h2 class="related-heading">Похожие записи</h2>
+    <div class="related-grid">
+      {{range .Related}}
+      <a class="series-card" href="/post/{{.Slug}}">
+        {{if .DisplayCover}}
+        <img class="series-card-cover" src="{{thumbSrc .DisplayCover}}"{{with thumbSrcset .DisplayCover}} srcset="{{.}}" sizes="(max-width: 600px) 100vw, 240px"{{end}} alt="" loading="lazy" decoding="async">
+        {{else}}
+        <div class="series-card-cover series-card-cover-empty"></div>
+        {{end}}
+        <div class="series-card-body">
+          <div class="series-card-text">
+            <div class="series-card-title">{{.Title}}</div>
+            <div class="series-card-date">{{fmtDateShort .Date}}</div>
+          </div>
+        </div>
+      </a>
+      {{end}}
+    </div>
+  </section>
+  {{end}}
 </article>
 {{end}}
 {{end}}

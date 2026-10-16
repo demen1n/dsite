@@ -1124,3 +1124,69 @@ func TestScheduledPostsHidden(t *testing.T) {
 		t.Errorf("after the date: ListPosts(true) = %v", slugs(got))
 	}
 }
+
+// ───── Related posts ─────
+
+func TestRelatedPosts(t *testing.T) {
+	setupTestDB(t)
+	sid, err := CreateSeries("S", "s", "", "", "", false, true, false, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	day := 0
+	mk := func(slug string, series int, published bool, tags ...string) int {
+		t.Helper()
+		id, err := CreatePost(slug, slug, "", "", "", published, series)
+		if err != nil {
+			t.Fatal(err)
+		}
+		day++
+		if err := SetPostPublishedAt(int(id), time.Date(2026, 1, day, 0, 0, 0, 0, time.UTC)); err != nil {
+			t.Fatal(err)
+		}
+		if err := SetPostTags(int(id), tags); err != nil {
+			t.Fatal(err)
+		}
+		return int(id)
+	}
+	me := mk("me", int(sid), true, "a", "b", "c")
+	mk("one-old", 0, true, "a")
+	mk("two", 0, true, "a", "b")
+	mk("one-new", 0, true, "c")
+	mk("same-series", int(sid), true, "a", "b", "c")
+	mk("draft", 0, false, "a", "b", "c")
+	mk("unrelated", 0, true, "z")
+	future, err := CreatePost("future", "future", "", "", "", true, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	SetPostPublishedAt(int(future), time.Now().Add(time.Hour))
+	SetPostTags(int(future), []string{"a", "b", "c"})
+
+	slugs := func(posts []Post) string {
+		var s []string
+		for _, p := range posts {
+			s = append(s, p.Slug)
+		}
+		return fmt.Sprint(s)
+	}
+	got, err := RelatedPosts(me, int(sid), 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "[two one-new one-old]"; slugs(got) != want {
+		t.Errorf("RelatedPosts = %s, want %s", slugs(got), want)
+	}
+	if got, _ := RelatedPosts(me, int(sid), 1); slugs(got) != "[two]" {
+		t.Errorf("limit 1 = %s", slugs(got))
+	}
+	// Без серии (или серия скрыта) — посты той же серии тоже предлагаются.
+	if got, _ := RelatedPosts(me, 0, 1); slugs(got) != "[same-series]" {
+		t.Errorf("no series = %s", slugs(got))
+	}
+
+	DB.Close()
+	if _, err := RelatedPosts(me, 0, 3); err == nil {
+		t.Error("want an error with the database closed")
+	}
+}
