@@ -202,10 +202,11 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 				return fmt.Sprintf("%d B", n)
 			}
 		},
-		"tagSlug": db.TagSlug,
-		"add":     func(a, b int) int { return a + b },
-		"sub":     func(a, b int) int { return a - b },
-		"join":    strings.Join,
+		"tagSlug":    db.TagSlug,
+		"thumbWidth": func() int { return thumbWidth },
+		"add":        func(a, b int) int { return a + b },
+		"sub":        func(a, b int) int { return a - b },
+		"join":       strings.Join,
 		"json": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			return template.JS(b), err
