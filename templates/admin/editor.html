@@ -239,6 +239,16 @@
     <a href="/admin/series/new" target="_blank" style="font-size:0.8rem; color:var(--muted)">+ новая</a>
   </div>
 
+  <!-- Published at -->
+  <div class="editor-tags">
+    <span class="editor-tags-label">Дата публикации:</span>
+    <input type="datetime-local" id="published-at-local"
+           style="border:1px solid var(--border); border-radius:4px; padding:0.2rem 0.5rem; font-size:0.85rem; background:var(--bg); color:var(--text); font-family:inherit">
+    <input type="hidden" name="published_at" id="published-at" form="post-form"
+           value="{{with .Data}}{{if not .PublishedAt.IsZero}}{{.PublishedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}{{end}}{{end}}">
+    <span style="font-size:0.8rem; color:var(--muted)">пусто — проставится при первой публикации</span>
+  </div>
+
   <!-- Tags -->
   <div class="editor-tags">
     <span class="editor-tags-label">Теги:</span>

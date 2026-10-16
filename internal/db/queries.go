@@ -40,20 +40,23 @@ func GetAdmin() (login, hash string, err error) {
 // ───────────────────────── Posts ─────────────────────────
 
 type Post struct {
-	ID         int
-	Slug       string
-	Title      string
-	BodyMD     string
-	BodyHTML   string
-	Cover      string
-	Published  bool
-	Views      int
-	Tags       []string
-	CreatedAt  time.Time
-	UpdatedAt  time.Time
-	SeriesID   int // 0 = not part of a series
-	SeriesName string
-	SeriesSlug string
+	ID        int
+	Slug      string
+	Title     string
+	BodyMD    string
+	BodyHTML  string
+	Cover     string
+	Published bool
+	Views     int
+	Tags      []string
+	CreatedAt time.Time
+	UpdatedAt time.Time
+	// PublishedAt — дата публикации: первая публикация или выставленная
+	// вручную. Нулевая, если пост ещё ни разу не публиковался.
+	PublishedAt time.Time
+	SeriesID    int // 0 = not part of a series
+	SeriesName  string
+	SeriesSlug  string
 	// SeriesHidden — серия поста скрыта (см. Series.Hidden); заполняется
 	// только GetPostBySlug/GetPostByID.
 	SeriesHidden bool
@@ -61,14 +64,35 @@ type Post struct {
 
 const PostsPerPage = 10
 
+// Date — дата, которую показываем и по которой сортируем: дата публикации,
+// а для ни разу не публиковавшегося черновика — дата создания.
+func (p Post) Date() time.Time {
+	if !p.PublishedAt.IsZero() {
+		return p.PublishedAt
+	}
+	return p.CreatedAt
+}
+
+// dbTimeLayout — формат, в котором SQLite отдаёт datetime('now') (UTC).
+const dbTimeLayout = "2006-01-02 15:04:05"
+
+// parseNullTime разбирает nullable-колонку с датой; NULL — нулевое время.
+func parseNullTime(ns sql.NullString) time.Time {
+	if !ns.Valid {
+		return time.Time{}
+	}
+	t, _ := time.Parse(dbTimeLayout, ns.String)
+	return t
+}
+
 // ListPosts возвращает все посты (для admin-панели, без тегов).
 func ListPosts(onlyPublished bool) ([]Post, error) {
-	q := `SELECT id, slug, title, body_md, body_html, cover, published, views, created_at, updated_at
+	q := `SELECT id, slug, title, body_md, body_html, cover, published, views, created_at, updated_at, published_at
 	      FROM posts`
 	if onlyPublished {
 		q += ` WHERE published=1`
 	}
-	q += ` ORDER BY created_at DESC`
+	q += ` ORDER BY COALESCE(published_at, created_at) DESC`
 	rows, err := DB.Query(q)
 	if err != nil {
 		return nil, err
@@ -79,11 +103,13 @@ func ListPosts(onlyPublished bool) ([]Post, error) {
 		var p Post
 		var pub int
 		var ca, ua string
+		var pa sql.NullString
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua); err != nil {
+			&p.Cover, &pub, &p.Views, &ca, &ua, &pa); err != nil {
 			return nil, err
 		}
 		p.Published = pub == 1
+		p.PublishedAt = parseNullTime(pa)
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
 		posts = append(posts, p)
@@ -96,12 +122,12 @@ func ListPosts(onlyPublished bool) ([]Post, error) {
 // otherwise pull every post's full markdown+HTML off disk just to read a
 // slug and a date.
 func ListPostsMeta(onlyPublished bool) ([]Post, error) {
-	q := `SELECT id, slug, title, cover, published, views, created_at, updated_at
+	q := `SELECT id, slug, title, cover, published, views, created_at, updated_at, published_at
 	      FROM posts`
 	if onlyPublished {
 		q += ` WHERE published=1`
 	}
-	q += ` ORDER BY created_at DESC`
+	q += ` ORDER BY COALESCE(published_at, created_at) DESC`
 	rows, err := DB.Query(q)
 	if err != nil {
 		return nil, err
@@ -112,10 +138,12 @@ func ListPostsMeta(onlyPublished bool) ([]Post, error) {
 		var p Post
 		var pub int
 		var ca, ua string
-		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &pub, &p.Views, &ca, &ua); err != nil {
+		var pa sql.NullString
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &pub, &p.Views, &ca, &ua, &pa); err != nil {
 			return nil, err
 		}
 		p.Published = pub == 1
+		p.PublishedAt = parseNullTime(pa)
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
 		posts = append(posts, p)
@@ -142,7 +170,7 @@ func ListPostsPaginated(tagSlug string, page, perPage int) ([]Post, int, error) 
 	offset := (page - 1) * perPage
 	args2 := []any{}
 	q := `SELECT p.id, p.slug, p.title, p.body_md, p.body_html, p.cover,
-	             p.published, p.views, p.created_at, p.updated_at,
+	             p.published, p.views, p.created_at, p.updated_at, p.published_at,
 	             COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
 	      FROM posts p
 	      LEFT JOIN post_tags pt ON pt.post_id = p.id
@@ -155,7 +183,7 @@ func ListPostsPaginated(tagSlug string, page, perPage int) ([]Post, int, error) 
 	} else {
 		q += ` WHERE p.published=1`
 	}
-	q += ` GROUP BY p.id ORDER BY p.created_at DESC LIMIT ? OFFSET ?`
+	q += ` GROUP BY p.id ORDER BY COALESCE(p.published_at, p.created_at) DESC LIMIT ? OFFSET ?`
 	args2 = append(args2, perPage, offset)
 
 	rows, err := DB.Query(q, args2...)
@@ -168,11 +196,13 @@ func ListPostsPaginated(tagSlug string, page, perPage int) ([]Post, int, error) 
 		var p Post
 		var pub int
 		var ca, ua, tagsStr string
+		var pa sql.NullString
 		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua, &tagsStr); err != nil {
+			&p.Cover, &pub, &p.Views, &ca, &ua, &pa, &tagsStr); err != nil {
 			return nil, 0, err
 		}
 		p.Published = pub == 1
+		p.PublishedAt = parseNullTime(pa)
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
 		if tagsStr != "" {
@@ -197,9 +227,10 @@ func GetPostBySlug(slug string) (*Post, error) {
 	var seriesID sql.NullInt64
 	var seriesName, seriesSlug sql.NullString
 	var seriesHidden sql.NullInt64
+	var pa sql.NullString
 	err := DB.QueryRow(`
 		SELECT p.id, p.slug, p.title, p.body_md, p.body_html, p.cover, p.published, p.views,
-		       p.created_at, p.updated_at, p.series_id, s.name, s.slug, s.hidden,
+		       p.created_at, p.updated_at, p.published_at, p.series_id, s.name, s.slug, s.hidden,
 		       COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
 		FROM posts p
 		LEFT JOIN post_tags pt ON pt.post_id = p.id
@@ -207,7 +238,7 @@ func GetPostBySlug(slug string) (*Post, error) {
 		LEFT JOIN series s ON s.id = p.series_id
 		WHERE p.slug=? GROUP BY p.id`, slug).
 		Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &seriesHidden, &tagsStr)
+			&p.Cover, &pub, &p.Views, &ca, &ua, &pa, &seriesID, &seriesName, &seriesSlug, &seriesHidden, &tagsStr)
 	if err != nil {
 		return nil, err
 	}
@@ -218,6 +249,7 @@ func GetPostBySlug(slug string) (*Post, error) {
 	p.SeriesName = seriesName.String
 	p.SeriesSlug = seriesSlug.String
 	p.SeriesHidden = seriesHidden.Int64 == 1
+	p.PublishedAt = parseNullTime(pa)
 	if tagsStr != "" {
 		p.Tags = strings.Split(tagsStr, ",")
 	}
@@ -231,9 +263,10 @@ func GetPostByID(id int) (*Post, error) {
 	var seriesID sql.NullInt64
 	var seriesName, seriesSlug sql.NullString
 	var seriesHidden sql.NullInt64
+	var pa sql.NullString
 	err := DB.QueryRow(`
 		SELECT p.id, p.slug, p.title, p.body_md, p.body_html, p.cover, p.published, p.views,
-		       p.created_at, p.updated_at, p.series_id, s.name, s.slug, s.hidden,
+		       p.created_at, p.updated_at, p.published_at, p.series_id, s.name, s.slug, s.hidden,
 		       COALESCE(GROUP_CONCAT(t.name, ','), '') as tags
 		FROM posts p
 		LEFT JOIN post_tags pt ON pt.post_id = p.id
@@ -241,7 +274,7 @@ func GetPostByID(id int) (*Post, error) {
 		LEFT JOIN series s ON s.id = p.series_id
 		WHERE p.id=? GROUP BY p.id`, id).
 		Scan(&p.ID, &p.Slug, &p.Title, &p.BodyMD, &p.BodyHTML,
-			&p.Cover, &pub, &p.Views, &ca, &ua, &seriesID, &seriesName, &seriesSlug, &seriesHidden, &tagsStr)
+			&p.Cover, &pub, &p.Views, &ca, &ua, &pa, &seriesID, &seriesName, &seriesSlug, &seriesHidden, &tagsStr)
 	if err != nil {
 		return nil, err
 	}
@@ -252,6 +285,7 @@ func GetPostByID(id int) (*Post, error) {
 	p.SeriesName = seriesName.String
 	p.SeriesSlug = seriesSlug.String
 	p.SeriesHidden = seriesHidden.Int64 == 1
+	p.PublishedAt = parseNullTime(pa)
 	if tagsStr != "" {
 		p.Tags = strings.Split(tagsStr, ",")
 	}
@@ -271,8 +305,10 @@ func CreatePost(slug, title, bodyMD, bodyHTML, cover string, published bool, ser
 	if published {
 		pub = 1
 	}
-	res, err := DB.Exec(`INSERT INTO posts (slug, title, body_md, body_html, cover, published, series_id)
-	                      VALUES (?,?,?,?,?,?,?)`, slug, title, bodyMD, bodyHTML, cover, pub, seriesIDArg(seriesID))
+	// published_at ставится при первой публикации (см. UpdatePost).
+	res, err := DB.Exec(`INSERT INTO posts (slug, title, body_md, body_html, cover, published, series_id, published_at)
+	                      VALUES (?,?,?,?,?,?,?, CASE WHEN ?=1 THEN datetime('now') END)`,
+		slug, title, bodyMD, bodyHTML, cover, pub, seriesIDArg(seriesID), pub)
 	if err != nil {
 		return 0, err
 	}
@@ -284,9 +320,19 @@ func UpdatePost(id int, slug, title, bodyMD, bodyHTML, cover string, published b
 	if published {
 		pub = 1
 	}
+	// published_at ставится при первой публикации и дальше сам не меняется:
+	// снятие с публикации и повторная публикация сохраняют исходную дату.
 	_, err := DB.Exec(`UPDATE posts SET slug=?, title=?, body_md=?, body_html=?, cover=?,
-	                   published=?, series_id=?, updated_at=datetime('now') WHERE id=?`,
-		slug, title, bodyMD, bodyHTML, cover, pub, seriesIDArg(seriesID), id)
+	                   published=?, series_id=?, updated_at=datetime('now'),
+	                   published_at=COALESCE(published_at, CASE WHEN ?=1 THEN datetime('now') END)
+	                   WHERE id=?`,
+		slug, title, bodyMD, bodyHTML, cover, pub, seriesIDArg(seriesID), pub, id)
+	return err
+}
+
+// SetPostPublishedAt выставляет дату публикации вручную (из редактора).
+func SetPostPublishedAt(id int, t time.Time) error {
+	_, err := DB.Exec(`UPDATE posts SET published_at=? WHERE id=?`, t.UTC().Format(dbTimeLayout), id)
 	return err
 }
 
@@ -296,14 +342,14 @@ func DeletePost(id int) error {
 }
 
 // PostsInSeries возвращает опубликованные посты серии в хронологическом
-// порядке (по дате создания) — так задаётся порядок серии: просто публикуй
-// посты по порядку.
+// порядке (по дате публикации) — так задаётся порядок серии: просто публикуй
+// посты по порядку (или поправь дату публикации в редакторе).
 func PostsInSeries(seriesID int) ([]Post, error) {
 	rows, err := DB.Query(`
-		SELECT p.id, p.slug, p.title, p.cover, p.body_html, p.published, p.views, p.created_at, p.updated_at
+		SELECT p.id, p.slug, p.title, p.cover, p.body_html, p.published, p.views, p.created_at, p.updated_at, p.published_at
 		FROM posts p
 		WHERE p.series_id=? AND p.published=1
-		ORDER BY p.created_at ASC`, seriesID)
+		ORDER BY COALESCE(p.published_at, p.created_at) ASC`, seriesID)
 	if err != nil {
 		return nil, err
 	}
@@ -313,10 +359,12 @@ func PostsInSeries(seriesID int) ([]Post, error) {
 		var p Post
 		var pub int
 		var ca, ua string
-		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &p.BodyHTML, &pub, &p.Views, &ca, &ua); err != nil {
+		var pa sql.NullString
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &p.BodyHTML, &pub, &p.Views, &ca, &ua, &pa); err != nil {
 			return nil, err
 		}
 		p.Published = pub == 1
+		p.PublishedAt = parseNullTime(pa)
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
 		posts = append(posts, p)
@@ -599,7 +647,7 @@ func SearchPosts(q string) ([]Post, error) {
 		return nil, nil
 	}
 	rows, err := DB.Query(`
-		SELECT p.id, p.slug, p.title, p.body_html, p.cover, p.created_at
+		SELECT p.id, p.slug, p.title, p.body_html, p.cover, p.created_at, p.published_at
 		FROM posts_fts f
 		JOIN posts p ON p.id = f.rowid
 		WHERE posts_fts MATCH ? AND p.published = 1
@@ -614,9 +662,11 @@ func SearchPosts(q string) ([]Post, error) {
 	for rows.Next() {
 		var p Post
 		var ca string
-		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.BodyHTML, &p.Cover, &ca); err != nil {
+		var pa sql.NullString
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.BodyHTML, &p.Cover, &ca, &pa); err != nil {
 			return nil, err
 		}
+		p.PublishedAt = parseNullTime(pa)
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		posts = append(posts, p)
 	}

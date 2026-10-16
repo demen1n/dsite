@@ -54,6 +54,9 @@ func Init(path string) error {
 	if err = migrateSeries(); err != nil {
 		return fmt.Errorf("migrate series: %w", err)
 	}
+	if err = migratePostsPublishedAt(); err != nil {
+		return fmt.Errorf("migrate posts published_at: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -163,6 +166,21 @@ func migrateSeries() error {
 	// shuffle_photos: в режиме collect_photos показывать фото в случайном
 	// порядке (новом при каждой загрузке), а не по порядку постов.
 	DB.Exec(`ALTER TABLE series ADD COLUMN shuffle_photos INTEGER NOT NULL DEFAULT 0`)
+	return nil
+}
+
+// migratePostsPublishedAt adds posts.published_at — когда пост впервые стал
+// публичным (или дата, выставленная вручную в редакторе). Лента, серии и
+// фиды сортируются по нему, а не по created_at. NULL — пост ещё ни разу не
+// публиковался; такие посты сортируются по created_at.
+//
+// Бэкфилл: уже опубликованным постам ставим published_at = created_at —
+// честнее данных у нас нет. Идемпотентно: новые публикации получают
+// published_at сразу (см. CreatePost/UpdatePost), так что на следующих
+// стартах условию соответствуют только посты из старой базы.
+func migratePostsPublishedAt() error {
+	DB.Exec(`ALTER TABLE posts ADD COLUMN published_at TEXT`)
+	DB.Exec(`UPDATE posts SET published_at = created_at WHERE published = 1 AND published_at IS NULL`)
 	return nil
 }
 

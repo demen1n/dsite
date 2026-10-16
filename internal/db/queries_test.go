@@ -719,3 +719,103 @@ func TestSeriesShufflePhotosFlag(t *testing.T) {
 		t.Errorf("ListSeries: got %+v", list)
 	}
 }
+
+// ───── Published at ─────
+
+func TestPostPublishedAtStamping(t *testing.T) {
+	setupTestDB(t)
+
+	draftID, _ := CreatePost("draft", "Draft", "", "", "", false, 0)
+	pubID, _ := CreatePost("pub", "Pub", "", "", "", true, 0)
+
+	if p, _ := GetPostByID(int(draftID)); !p.PublishedAt.IsZero() {
+		t.Errorf("draft: PublishedAt = %v, want zero", p.PublishedAt)
+	}
+	if p, _ := GetPostByID(int(pubID)); p.PublishedAt.IsZero() {
+		t.Error("published on create: PublishedAt not set")
+	}
+
+	// Первая публикация черновика ставит дату.
+	if err := UpdatePost(int(draftID), "draft", "Draft", "", "", "", true, 0); err != nil {
+		t.Fatalf("UpdatePost publish: %v", err)
+	}
+	if p, _ := GetPostByID(int(draftID)); p.PublishedAt.IsZero() {
+		t.Error("first publish: PublishedAt not set")
+	}
+
+	// Снятие с публикации и повторная публикация дату не меняют.
+	old := time.Date(2020, 5, 1, 10, 30, 0, 0, time.UTC)
+	if err := SetPostPublishedAt(int(draftID), old); err != nil {
+		t.Fatalf("SetPostPublishedAt: %v", err)
+	}
+	UpdatePost(int(draftID), "draft", "Draft", "", "", "", false, 0) //nolint
+	UpdatePost(int(draftID), "draft", "Draft", "", "", "", true, 0)  //nolint
+	if p, _ := GetPostByID(int(draftID)); !p.PublishedAt.Equal(old) {
+		t.Errorf("after unpublish/republish: PublishedAt = %v, want %v", p.PublishedAt, old)
+	}
+}
+
+func TestPostsOrderedByPublishedAt(t *testing.T) {
+	setupTestDB(t)
+	sid, _ := CreateSeries("Trip", "trip", "", "", "", false, true, false, false)
+
+	// Создаём a, b, c по порядку, но дату публикации a ставим самой поздней.
+	ids := map[string]int{}
+	for _, slug := range []string{"a", "b", "c"} {
+		id, err := CreatePost(slug, slug, "", "", "", true, int(sid))
+		if err != nil {
+			t.Fatalf("CreatePost %s: %v", slug, err)
+		}
+		ids[slug] = int(id)
+	}
+	base := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
+	SetPostPublishedAt(ids["b"], base)                  //nolint
+	SetPostPublishedAt(ids["c"], base.AddDate(0, 0, 1)) //nolint
+	SetPostPublishedAt(ids["a"], base.AddDate(0, 0, 2)) //nolint
+
+	slugs := func(posts []Post) string {
+		var s string
+		for _, p := range posts {
+			s += p.Slug
+		}
+		return s
+	}
+	if posts, _, _ := ListPostsPaginated("", 1, 10); slugs(posts) != "acb" {
+		t.Errorf("feed order = %q, want acb (newest published first)", slugs(posts))
+	}
+	if posts, _ := ListPostsMeta(true); slugs(posts) != "acb" {
+		t.Errorf("meta order = %q, want acb", slugs(posts))
+	}
+	if posts, _ := PostsInSeries(int(sid)); slugs(posts) != "bca" {
+		t.Errorf("series order = %q, want bca (oldest published first)", slugs(posts))
+	}
+}
+
+func TestMigratePostsPublishedAtBackfill(t *testing.T) {
+	setupTestDB(t)
+	id, _ := CreatePost("old", "Old", "", "", "", true, 0)
+	draftID, _ := CreatePost("old-draft", "Old draft", "", "", "", false, 0)
+	// Как в базе до миграции: даты публикации нет, created_at в прошлом.
+	DB.Exec(`UPDATE posts SET published_at = NULL, created_at = '2024-03-04 05:06:07'`) //nolint
+
+	if err := migratePostsPublishedAt(); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if p, _ := GetPostByID(int(id)); p.PublishedAt != time.Date(2024, 3, 4, 5, 6, 7, 0, time.UTC) {
+		t.Errorf("backfilled PublishedAt = %v, want created_at", p.PublishedAt)
+	}
+	if p, _ := GetPostByID(int(draftID)); !p.PublishedAt.IsZero() {
+		t.Errorf("draft PublishedAt = %v, want zero", p.PublishedAt)
+	}
+}
+
+func TestPostDate(t *testing.T) {
+	created := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	published := time.Date(2025, 6, 7, 8, 9, 10, 0, time.UTC)
+	if got := (Post{CreatedAt: created, PublishedAt: published}).Date(); !got.Equal(published) {
+		t.Errorf("published post: Date = %v, want PublishedAt", got)
+	}
+	if got := (Post{CreatedAt: created}).Date(); !got.Equal(created) {
+		t.Errorf("never-published draft: Date = %v, want CreatedAt", got)
+	}
+}

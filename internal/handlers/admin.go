@@ -159,6 +159,11 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	title := r.FormValue("title")
 	bodyMD := r.FormValue("body")
 	published := r.FormValue("published") == "1"
+	publishedAt, err := parsePublishedAt(r.FormValue("published_at"))
+	if err != nil {
+		http.Error(w, "bad published_at", 400)
+		return
+	}
 
 	slug := r.FormValue("slug")
 	if slug == "" {
@@ -186,6 +191,11 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Internal Server Error", 500)
 		return
 	}
+	if !publishedAt.IsZero() {
+		if err := db.SetPostPublishedAt(int(id), publishedAt); err != nil {
+			log.Printf("SetPostPublishedAt for post %d: %v", id, err)
+		}
+	}
 
 	if tagsStr := r.FormValue("tags"); tagsStr != "" {
 		if err := db.SetPostTags(int(id), parseTags(tagsStr)); err != nil {
@@ -194,6 +204,16 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.Redirect(w, r, fmt.Sprintf("/admin/posts/%d/edit", id), http.StatusFound)
+}
+
+// parsePublishedAt разбирает поле published_at редактора: момент в UTC в
+// формате RFC 3339 (его из datetime-local в локальном времени собирает
+// editor.js). Пусто — дату не трогаем: при первой публикации её проставит БД.
+func parsePublishedAt(v string) (time.Time, error) {
+	if v == "" {
+		return time.Time{}, nil
+	}
+	return time.Parse(time.RFC3339, v)
 }
 
 // GET /admin/posts/{id}/edit
@@ -232,6 +252,11 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 	bodyMD := r.FormValue("body")
 	slug := r.FormValue("slug")
 	published := r.FormValue("published") == "1"
+	publishedAt, err := parsePublishedAt(r.FormValue("published_at"))
+	if err != nil {
+		http.Error(w, "bad published_at", 400)
+		return
+	}
 
 	bodyHTML, err := RenderMD(bodyMD)
 	if err != nil {
@@ -257,6 +282,11 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 	if err := db.UpdatePost(id, slug, title, bodyMD, bodyHTML, cover, published, seriesID); err != nil {
 		http.Error(w, "DB error", 500)
 		return
+	}
+	if !publishedAt.IsZero() {
+		if err := db.SetPostPublishedAt(id, publishedAt); err != nil {
+			log.Printf("SetPostPublishedAt for post %d: %v", id, err)
+		}
 	}
 	if err := db.SetPostTags(id, parseTags(r.FormValue("tags"))); err != nil {
 		log.Printf("SetPostTags for post %d: %v", id, err)

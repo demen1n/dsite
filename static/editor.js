@@ -14,6 +14,25 @@ function updatePublishLabel() {
   document.getElementById('publish-label').textContent = checked ? 'Опубликован' : 'Черновик';
 }
 
+// Дата публикации: сервер хранит и принимает UTC (RFC 3339, скрытое поле
+// published_at), а человек видит и правит её в локальном времени
+// (datetime-local) — переводим туда-обратно здесь, где известен часовой пояс.
+(function publishedAtInit() {
+  const local = document.getElementById('published-at-local');
+  const hidden = document.getElementById('published-at');
+  if (!local || !hidden) return;
+  if (hidden.value) {
+    const d = new Date(hidden.value);
+    const pad = n => String(n).padStart(2, '0');
+    local.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+  }
+  local.addEventListener('change', () => {
+    // Пустое поле — дату не трогаем (сервер оставит текущую).
+    hidden.value = local.value ? new Date(local.value).toISOString() : '';
+  });
+})();
+
 document.getElementById('post-form').addEventListener('submit', async function(e) {
   const input = document.getElementById('cover-input');
   if (!input.files.length || !CLIENT_SIDE_RESIZE) return;
