@@ -57,6 +57,9 @@ func Init(path string) error {
 	if err = migratePostsPublishedAt(); err != nil {
 		return fmt.Errorf("migrate posts published_at: %w", err)
 	}
+	if err = migrateThumbnails(); err != nil {
+		return fmt.Errorf("migrate thumbnails: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -182,6 +185,21 @@ func migratePostsPublishedAt() error {
 	DB.Exec(`ALTER TABLE posts ADD COLUMN published_at TEXT`)
 	DB.Exec(`UPDATE posts SET published_at = created_at WHERE published = 1 AND published_at IS NULL`)
 	return nil
+}
+
+// migrateThumbnails adds the thumbnails table: превью для любого файла из
+// uploads/ (картинки в постах, обложки, фото галереи) и размеры оригинала,
+// нужные для srcset. thumb = filename — превью не нужно (GIF или фото не
+// шире превью): показываем оригинал.
+func migrateThumbnails() error {
+	_, err := DB.Exec(`
+	CREATE TABLE IF NOT EXISTS thumbnails (
+		filename TEXT PRIMARY KEY,
+		thumb    TEXT NOT NULL,
+		width    INTEGER NOT NULL DEFAULT 0,
+		height   INTEGER NOT NULL DEFAULT 0
+	)`)
+	return err
 }
 
 func migratePhotoDimensions() error {

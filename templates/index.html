@@ -34,13 +34,13 @@
     </div>
     <h2 class="feed-title"><a href="/post/{{.Slug}}">{{.Title}}</a></h2>
     {{if .Cover}}
-    <a href="/post/{{.Slug}}"><img class="feed-cover" src="/uploads/{{.Cover}}" alt="{{.Title}}" loading="lazy"></a>
+    <a href="/post/{{.Slug}}"><img class="feed-cover" src="/uploads/{{.Cover}}"{{with thumbSrcset .Cover}} srcset="{{.}}" sizes="{{coverSizes}}"{{end}} alt="{{.Title}}" loading="lazy"></a>
     {{end}}
     {{if hasMore .BodyHTML}}
     <div class="feed-body prose">{{beforeMore .BodyHTML}}</div>
     <a class="read-more" href="/post/{{.Slug}}">Читать дальше →</a>
     {{else}}
-    <div class="feed-body prose">{{safeHTML .BodyHTML}}</div>
+    <div class="feed-body prose">{{postHTML .BodyHTML}}</div>
     {{end}}
   </article>
   {{end}}

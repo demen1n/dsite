@@ -596,11 +596,8 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r)
 		return
 	}
-	release := imgproc.Reserve() // для превью (imgproc.Process)
-	defer release()
 	var pw, ph int
-	data, err := os.ReadFile(path)
-	if err == nil {
+	if data, err := os.ReadFile(path); err == nil {
 		pw, ph, _ = imgproc.Dimensions(data)
 	}
 	caption := r.FormValue("caption")
@@ -608,9 +605,7 @@ func AddToGallery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	if data != nil {
-		saveThumb(filename, data, pw)
-	}
+	queueThumb(filename) // превью у файла из поста обычно уже есть — просто проставится фото
 	fmt.Fprint(w, "✓ Добавлено в галерею")
 }
 
@@ -705,7 +700,7 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 				log.Printf("AddPhoto %s: %v", filename, err)
 				return
 			}
-			saveThumb(filename, stored, pw)
+			registerThumb(filename, stored)
 		}()
 	}
 
@@ -866,7 +861,7 @@ func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r)
 		return
 	}
-	filename, thumb, err := db.DeletePhoto(id)
+	filename, _, err := db.DeletePhoto(id)
 	if err != nil {
 		NotFound(w, r)
 		return
@@ -874,7 +869,7 @@ func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 	if err := os.Remove(filepath.Join(uploadsDir, filename)); err != nil {
 		log.Printf("remove photo %s: %v", filename, err)
 	}
-	removeThumb(filename, thumb)
+	forgetThumb(filename)
 
 	photos, _ := db.ListPhotos("", "")
 	cats, _ := db.ListCategories()
@@ -1023,6 +1018,7 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "could not process image", 500)
 		return
 	}
+	queueThumb(filename)
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte("/uploads/" + filename))
@@ -1098,16 +1094,20 @@ func handleBoundedImageUpload(r *http.Request, field string, maxHeight int) (str
 	if !isAllowedImageContent(data) {
 		return "", fmt.Errorf("unsupported file type")
 	}
-	if ext == ".gif" { // анимация — сохраняем как есть, без перекодирования
-		return saveUpload(data, ext)
+	if ext != ".gif" { // GIF (анимация) сохраняем как есть, без перекодирования
+		release := imgproc.Reserve()
+		data, _, _, err = imgproc.Process(data, uploadMaxWidth, maxHeight, uploadQuality)
+		release()
+		if err != nil {
+			return "", fmt.Errorf("process image: %w", err)
+		}
+		ext = ".jpg"
 	}
-	release := imgproc.Reserve()
-	processed, _, _, err := imgproc.Process(data, uploadMaxWidth, maxHeight, uploadQuality)
-	release()
-	if err != nil {
-		return "", fmt.Errorf("process image: %w", err)
+	filename, err := saveUpload(data, ext)
+	if err == nil {
+		queueThumb(filename)
 	}
-	return saveUpload(processed, ".jpg")
+	return filename, err
 }
 
 // ─────────────────────── Categories ───────────────────────
@@ -1225,6 +1225,7 @@ func DeleteUploadFile(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "remove error", 500)
 		return
 	}
+	forgetThumb(filename)
 	if r.Header.Get("HX-Request") == "true" {
 		w.WriteHeader(http.StatusOK)
 		return

@@ -187,6 +187,7 @@ function layoutCards(grid, cards, covers) {
     cards.forEach((card, i) => {
       card.style.cssText = `width:100%; flex:none;`;
       covers[i].style.height = Math.round(W / ratios[i]) + 'px';
+      if (covers[i].tagName === 'IMG') applySrcset(covers[i], W);
     });
     setupFadeIn(covers.filter(c => c.tagName === 'IMG'));
     return;
@@ -196,6 +197,7 @@ function layoutCards(grid, cards, covers) {
   cards.forEach((card, i) => {
     card.style.cssText = `width:${sized[i].width}px; flex:none;`;
     covers[i].style.height = sized[i].height + 'px';
+    if (covers[i].tagName === 'IMG') applySrcset(covers[i], sized[i].width);
   });
   setupFadeIn(covers.filter(c => c.tagName === 'IMG'));
 }

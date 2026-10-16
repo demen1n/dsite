@@ -188,9 +188,9 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 		"hasMore":      func(s string) bool { return strings.Contains(s, "<!--more-->") },
 		"beforeMore": func(s string) template.HTML {
 			if i := strings.Index(s, "<!--more-->"); i >= 0 {
-				return template.HTML(s[:i])
+				s = s[:i]
 			}
-			return template.HTML(s)
+			return template.HTML(responsiveImages(s))
 		},
 		"fmtSize": func(n int64) string {
 			switch {
@@ -202,11 +202,17 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 				return fmt.Sprintf("%d B", n)
 			}
 		},
-		"tagSlug":    db.TagSlug,
-		"thumbWidth": func() int { return thumbWidth },
-		"add":        func(a, b int) int { return a + b },
-		"sub":        func(a, b int) int { return a - b },
-		"join":       strings.Join,
+		"tagSlug":     db.TagSlug,
+		"thumbWidth":  func() int { return thumbWidth },
+		"thumbSrcset": thumbSrcset,
+		"thumbSrc":    thumbSrc,
+		"thumbRatio":  thumbRatio,
+		"coverSizes":  func() string { return coverImgSizes },
+		// postHTML — HTML поста с адаптивными картинками (см. responsiveImages).
+		"postHTML": func(s string) template.HTML { return template.HTML(responsiveImages(s)) },
+		"add":      func(a, b int) int { return a + b },
+		"sub":      func(a, b int) int { return a - b },
+		"join":     strings.Join,
 		"json": func(v any) (template.JS, error) {
 			b, err := json.Marshal(v)
 			return template.JS(b), err
@@ -231,6 +237,7 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 		log.Fatalf("parse admin/base.html: %v", err)
 	}
 	log.Println("Templates loaded from", templatesDir)
+	loadThumbIndex()
 
 	go func() {
 		for range time.Tick(10 * time.Minute) {

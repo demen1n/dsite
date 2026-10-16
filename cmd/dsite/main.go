@@ -95,7 +95,7 @@ func main() {
 		handlers.SetFaviconPNG(data)
 	}
 	handlers.EnsureAdminExists()
-	go handlers.BackfillThumbs()
+	handlers.StartThumbWorker()
 
 	mux := http.NewServeMux()
 
