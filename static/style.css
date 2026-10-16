@@ -131,7 +131,13 @@ a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
 /* ── Gallery ── */
 .gallery-grid-inner { display: flex; flex-wrap: wrap; gap: 3px; }
 .gallery-item { overflow: hidden; cursor: pointer; }
-.gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; opacity: 0; transition: opacity 0.35s ease; }
+/* display:none — картинку плитки показывает gallery.js (класс shown), когда
+   плитка подходит к экрану: так грузятся видимые фото, а не всё подряд, и
+   после обновления страницы — с места прокрутки, а не сверху (см. revealNear
+   и restoreScroll в gallery.js). Без JS их показывает <noscript> в шаблоне. */
+.gallery-item img { width: 100%; height: 100%; object-fit: cover; display: none; opacity: 0; transition: opacity 0.35s ease; }
+.gallery-item img.shown { display: block; }
+.series-grid img.series-card-cover { display: none; }
 .gallery-item img.gfade { opacity: 1; }
 .gallery-item:hover img.gfade { opacity: 1; }
 .gallery-item-caption { font-family: var(--sans); font-size: 0.78rem; color: var(--muted); padding: 0.25rem 0; }
