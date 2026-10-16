@@ -1,106 +1,315 @@
 package handlers
 
 import (
+	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/demen1n/dsite/internal/db"
 	"github.com/demen1n/dsite/internal/imgproc"
 )
 
-// Превью для сетки галереи. Оригинал (до 1600px) нужен в лайтбоксе, а в
-// плитке сетки он почти всегда избыточен: страница галереи тянула десятки
-// мегабайт, что ощутимо медленно издалека и на мобильном. Плитки
-// «резиновые» (высота ряда — ширина/3.5), поэтому превью не заменяет
-// оригинал, а идёт в srcset рядом с ним: gallery.js проставляет sizes по
-// реальной ширине плитки, и браузер сам берёт превью или оригинал с учётом
-// плотности экрана.
+// Превью картинок. Оригинал (до 1600px) нужен в лайтбоксе и на больших
+// экранах, а в плитках, карточках и на телефоне он почти всегда избыточен:
+// страницы тянули десятки мегабайт, что ощутимо медленно издалека и на
+// мобильном. Превью не заменяет оригинал, а идёт в srcset рядом с ним —
+// браузер сам выбирает файл под реальный размер картинки и плотность экрана.
+//
+// Превью есть у любого файла из uploads/ (картинки в постах, обложки, фото
+// галереи); путь и размеры оригинала лежат в таблице thumbnails, а для
+// рендера — в памяти (thumbIdx), чтобы не ходить в БД на каждую картинку.
 const (
 	thumbWidth   = 800
 	thumbQuality = 80
 	thumbsDir    = "thumbs" // подкаталог uploads/
+
+	// proseImgSizes и coverImgSizes — sizes для картинок в тексте поста
+	// (.prose img: колонка 652px + 200px вылета) и обложек (колонка 652px).
+	// На узких экранах ширина занижена до 67vw: так 3x-телефон берёт превью
+	// 800px, как 2x (390·0.67·3 ≈ 800) — то же ограничение плотности, что
+	// gallery.js делает для плиток; на фото разницы с 3x не видно, а оригинал
+	// весит в разы больше.
+	proseImgSizes = "(max-width: 520px) 67vw, 852px"
+	coverImgSizes = "(max-width: 700px) 67vw, 652px"
 )
 
-// makeThumb делает превью из байтов оригинала filename (width — его ширина,
-// 0 — неизвестна) и возвращает путь превью относительно uploads/. Для GIF
-// (анимация) и фото не шире thumbWidth превью не нужно — возвращается сам
-// filename. Вызывающий должен держать слот imgproc.Reserve.
-func makeThumb(filename string, data []byte, width int) (string, error) {
-	if strings.EqualFold(filepath.Ext(filename), ".gif") {
-		return filename, nil
+var thumbIdx = struct {
+	sync.RWMutex
+	m map[string]db.Thumbnail
+}{m: map[string]db.Thumbnail{}}
+
+// loadThumbIndex перечитывает превью из БД в память.
+func loadThumbIndex() {
+	list, err := db.ListThumbnails()
+	if err != nil {
+		log.Printf("load thumbnails: %v", err)
+		return
 	}
-	if width == 0 {
-		width, _, _ = imgproc.Dimensions(data)
+	m := make(map[string]db.Thumbnail, len(list))
+	for _, t := range list {
+		m[t.Filename] = t
 	}
-	if width > 0 && width <= thumbWidth {
-		return filename, nil
+	thumbIdx.Lock()
+	thumbIdx.m = m
+	thumbIdx.Unlock()
+}
+
+func thumbOf(filename string) (db.Thumbnail, bool) {
+	thumbIdx.RLock()
+	defer thumbIdx.RUnlock()
+	t, ok := thumbIdx.m[filename]
+	return t, ok
+}
+
+// makeThumb делает превью из байтов оригинала filename. Для GIF (анимация)
+// и фото не шире thumbWidth превью не нужно — Thumb = сам filename.
+// Вызывающий должен держать слот imgproc.Reserve.
+func makeThumb(filename string, data []byte) (db.Thumbnail, error) {
+	filename = filepath.Base(filename)
+	t := db.Thumbnail{Filename: filename, Thumb: filename}
+	w, h, err := imgproc.Dimensions(data)
+	if err != nil {
+		return t, err
+	}
+	t.Width, t.Height = w, h
+	if strings.EqualFold(filepath.Ext(filename), ".gif") || w <= thumbWidth {
+		return t, nil
 	}
 	out, _, _, err := imgproc.Process(data, thumbWidth, 0, thumbQuality)
 	if err != nil {
-		return "", err
+		return t, err
 	}
 	if err := os.MkdirAll(filepath.Join(uploadsDir, thumbsDir), 0o750); err != nil {
-		return "", err
+		return t, err
 	}
-	// Base — превью всегда ложится прямо в uploads/thumbs/, как бы ни
-	// выглядело имя оригинала.
-	base := filepath.Base(filename)
-	name := strings.TrimSuffix(base, filepath.Ext(base)) + ".jpg"
-	if err := os.WriteFile(filepath.Join(uploadsDir, thumbsDir, name), out, 0o600); err != nil { //nolint:gosec // name — filepath.Base, за пределы thumbs/ не выйти
-		return "", err
+	name := strings.TrimSuffix(filename, filepath.Ext(filename)) + ".jpg"
+	if err := os.WriteFile(filepath.Join(uploadsDir, thumbsDir, name), out, 0o600); err != nil { //nolint:gosec // name — из filepath.Base, за пределы thumbs/ не выйти
+		return t, err
 	}
-	return thumbsDir + "/" + name, nil
+	t.Thumb = thumbsDir + "/" + name
+	return t, nil
 }
 
-// saveThumb делает превью и записывает его в БД; ошибки только логирует —
-// без превью галерея просто покажет оригинал. Вызывающий держит слот
-// imgproc.Reserve.
-func saveThumb(filename string, data []byte, width int) {
-	thumb, err := makeThumb(filename, data, width)
+// registerThumb делает превью и запоминает его (БД, память, photos.thumb
+// для галереи). Ошибки только логирует — без превью показывается оригинал.
+// Вызывающий держит слот imgproc.Reserve.
+func registerThumb(filename string, data []byte) {
+	t, err := makeThumb(filename, data)
 	if err != nil {
 		log.Printf("thumb %s: %v", filename, err)
 		return
 	}
-	if err := db.SetPhotoThumb(filename, thumb); err != nil {
-		log.Printf("SetPhotoThumb %s: %v", filename, err)
-	}
+	rememberThumb(t)
 }
 
-// removeThumb удаляет файл превью, если он отдельный от оригинала.
-func removeThumb(filename, thumb string) {
-	if thumb == "" || thumb == filename {
+func rememberThumb(t db.Thumbnail) {
+	if err := db.UpsertThumbnail(t); err != nil {
+		log.Printf("UpsertThumbnail %s: %v", t.Filename, err)
 		return
 	}
-	if err := os.Remove(filepath.Join(uploadsDir, filepath.FromSlash(thumb))); err != nil && !os.IsNotExist(err) {
-		log.Printf("remove thumb %s: %v", thumb, err)
+	if err := db.SetPhotoThumb(t.Filename, t.Thumb); err != nil {
+		log.Printf("SetPhotoThumb %s: %v", t.Filename, err)
+	}
+	thumbIdx.Lock()
+	thumbIdx.m[t.Filename] = t
+	thumbIdx.Unlock()
+}
+
+// thumbFileOK — превью из индекса на месте (его файл не удалили руками).
+func thumbFileOK(t db.Thumbnail) bool {
+	if t.Thumb == t.Filename {
+		return true
+	}
+	_, err := os.Stat(filepath.Join(uploadsDir, filepath.FromSlash(t.Thumb)))
+	return err == nil
+}
+
+// processThumbFile делает превью для файла из uploads/, если его ещё нет.
+func processThumbFile(filename string) {
+	filename = filepath.Base(filename)
+	if t, ok := thumbOf(filename); ok && thumbFileOK(t) {
+		// Превью уже есть (например, файл из поста добавили в галерею) —
+		// достаточно проставить его фото галереи.
+		if err := db.SetPhotoThumb(filename, t.Thumb); err != nil {
+			log.Printf("SetPhotoThumb %s: %v", filename, err)
+		}
+		return
+	}
+	release := imgproc.Reserve()
+	defer release()
+	data, err := os.ReadFile(filepath.Join(uploadsDir, filename))
+	if err != nil {
+		log.Printf("thumb %s: %v", filename, err)
+		return
+	}
+	registerThumb(filename, data)
+}
+
+// thumbQueue — файлы, ждущие превью. Загрузки кладут сюда имя и не ждут
+// генерации; разбирает очередь StartThumbWorker.
+var thumbQueue = make(chan string, 512)
+
+func queueThumb(filename string) {
+	select {
+	case thumbQueue <- filename:
+	default:
+		// Очередь переполнена — не страшно: превью догенерит BackfillThumbs
+		// при следующем старте.
+		log.Printf("thumb queue full, skipping %s", filename)
 	}
 }
 
-// BackfillThumbs догенерирует превью для фото, загруженных до их появления
-// (или если генерация когда-то не удалась). Запускается в фоне при старте
-// сервера; идемпотентно — берёт только фото с пустым thumb.
+// StartThumbWorker запускает фоновую генерацию превью: разбор очереди
+// загрузок и догенерацию для уже лежащих в uploads/ файлов.
+func StartThumbWorker() {
+	go func() {
+		for name := range thumbQueue {
+			processThumbFile(name)
+		}
+	}()
+	go BackfillThumbs()
+}
+
+// forgetThumb удаляет превью файла (файл превью, запись в БД и в памяти) —
+// когда удаляют сам файл.
+func forgetThumb(filename string) {
+	filename = filepath.Base(filename)
+	if t, ok := thumbOf(filename); ok && t.Thumb != t.Filename {
+		if err := os.Remove(filepath.Join(uploadsDir, filepath.FromSlash(t.Thumb))); err != nil && !os.IsNotExist(err) {
+			log.Printf("remove thumb %s: %v", t.Thumb, err)
+		}
+	}
+	if err := db.DeleteThumbnail(filename); err != nil {
+		log.Printf("DeleteThumbnail %s: %v", filename, err)
+	}
+	thumbIdx.Lock()
+	delete(thumbIdx.m, filename)
+	thumbIdx.Unlock()
+}
+
+// BackfillThumbs догенерирует превью для всех картинок в uploads/, у которых
+// его нет (загружены до появления превью, или генерация не удалась).
+// Идемпотентно; запускается в фоне при старте сервера.
 func BackfillThumbs() {
-	photos, err := db.PhotosWithoutThumb()
+	entries, err := os.ReadDir(uploadsDir)
 	if err != nil {
 		log.Printf("thumbs backfill: %v", err)
 		return
 	}
-	if len(photos) == 0 {
-		return
-	}
 	done := 0
-	for _, p := range photos {
-		release := imgproc.Reserve()
-		data, err := os.ReadFile(filepath.Join(uploadsDir, p.Filename))
-		if err == nil {
-			saveThumb(p.Filename, data, p.Width)
-			done++
-		} else {
-			log.Printf("thumbs backfill %s: %v", p.Filename, err)
+	for _, e := range entries {
+		if e.IsDir() || !isAllowedImageExt(filepath.Ext(e.Name())) {
+			continue
 		}
-		release()
+		if t, ok := thumbOf(e.Name()); ok && thumbFileOK(t) {
+			continue
+		}
+		processThumbFile(e.Name())
+		done++
 	}
-	log.Printf("thumbs backfill: processed %d/%d photos", done, len(photos))
+	// Фото галереи, чьё превью уже было, но не проставлено в photos.thumb.
+	if photos, err := db.PhotosWithoutThumb(); err == nil {
+		for _, p := range photos {
+			if t, ok := thumbOf(p.Filename); ok {
+				db.SetPhotoThumb(p.Filename, t.Thumb) //nolint:errcheck // best effort, повторится на следующем старте
+			}
+		}
+	}
+	if done > 0 {
+		log.Printf("thumbs backfill: processed %d files", done)
+	}
+}
+
+// ───── Рендер ─────
+
+// uploadName достаёт имя файла из "/uploads/x.jpg" или "x.jpg"; "" — не наш
+// файл (внешняя ссылка, подкаталог и т.п.).
+func uploadName(src string) string {
+	name := strings.TrimPrefix(src, "/uploads/")
+	if name == "" || strings.ContainsAny(name, "/?#") || strings.Contains(src, "://") {
+		return ""
+	}
+	return name
+}
+
+// thumbSrcset — srcset «превью + оригинал» для картинки из uploads/; ""
+// если превью нет или оно не нужно.
+func thumbSrcset(src string) string {
+	name := uploadName(src)
+	if name == "" {
+		return ""
+	}
+	t, ok := thumbOf(name)
+	if !ok || t.Thumb == t.Filename || t.Width == 0 {
+		return ""
+	}
+	return fmt.Sprintf("/uploads/%s %dw, /uploads/%s %dw", t.Thumb, thumbWidth, t.Filename, t.Width)
+}
+
+// thumbSrc — адрес превью (или исходный src, если превью нет).
+func thumbSrc(src string) string {
+	name := uploadName(src)
+	if name == "" {
+		return src
+	}
+	if t, ok := thumbOf(name); ok {
+		return "/uploads/" + t.Thumb
+	}
+	return "/uploads/" + name
+}
+
+// thumbRatio — "ширина/высота" оригинала для data-ratio плитки (раскладка
+// сетки сразу, не дожидаясь загрузки картинки); "" — размеры неизвестны.
+func thumbRatio(src string) string {
+	if t, ok := thumbOf(uploadName(src)); ok && t.Width > 0 && t.Height > 0 {
+		return fmt.Sprintf("%d/%d", t.Width, t.Height)
+	}
+	return ""
+}
+
+var (
+	reImgTag     = regexp.MustCompile(`<img\s[^>]*>`)
+	reImgTagSrc  = regexp.MustCompile(`\ssrc="([^"]*)"`)
+	reImgTagAttr = regexp.MustCompile(`\s(srcset|loading|decoding|width|height)=`)
+)
+
+// responsiveImages дополняет картинки в HTML поста: srcset/sizes для файлов
+// с превью, width/height (место под картинку резервируется до загрузки и
+// страница не прыгает), loading="lazy" и decoding="async". Атрибуты, уже
+// заданные в markdown/HTML поста, не трогает.
+func responsiveImages(html string) string {
+	return reImgTag.ReplaceAllStringFunc(html, func(tag string) string {
+		m := reImgTagSrc.FindStringSubmatch(tag)
+		if m == nil {
+			return tag
+		}
+		have := map[string]bool{}
+		for _, a := range reImgTagAttr.FindAllStringSubmatch(tag, -1) {
+			have[a[1]] = true
+		}
+		var add strings.Builder
+		if name := uploadName(m[1]); name != "" {
+			if ss := thumbSrcset(name); ss != "" && !have["srcset"] {
+				fmt.Fprintf(&add, ` srcset="%s" sizes="%s"`, ss, proseImgSizes)
+			}
+			if t, ok := thumbOf(name); ok && t.Width > 0 && t.Height > 0 && !have["width"] && !have["height"] {
+				fmt.Fprintf(&add, ` width="%d" height="%d"`, t.Width, t.Height)
+			}
+		}
+		if !have["loading"] {
+			add.WriteString(` loading="lazy"`)
+		}
+		if !have["decoding"] {
+			add.WriteString(` decoding="async"`)
+		}
+		end := len(tag) - 1
+		if strings.HasSuffix(tag, "/>") {
+			end = len(tag) - 2
+		}
+		return strings.TrimRight(tag[:end], " ") + add.String() + tag[end:]
+	})
 }

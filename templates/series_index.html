@@ -6,7 +6,7 @@
   {{range .Series}}
   <a class="series-card" href="/series/{{.Slug}}">
     {{if .Cover}}
-    <img class="series-card-cover" src="/uploads/{{.Cover}}" alt="{{.Name}}" loading="lazy">
+    <img class="series-card-cover" src="/uploads/{{.Cover}}"{{with thumbSrcset .Cover}} srcset="{{.}}" sizes="{{coverSizes}}"{{end}} alt="{{.Name}}" loading="lazy">
     {{else}}
     <div class="series-card-cover series-card-cover-empty"></div>
     {{end}}

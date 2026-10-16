@@ -28,8 +28,10 @@
   {{if .Photos}}
   <div class="gallery-grid-inner">
     {{range .Photos}}
-    <div class="gallery-item">
-      <img src="{{.}}" alt="" decoding="async">
+    {{/* как в галерее: src — превью, data-srcset включает gallery.js
+         после раскладки, data-full — оригинал для лайтбокса */}}
+    <div class="gallery-item"{{with thumbRatio .}} data-ratio="{{.}}"{{end}}>
+      <img src="{{thumbSrc .}}"{{with thumbSrcset .}} data-srcset="{{.}}"{{end}} data-full="{{.}}" alt="" loading="lazy" decoding="async">
     </div>
     {{end}}
   </div>
@@ -43,7 +45,7 @@
     {{range $i, $p := .Posts}}
     <a class="series-card" href="/post/{{$p.Slug}}">
       {{if $p.DisplayCover}}
-      <img class="series-card-cover" src="{{$p.DisplayCover}}" alt="{{$p.Title}}" loading="lazy">
+      <img class="series-card-cover" src="{{thumbSrc $p.DisplayCover}}"{{with thumbSrcset $p.DisplayCover}} data-srcset="{{.}}"{{end}} alt="{{$p.Title}}" loading="lazy">
       {{else}}
       <div class="series-card-cover series-card-cover-empty"></div>
       {{end}}
@@ -51,7 +53,7 @@
         <span class="series-card-num">{{add $i 1}}</span>
         <div class="series-card-text">
           <div class="series-card-title">{{$p.Title}}</div>
-          <div class="series-card-date">{{fmtDateShort $p.CreatedAt}}</div>
+          <div class="series-card-date">{{fmtDateShort $p.Date}}</div>
         </div>
       </div>
     </a>
