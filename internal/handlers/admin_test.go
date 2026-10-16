@@ -170,3 +170,49 @@ func TestBulkSeriesHandlers(t *testing.T) {
 		}
 	}
 }
+
+func TestBulkSeriesValidation(t *testing.T) {
+	setupPublic(t)
+	sid, _ := db.CreateSeries("Trip", "trip", "", "", "", false, true, false, false)
+	pid, _ := db.CreatePost("p", "P", "", "", "", true, int(sid))
+	keep := url.Values{"post_ids": {strconv.FormatInt(pid, 10)}}
+
+	// Мусорный или отрицательный series_id в варианте B — 400.
+	for _, v := range []string{"abc", "-1", ""} {
+		form := url.Values{"post_ids": keep["post_ids"], "series_id": {v}}
+		if rec := postURLForm(BulkSetPostsSeries, "POST /admin/posts/series", "/admin/posts/series", form); rec.Code != http.StatusBadRequest {
+			t.Errorf("series_id=%q: status %d, want 400", v, rec.Code)
+		}
+	}
+
+	// Нечисловой и несуществующий id серии в пути — 404 во всех хендлерах.
+	for _, c := range []struct {
+		name    string
+		h       http.HandlerFunc
+		pattern string
+		suffix  string
+	}{
+		{"add", AddPostsToSeries, "POST /admin/series/{id}/posts", "/posts"},
+		{"remove", RemovePostsFromSeries, "POST /admin/series/{id}/posts/remove", "/posts/remove"},
+	} {
+		for _, id := range []string{"abc", "9999"} {
+			if rec := postURLForm(c.h, c.pattern, "/admin/series/"+id+c.suffix, keep); rec.Code != http.StatusNotFound {
+				t.Errorf("%s, series %s: status %d, want 404", c.name, id, rec.Code)
+			}
+		}
+	}
+	for _, id := range []string{"abc", "9999"} {
+		if rec := serve(EditSeriesForm, "GET /admin/series/{id}/edit", "/admin/series/"+id+"/edit"); rec.Code != http.StatusNotFound {
+			t.Errorf("edit page, series %s: status %d, want 404", id, rec.Code)
+		}
+	}
+
+	// Мусор в post_ids пропускается, валидные id обрабатываются.
+	form := url.Values{"post_ids": {"x", "-5", "0", strconv.FormatInt(pid, 10)}, "series_id": {"0"}}
+	if rec := postURLForm(BulkSetPostsSeries, "POST /admin/posts/series", "/admin/posts/series", form); rec.Code != http.StatusFound {
+		t.Fatalf("garbage post_ids: status %d, want 302", rec.Code)
+	}
+	if p, _ := db.GetPostByID(int(pid)); p.SeriesID != 0 {
+		t.Errorf("garbage post_ids: valid post not processed, series %d", p.SeriesID)
+	}
+}
