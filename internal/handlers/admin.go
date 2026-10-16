@@ -134,7 +134,47 @@ func AdminIndex(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	render(w, "admin/index.html", page("Панель управления", posts))
+	pd := page("Панель управления", posts)
+	pd.AllSeries, _ = db.ListSeries()
+	render(w, "admin/index.html", pd)
+}
+
+// parsePostIDs достаёт отмеченные чекбоксами post_ids из формы массовых
+// действий; мусорные значения пропускает.
+func parsePostIDs(r *http.Request) []int {
+	var ids []int
+	for _, v := range r.Form["post_ids"] {
+		if id, err := strconv.Atoi(v); err == nil && id > 0 {
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// POST /admin/posts/series — массово перенести отмеченные посты в серию
+// (series_id=0 — убрать из серии). Вариант «из списка постов» для #27.
+func BulkSetPostsSeries(w http.ResponseWriter, r *http.Request) {
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", 400)
+		return
+	}
+	seriesID, err := strconv.Atoi(r.FormValue("series_id"))
+	if err != nil || seriesID < 0 {
+		http.Error(w, "bad series_id", 400)
+		return
+	}
+	if seriesID != 0 {
+		if _, err := db.GetSeriesByID(seriesID); err != nil {
+			http.Error(w, "series not found", 400)
+			return
+		}
+	}
+	if err := db.SetPostsSeries(parsePostIDs(r), seriesID); err != nil {
+		log.Printf("SetPostsSeries: %v", err)
+		http.Error(w, "DB error", 500)
+		return
+	}
+	http.Redirect(w, r, "/admin", http.StatusFound)
 }
 
 // ─────────────────────── Posts CRUD ───────────────────────
@@ -388,17 +428,83 @@ func CreateSeries(w http.ResponseWriter, r *http.Request) {
 
 // GET /admin/series/{id}/edit
 func EditSeriesForm(w http.ResponseWriter, r *http.Request) {
+	series, ok := seriesFromPath(w, r)
+	if !ok {
+		return
+	}
+	all, err := db.ListPostsMeta(false)
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
+	data := SeriesEditData{Series: series}
+	for _, p := range all {
+		if p.SeriesID == series.ID {
+			data.InSeries = append(data.InSeries, p)
+		} else {
+			data.Others = append(data.Others, p)
+		}
+	}
+	render(w, "admin/series_form.html", page("Редактировать серию", data))
+}
+
+// SeriesEditData — форма серии плюс блок массового управления её постами
+// (вариант «со страницы серии» для #27).
+type SeriesEditData struct {
+	*db.Series
+	InSeries []db.Post // посты этой серии, включая черновики
+	Others   []db.Post // все остальные посты — кандидаты на добавление
+}
+
+// seriesFromPath — серия из {id} в пути; ok=false, если ответ (404) уже отдан.
+func seriesFromPath(w http.ResponseWriter, r *http.Request) (*db.Series, bool) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil {
 		NotFound(w, r)
-		return
+		return nil, false
 	}
 	series, err := db.GetSeriesByID(id)
 	if err != nil {
 		NotFound(w, r)
+		return nil, false
+	}
+	return series, true
+}
+
+// POST /admin/series/{id}/posts — добавить отмеченные посты в серию.
+func AddPostsToSeries(w http.ResponseWriter, r *http.Request) {
+	series, ok := seriesFromPath(w, r)
+	if !ok {
 		return
 	}
-	render(w, "admin/series_form.html", page("Редактировать серию", series))
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", 400)
+		return
+	}
+	if err := db.SetPostsSeries(parsePostIDs(r), series.ID); err != nil {
+		log.Printf("SetPostsSeries %d: %v", series.ID, err)
+		http.Error(w, "DB error", 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/admin/series/%d/edit#series-posts", series.ID), http.StatusFound)
+}
+
+// POST /admin/series/{id}/posts/remove — убрать отмеченные посты из серии.
+func RemovePostsFromSeries(w http.ResponseWriter, r *http.Request) {
+	series, ok := seriesFromPath(w, r)
+	if !ok {
+		return
+	}
+	if err := r.ParseForm(); err != nil {
+		http.Error(w, "bad form", 400)
+		return
+	}
+	if err := db.RemovePostsFromSeries(series.ID, parsePostIDs(r)); err != nil {
+		log.Printf("RemovePostsFromSeries %d: %v", series.ID, err)
+		http.Error(w, "DB error", 500)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("/admin/series/%d/edit#series-posts", series.ID), http.StatusFound)
 }
 
 // POST /admin/series/{id}/edit

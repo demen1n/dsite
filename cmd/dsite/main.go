@@ -140,6 +140,7 @@ func main() {
 	mux.HandleFunc("POST /admin/posts/preview", handlers.RequireAuth(handlers.PreviewMD))
 	mux.HandleFunc("POST /admin/upload", handlers.RequireAuth(handlers.UploadImage))
 	mux.HandleFunc("POST /admin/tags/delete", handlers.RequireAuth(handlers.DeleteTag))
+	mux.HandleFunc("POST /admin/posts/series", handlers.RequireAuth(handlers.BulkSetPostsSeries))
 
 	mux.HandleFunc("GET /admin/series", handlers.RequireAuth(handlers.AdminSeries))
 	mux.HandleFunc("GET /admin/series/new", handlers.RequireAuth(handlers.NewSeriesForm))
@@ -148,6 +149,8 @@ func main() {
 	mux.HandleFunc("POST /admin/series/{id}/edit", handlers.RequireAuth(handlers.UpdateSeries))
 	mux.HandleFunc("POST /admin/series/{id}/delete", handlers.RequireAuth(handlers.DeleteSeries))
 	mux.HandleFunc("POST /admin/series/reorder", handlers.RequireAuth(handlers.ReorderSeries))
+	mux.HandleFunc("POST /admin/series/{id}/posts", handlers.RequireAuth(handlers.AddPostsToSeries))
+	mux.HandleFunc("POST /admin/series/{id}/posts/remove", handlers.RequireAuth(handlers.RemovePostsFromSeries))
 
 	mux.HandleFunc("GET /admin/media/picker", handlers.RequireAuth(handlers.MediaPicker))
 	mux.HandleFunc("POST /admin/media/to-gallery", handlers.RequireAuth(handlers.AddToGallery))

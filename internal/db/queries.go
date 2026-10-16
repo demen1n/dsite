@@ -120,14 +120,17 @@ func ListPosts(onlyPublished bool) ([]Post, error) {
 // ListPostsMeta is like ListPosts but leaves BodyMD/BodyHTML unset — for
 // callers that only need metadata (sitemap, admin post list) and would
 // otherwise pull every post's full markdown+HTML off disk just to read a
-// slug and a date.
+// slug and a date. Fills SeriesID/SeriesName so the admin list can show
+// (and bulk-change) which series each post is in.
 func ListPostsMeta(onlyPublished bool) ([]Post, error) {
-	q := `SELECT id, slug, title, cover, published, views, created_at, updated_at, published_at
-	      FROM posts`
+	q := `SELECT p.id, p.slug, p.title, p.cover, p.published, p.views, p.created_at, p.updated_at, p.published_at,
+	             p.series_id, s.name
+	      FROM posts p
+	      LEFT JOIN series s ON s.id = p.series_id`
 	if onlyPublished {
-		q += ` WHERE published=1`
+		q += ` WHERE p.published=1`
 	}
-	q += ` ORDER BY COALESCE(published_at, created_at) DESC`
+	q += ` ORDER BY COALESCE(p.published_at, p.created_at) DESC`
 	rows, err := DB.Query(q)
 	if err != nil {
 		return nil, err
@@ -138,12 +141,15 @@ func ListPostsMeta(onlyPublished bool) ([]Post, error) {
 		var p Post
 		var pub int
 		var ca, ua string
-		var pa sql.NullString
-		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &pub, &p.Views, &ca, &ua, &pa); err != nil {
+		var pa, seriesName sql.NullString
+		var seriesID sql.NullInt64
+		if err := rows.Scan(&p.ID, &p.Slug, &p.Title, &p.Cover, &pub, &p.Views, &ca, &ua, &pa, &seriesID, &seriesName); err != nil {
 			return nil, err
 		}
 		p.Published = pub == 1
 		p.PublishedAt = parseNullTime(pa)
+		p.SeriesID = int(seriesID.Int64)
+		p.SeriesName = seriesName.String
 		p.CreatedAt, _ = time.Parse("2006-01-02 15:04:05", ca)
 		p.UpdatedAt, _ = time.Parse("2006-01-02 15:04:05", ua)
 		posts = append(posts, p)
@@ -338,6 +344,34 @@ func SetPostPublishedAt(id int, t time.Time) error {
 
 func DeletePost(id int) error {
 	_, err := DB.Exec(`DELETE FROM posts WHERE id=?`, id)
+	return err
+}
+
+// SetPostsSeries переносит посты в серию seriesID (0 — убрать из серии),
+// одним запросом. Посты, уже бывшие в другой серии, переезжают.
+func SetPostsSeries(postIDs []int, seriesID int) error {
+	if len(postIDs) == 0 {
+		return nil
+	}
+	args := []any{seriesIDArg(seriesID)}
+	for _, id := range postIDs {
+		args = append(args, id)
+	}
+	_, err := DB.Exec(`UPDATE posts SET series_id=? WHERE id IN (?`+strings.Repeat(",?", len(postIDs)-1)+`)`, args...)
+	return err
+}
+
+// RemovePostsFromSeries убирает посты из серии seriesID. Посты, которые
+// к этому моменту уже в другой серии, не трогает.
+func RemovePostsFromSeries(seriesID int, postIDs []int) error {
+	if len(postIDs) == 0 {
+		return nil
+	}
+	args := []any{seriesID}
+	for _, id := range postIDs {
+		args = append(args, id)
+	}
+	_, err := DB.Exec(`UPDATE posts SET series_id=NULL WHERE series_id=? AND id IN (?`+strings.Repeat(",?", len(postIDs)-1)+`)`, args...)
 	return err
 }
 
