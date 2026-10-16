@@ -39,7 +39,9 @@
         </td>
         <td class="col-series">{{if .SeriesName}}{{.SeriesName}}{{else}}<span class="muted-dash">—</span>{{end}}</td>
         <td class="col-status">
-          {{if .Published}}
+          {{if .Scheduled}}
+          <span class="badge badge-blue" title="Выйдет {{fmtDateShort .Date}}">Запланирован</span>
+          {{else if .Published}}
           <span class="badge badge-green">Опубликован</span>
           {{else}}
           <span class="badge badge-gray">Черновик</span>
@@ -49,7 +51,7 @@
         <td class="col-date">{{fmtDateShort .Date}}</td>
         <td class="td-actions">
           <a class="icon-btn" href="/admin/posts/{{.ID}}/edit" title="Редактировать" aria-label="Редактировать">✎</a>
-          {{if .Published}}<a class="icon-btn" href="/post/{{.Slug}}" target="_blank" title="Открыть на сайте" aria-label="Открыть на сайте">↗</a>{{end}}
+          {{if .Live}}<a class="icon-btn" href="/post/{{.Slug}}" target="_blank" title="Открыть на сайте" aria-label="Открыть на сайте">↗</a>{{end}}
           <form method="POST" action="/admin/posts/{{.ID}}/delete"
                 onsubmit="return confirm('Удалить пост «{{.Title}}»?')">
             <button type="submit" class="icon-btn icon-btn-danger" title="Удалить" aria-label="Удалить">✕</button>

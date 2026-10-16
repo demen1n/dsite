@@ -126,7 +126,7 @@
         <tr>
           <td class="td-check"><input type="checkbox" class="bulk-item" name="post_ids" value="{{.ID}}"></td>
           <td><a href="/admin/posts/{{.ID}}/edit">{{.Title}}</a></td>
-          <td>{{if .Published}}<span class="badge badge-green">Опубликован</span>{{else}}<span class="badge badge-gray">Черновик</span>{{end}}</td>
+          <td>{{if .Scheduled}}<span class="badge badge-blue" title="Выйдет {{fmtDateShort .Date}}">Запланирован</span>{{else if .Published}}<span class="badge badge-green">Опубликован</span>{{else}}<span class="badge badge-gray">Черновик</span>{{end}}</td>
           <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .Date}}</td>
         </tr>
         {{end}}
@@ -154,7 +154,7 @@
         <tr>
           <td class="td-check"><input type="checkbox" class="bulk-item" name="post_ids" value="{{.ID}}"></td>
           <td><a href="/admin/posts/{{.ID}}/edit">{{.Title}}</a></td>
-          <td>{{if .Published}}<span class="badge badge-green">Опубликован</span>{{else}}<span class="badge badge-gray">Черновик</span>{{end}}</td>
+          <td>{{if .Scheduled}}<span class="badge badge-blue" title="Выйдет {{fmtDateShort .Date}}">Запланирован</span>{{else if .Published}}<span class="badge badge-green">Опубликован</span>{{else}}<span class="badge badge-gray">Черновик</span>{{end}}</td>
           <td style="color:var(--muted)">{{if .SeriesName}}{{.SeriesName}}{{else}}—{{end}}</td>
           <td style="color:var(--muted); white-space:nowrap">{{fmtDateShort .Date}}</td>
         </tr>

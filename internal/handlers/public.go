@@ -196,7 +196,7 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		// Пост переименовали — ведём со старого адреса на новый.
 		if id, ok := db.OldSlugTarget("post", slug); ok {
-			if p, err := db.GetPostByID(id); err == nil && p.Published {
+			if p, err := db.GetPostByID(id); err == nil && p.Live() {
 				redirectPermanent(w, r, "/post/"+url.PathEscape(p.Slug))
 				return
 			}
@@ -204,7 +204,7 @@ func ViewPost(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r)
 		return
 	}
-	if !post.Published {
+	if !post.Live() {
 		NotFound(w, r)
 		return
 	}

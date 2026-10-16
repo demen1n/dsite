@@ -226,7 +226,7 @@
                {{with .Data}}{{if .Published}}checked{{end}}{{end}}
                onchange="updatePublishLabel()">
         <div class="toggle-track"><div class="toggle-thumb"></div></div>
-        <span id="publish-label">{{if .Data}}{{if .Data.Published}}Опубликован{{else}}Черновик{{end}}{{else}}Черновик{{end}}</span>
+        <span id="publish-label">{{if .Data}}{{if .Data.Scheduled}}Запланирован{{else if .Data.Published}}Опубликован{{else}}Черновик{{end}}{{else}}Черновик{{end}}</span>
       </label>
 
       <button type="submit" form="post-form" class="btn btn-primary">Сохранить</button>
@@ -267,7 +267,7 @@
            style="border:1px solid var(--border); border-radius:4px; padding:0.2rem 0.5rem; font-size:0.85rem; background:var(--bg); color:var(--text); font-family:inherit">
     <input type="hidden" name="published_at" id="published-at" form="post-form"
            value="{{with .Data}}{{if not .PublishedAt.IsZero}}{{.PublishedAt.UTC.Format "2006-01-02T15:04:05Z07:00"}}{{end}}{{end}}">
-    <span style="font-size:0.8rem; color:var(--muted)">пусто — проставится при первой публикации</span>
+    <span style="font-size:0.8rem; color:var(--muted)">пусто — проставится при первой публикации; дата в будущем — пост появится на сайте в это время</span>
   </div>
 
   <!-- Tags -->

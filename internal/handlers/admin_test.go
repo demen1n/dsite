@@ -216,3 +216,44 @@ func TestBulkSeriesValidation(t *testing.T) {
 		t.Errorf("garbage post_ids: valid post not processed, series %d", p.SeriesID)
 	}
 }
+
+func TestScheduledPost(t *testing.T) {
+	setupPublic(t)
+	future := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	fields := map[string]string{"title": "Завтра", "slug": "zavtra", "body": "x", "published": "1", "published_at": future}
+	if rec := postForm(t, CreatePost, "POST /admin/posts/new", "/admin/posts/new", fields); rec.Code != http.StatusFound {
+		t.Fatalf("create: status = %d", rec.Code)
+	}
+
+	if rec := serve(ViewPost, "GET /post/{slug}", "/post/zavtra"); rec.Code != 404 {
+		t.Errorf("scheduled post page: status = %d, want 404", rec.Code)
+	}
+	// И по старому адресу — 404, а не редирект на ещё не вышедший пост.
+	p, err := db.GetPostBySlug("zavtra")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdatePost(p.ID, "zavtra-2", p.Title, p.BodyMD, p.BodyHTML, "", true, 0); err != nil {
+		t.Fatal(err)
+	}
+	if rec := serve(ViewPost, "GET /post/{slug}", "/post/zavtra"); rec.Code != 404 {
+		t.Errorf("old slug of a scheduled post: status = %d, want 404", rec.Code)
+	}
+	for _, pg := range []struct {
+		path string
+		h    http.HandlerFunc
+	}{{"/blog", Index}, {"/feed.xml", Feed}, {"/sitemap.xml", Sitemap}} {
+		if rec := serve(pg.h, "GET "+pg.path, pg.path); strings.Contains(rec.Body.String(), "zavtra") {
+			t.Errorf("%s lists the scheduled post", pg.path)
+		}
+	}
+
+	rec := serve(AdminIndex, "GET /admin", "/admin")
+	body := rec.Body.String()
+	if !strings.Contains(body, "Запланирован") {
+		t.Error("admin list doesn't mark the post as scheduled")
+	}
+	if strings.Contains(body, `href="/post/zavtra" target="_blank"`) {
+		t.Error("admin list links to the not-yet-public post")
+	}
+}
