@@ -91,7 +91,9 @@ templates/
 
 **Templates**: Block inheritance — base template defines layout, page templates override blocks. HTMX fragment responses render standalone without the layout wrapper. The rendering logic is in `helpers.go:renderTemplate`.
 
-**Database**: Raw SQL, no ORM. `modernc.org/sqlite` (pure Go, no CGO). Schema migrations run on startup in `db.go`. Tables: `users`, `posts`, `photos`, `resume`, `categories`, `places`, `series`, `tags`, `post_tags`, `sessions`, `settings`, plus the `posts_fts` FTS5 virtual table (full-text search over post title/body, kept in sync via triggers).
+**Database**: Raw SQL, no ORM. `modernc.org/sqlite` (pure Go, no CGO). Schema migrations run on startup in `db.go`. Tables: `users`, `posts`, `photos`, `resume`, `categories`, `places`, `series`, `tags`, `post_tags`, `sessions`, `settings`, `thumbnails`, `slug_history`, plus the `posts_fts` FTS5 virtual table (full-text search over post title/body, kept in sync via triggers).
+
+**Old slugs redirect**: renaming a post or series slug keeps the old one in `slug_history` (maintained by triggers in `migrateSlugHistory`, so no Go code on the update paths), and `ViewPost`/`SeriesView` answer 301 from an old slug to the current one — unless the post is unpublished or the series hidden, which stay 404.
 
 **Sessions**: Stored in SQLite (`sessions` table). 30-day expiry. Expired sessions cleaned on startup and hourly. Single admin user.
 

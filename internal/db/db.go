@@ -60,6 +60,9 @@ func Init(path string) error {
 	if err = migrateThumbnails(); err != nil {
 		return fmt.Errorf("migrate thumbnails: %w", err)
 	}
+	if err = migrateSlugHistory(); err != nil {
+		return fmt.Errorf("migrate slug history: %w", err)
+	}
 	log.Println("DB initialized:", path)
 	return nil
 }
@@ -199,6 +202,45 @@ func migrateThumbnails() error {
 		width    INTEGER NOT NULL DEFAULT 0,
 		height   INTEGER NOT NULL DEFAULT 0
 	)`)
+	return err
+}
+
+// migrateSlugHistory adds slug_history: прежние slug постов и серий, чтобы
+// старые ссылки после переименования вели 301-редиректом на новый адрес.
+// Ведётся триггерами, так что любой UPDATE slug (из админки или руками в
+// базе) попадает в историю. Живой slug всегда важнее истории: при
+// переименовании или создании с занятым в истории slug запись удаляется.
+func migrateSlugHistory() error {
+	_, err := DB.Exec(`
+	CREATE TABLE IF NOT EXISTS slug_history (
+		kind      TEXT NOT NULL,    -- 'post' | 'series'
+		slug      TEXT NOT NULL,    -- прежний slug
+		target_id INTEGER NOT NULL, -- id поста/серии
+		PRIMARY KEY (kind, slug)
+	);
+	CREATE TRIGGER IF NOT EXISTS posts_slug_au AFTER UPDATE OF slug ON posts
+	WHEN old.slug <> new.slug BEGIN
+		INSERT OR REPLACE INTO slug_history (kind, slug, target_id) VALUES ('post', old.slug, old.id);
+		DELETE FROM slug_history WHERE kind = 'post' AND slug = new.slug;
+	END;
+	CREATE TRIGGER IF NOT EXISTS posts_slug_ai AFTER INSERT ON posts BEGIN
+		DELETE FROM slug_history WHERE kind = 'post' AND slug = new.slug;
+	END;
+	CREATE TRIGGER IF NOT EXISTS posts_slug_ad AFTER DELETE ON posts BEGIN
+		DELETE FROM slug_history WHERE kind = 'post' AND target_id = old.id;
+	END;
+	CREATE TRIGGER IF NOT EXISTS series_slug_au AFTER UPDATE OF slug ON series
+	WHEN old.slug <> new.slug BEGIN
+		INSERT OR REPLACE INTO slug_history (kind, slug, target_id) VALUES ('series', old.slug, old.id);
+		DELETE FROM slug_history WHERE kind = 'series' AND slug = new.slug;
+	END;
+	CREATE TRIGGER IF NOT EXISTS series_slug_ai AFTER INSERT ON series BEGIN
+		DELETE FROM slug_history WHERE kind = 'series' AND slug = new.slug;
+	END;
+	CREATE TRIGGER IF NOT EXISTS series_slug_ad AFTER DELETE ON series BEGIN
+		DELETE FROM slug_history WHERE kind = 'series' AND target_id = old.id;
+	END;
+	`)
 	return err
 }
 

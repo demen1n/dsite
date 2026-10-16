@@ -343,6 +343,14 @@ func SetPostPublishedAt(id int, t time.Time) error {
 	return err
 }
 
+// OldSlugTarget возвращает id поста или серии (kind = "post" | "series"),
+// у которых slug когда-то был таким (см. migrateSlugHistory).
+func OldSlugTarget(kind, slug string) (int, bool) {
+	var id int
+	err := DB.QueryRow(`SELECT target_id FROM slug_history WHERE kind=? AND slug=?`, kind, slug).Scan(&id)
+	return id, err == nil
+}
+
 func DeletePost(id int) error {
 	_, err := DB.Exec(`DELETE FROM posts WHERE id=?`, id)
 	return err
