@@ -1190,3 +1190,26 @@ func TestRelatedPosts(t *testing.T) {
 		t.Error("want an error with the database closed")
 	}
 }
+
+func TestThumbnails(t *testing.T) {
+	setupTestDB(t)
+	th := Thumbnail{Filename: "a.jpg", Thumb: "thumbs/a.jpg", Width: 1600, Height: 900, Placeholder: "data:image/jpeg;base64,AAA="}
+	if err := UpsertThumbnail(th); err != nil {
+		t.Fatal(err)
+	}
+	// Повторный upsert обновляет запись, а не дублирует её.
+	th.Placeholder = "data:image/jpeg;base64,BBB="
+	if err := UpsertThumbnail(th); err != nil {
+		t.Fatal(err)
+	}
+	list, err := ListThumbnails()
+	if err != nil || len(list) != 1 || list[0] != th {
+		t.Fatalf("ListThumbnails = %+v, %v; want [%+v]", list, err, th)
+	}
+	if err := DeleteThumbnail("a.jpg"); err != nil {
+		t.Fatal(err)
+	}
+	if list, _ := ListThumbnails(); len(list) != 0 {
+		t.Errorf("after delete: %+v", list)
+	}
+}
