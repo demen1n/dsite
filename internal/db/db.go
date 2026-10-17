@@ -202,14 +202,12 @@ func migrateThumbnails() error {
 		width    INTEGER NOT NULL DEFAULT 0,
 		height   INTEGER NOT NULL DEFAULT 0
 	)`)
-	if err != nil {
-		return err
-	}
 	// placeholder: крошечная копия картинки (data:-URI), которую показываем
 	// фоном, пока грузится сама картинка. Пусто — ещё не сгенерирована
-	// (BackfillThumbs догенерит) или не нужна (GIF).
+	// (BackfillThumbs догенерит) или не нужна (GIF). Ошибка ALTER — колонка
+	// уже есть.
 	DB.Exec(`ALTER TABLE thumbnails ADD COLUMN placeholder TEXT NOT NULL DEFAULT ''`)
-	return nil
+	return err
 }
 
 // migrateSlugHistory adds slug_history: прежние slug постов и серий, чтобы
