@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	"encoding/base64"
 	"fmt"
+	"html/template"
 	"log"
 	"os"
 	"path/filepath"
@@ -35,6 +37,13 @@ const (
 	// весит в разы больше.
 	proseImgSizes = "(max-width: 520px) 67vw, 852px"
 	coverImgSizes = "(max-width: 700px) 67vw, 652px"
+
+	// Заглушка: картинка шириной placeholderWidth, растянутая фоном под
+	// <img>. Пока картинка грузится (издалека — секунды, и JPEG проявляется
+	// сверху вниз), вместо белого прямоугольника видна её размытая копия.
+	// Лежит прямо в HTML как data:-URI, ~1 КБ на картинку.
+	placeholderWidth   = 16
+	placeholderQuality = 50
 )
 
 var thumbIdx = struct {
@@ -76,13 +85,18 @@ func makeThumb(filename string, data []byte) (db.Thumbnail, error) {
 		return t, err
 	}
 	t.Width, t.Height = w, h
-	if strings.EqualFold(filepath.Ext(filename), ".gif") || w <= thumbWidth {
+	if isGIF(filename) {
+		return t, nil
+	}
+	if w <= thumbWidth {
+		t.Placeholder = placeholderOf(filename, data)
 		return t, nil
 	}
 	out, _, _, err := imgproc.Process(data, thumbWidth, 0, thumbQuality)
 	if err != nil {
 		return t, err
 	}
+	t.Placeholder = placeholderOf(filename, out)
 	if err := os.MkdirAll(filepath.Join(uploadsDir, thumbsDir), 0o750); err != nil {
 		return t, err
 	}
@@ -92,6 +106,33 @@ func makeThumb(filename string, data []byte) (db.Thumbnail, error) {
 	}
 	t.Thumb = thumbsDir + "/" + name
 	return t, nil
+}
+
+func isGIF(filename string) bool { return strings.EqualFold(filepath.Ext(filename), ".gif") }
+
+// needsPlaceholder — у превью нет заглушки, хотя она нужна (у GIF её нет
+// намеренно: прозрачные места показывали бы фон).
+func needsPlaceholder(t db.Thumbnail) bool { return t.Placeholder == "" && !isGIF(t.Filename) }
+
+// makePlaceholder — data:-URI заглушки для картинки data (лучше передавать
+// превью, а не оригинал: меньше декодировать). Вызывающий держит слот
+// imgproc.Reserve.
+func makePlaceholder(data []byte) (string, error) {
+	out, _, _, err := imgproc.Process(data, placeholderWidth, 0, placeholderQuality)
+	if err != nil {
+		return "", err
+	}
+	return "data:image/jpeg;base64," + base64.StdEncoding.EncodeToString(out), nil
+}
+
+// placeholderOf — makePlaceholder, ошибка которого только логируется: без
+// заглушки картинка просто грузится на белом фоне.
+func placeholderOf(filename string, data []byte) string {
+	ph, err := makePlaceholder(data)
+	if err != nil {
+		log.Printf("placeholder %s: %v", filename, err)
+	}
+	return ph
 }
 
 // registerThumb делает превью и запоминает его (БД, память, photos.thumb
@@ -132,6 +173,11 @@ func thumbFileOK(t db.Thumbnail) bool {
 func processThumbFile(filename string) {
 	filename = filepath.Base(filename)
 	if t, ok := thumbOf(filename); ok && thumbFileOK(t) {
+		if needsPlaceholder(t) {
+			// Превью сделано до появления заглушек — её делаем из превью.
+			addPlaceholder(t)
+			return
+		}
 		// Превью уже есть (например, файл из поста добавили в галерею) —
 		// достаточно проставить его фото галереи.
 		if err := db.SetPhotoThumb(filename, t.Thumb); err != nil {
@@ -147,6 +193,20 @@ func processThumbFile(filename string) {
 		return
 	}
 	registerThumb(filename, data)
+}
+
+// addPlaceholder дополняет готовое превью t заглушкой.
+func addPlaceholder(t db.Thumbnail) {
+	release := imgproc.Reserve()
+	defer release()
+	data, err := os.ReadFile(filepath.Join(uploadsDir, filepath.FromSlash(t.Thumb)))
+	if err != nil {
+		log.Printf("placeholder %s: %v", t.Filename, err)
+		return
+	}
+	if t.Placeholder = placeholderOf(t.Filename, data); t.Placeholder != "" {
+		rememberThumb(t)
+	}
 }
 
 // thumbQueue — файлы, ждущие превью. Загрузки кладут сюда имя и не ждут
@@ -205,7 +265,7 @@ func BackfillThumbs() {
 		if e.IsDir() || !isAllowedImageExt(filepath.Ext(e.Name())) {
 			continue
 		}
-		if t, ok := thumbOf(e.Name()); ok && thumbFileOK(t) {
+		if t, ok := thumbOf(e.Name()); ok && thumbFileOK(t) && !needsPlaceholder(t) {
 			continue
 		}
 		processThumbFile(e.Name())
@@ -271,15 +331,41 @@ func thumbRatio(src string) string {
 	return ""
 }
 
+// placeholderStyle — style с заглушкой картинки src фоном; "" — заглушки нет.
+func placeholderStyle(src string) string {
+	t, ok := thumbOf(uploadName(src))
+	if !ok || t.Placeholder == "" {
+		return ""
+	}
+	return "background: url(" + t.Placeholder + ") center / cover no-repeat"
+}
+
+// thumbAttrs — атрибуты width/height и style с заглушкой для <img> обложки:
+// место под неё резервируется до загрузки, и до загрузки видна заглушка.
+func thumbAttrs(src string) template.HTMLAttr {
+	t, ok := thumbOf(uploadName(src))
+	if !ok {
+		return ""
+	}
+	var b strings.Builder
+	if t.Width > 0 && t.Height > 0 {
+		fmt.Fprintf(&b, ` width="%d" height="%d"`, t.Width, t.Height)
+	}
+	if st := placeholderStyle(src); st != "" {
+		fmt.Fprintf(&b, ` style="%s"`, st)
+	}
+	return template.HTMLAttr(b.String()) //nolint:gosec // числа и data:-URI из base64, сгенерированные нами
+}
+
 var (
 	reImgTag     = regexp.MustCompile(`<img\s[^>]*>`)
 	reImgTagSrc  = regexp.MustCompile(`\ssrc="([^"]*)"`)
-	reImgTagAttr = regexp.MustCompile(`\s(srcset|loading|decoding|width|height)=`)
+	reImgTagAttr = regexp.MustCompile(`\s(srcset|loading|decoding|width|height|style)=`)
 )
 
 // responsiveImages дополняет картинки в HTML поста: srcset/sizes для файлов
 // с превью, width/height (место под картинку резервируется до загрузки и
-// страница не прыгает), loading="lazy" и decoding="async". Атрибуты, уже
+// страница не прыгает), заглушку фоном, loading="lazy" и decoding="async". Атрибуты, уже
 // заданные в markdown/HTML поста, не трогает.
 func responsiveImages(html string) string {
 	return reImgTag.ReplaceAllStringFunc(html, func(tag string) string {
@@ -298,6 +384,9 @@ func responsiveImages(html string) string {
 			}
 			if t, ok := thumbOf(name); ok && t.Width > 0 && t.Height > 0 && !have["width"] && !have["height"] {
 				fmt.Fprintf(&add, ` width="%d" height="%d"`, t.Width, t.Height)
+			}
+			if st := placeholderStyle(name); st != "" && !have["style"] {
+				fmt.Fprintf(&add, ` style="%s"`, st)
 			}
 		}
 		if !have["loading"] {

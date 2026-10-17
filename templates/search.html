@@ -22,7 +22,7 @@
       </div>
       <h2 class="feed-title"><a href="/post/{{.Slug}}">{{.Title}}</a></h2>
       {{if .Cover}}
-      <a href="/post/{{.Slug}}"><img class="feed-cover" src="/uploads/{{.Cover}}"{{with thumbSrcset .Cover}} srcset="{{.}}" sizes="{{coverSizes}}"{{end}} alt="{{.Title}}" loading="lazy"></a>
+      <a href="/post/{{.Slug}}"><img class="feed-cover" src="/uploads/{{.Cover}}"{{with thumbSrcset .Cover}} srcset="{{.}}" sizes="{{coverSizes}}"{{end}} {{thumbAttrs .Cover}} alt="{{.Title}}" loading="lazy" decoding="async"></a>
       {{end}}
       <p class="feed-excerpt">{{excerpt .BodyHTML}}</p>
     </article>

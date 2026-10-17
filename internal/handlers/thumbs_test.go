@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"bytes"
+	"encoding/base64"
 	"image"
 	"image/color"
 	"image/gif"
@@ -53,6 +54,7 @@ func TestMakeThumb(t *testing.T) {
 	if w, h, _ := imgproc.Dimensions(data); w != thumbWidth || h != 500 {
 		t.Errorf("thumb size = %dx%d, want %dx500", w, h, thumbWidth)
 	}
+	assertPlaceholder(t, "wide", th.Placeholder)
 
 	// webp-оригинал даёт .jpg превью.
 	if th, _ := makeThumb("old.webp", testJPEG(t, 1200, 800)); th.Thumb != "thumbs/old.jpg" {
@@ -60,13 +62,32 @@ func TestMakeThumb(t *testing.T) {
 	}
 
 	// Узкое фото и GIF — превью не нужно, оригинал сам себе превью.
-	if th, _ := makeThumb("narrow.jpg", testJPEG(t, 640, 480)); th.Thumb != "narrow.jpg" || th.Width != 640 {
+	th, _ = makeThumb("narrow.jpg", testJPEG(t, 640, 480))
+	if th.Thumb != "narrow.jpg" || th.Width != 640 {
 		t.Errorf("narrow: %+v, want original", th)
 	}
+	assertPlaceholder(t, "narrow", th.Placeholder)
 	var gifBuf bytes.Buffer
 	gif.Encode(&gifBuf, image.NewPaletted(image.Rect(0, 0, 1600, 900), color.Palette{color.Black, color.White}), nil) //nolint
-	if th, _ := makeThumb("anim.gif", gifBuf.Bytes()); th.Thumb != "anim.gif" {
-		t.Errorf("gif: thumb=%q, want original", th.Thumb)
+	if th, _ := makeThumb("anim.gif", gifBuf.Bytes()); th.Thumb != "anim.gif" || th.Placeholder != "" {
+		t.Errorf("gif: %+v, want original and no placeholder", th)
+	}
+
+	// Битая картинка — заглушки нет, но и не падаем.
+	if ph := placeholderOf("broken.jpg", []byte("not an image")); ph != "" {
+		t.Errorf("broken: placeholder = %q", ph)
+	}
+}
+
+// assertPlaceholder: ph — data:-URI JPEG шириной placeholderWidth.
+func assertPlaceholder(t *testing.T, name, ph string) {
+	t.Helper()
+	raw, err := base64.StdEncoding.DecodeString(strings.TrimPrefix(ph, "data:image/jpeg;base64,"))
+	if !strings.HasPrefix(ph, "data:image/jpeg;base64,") || err != nil {
+		t.Fatalf("%s: placeholder = %.40q (%v)", name, ph, err)
+	}
+	if w, _, err := imgproc.Dimensions(raw); w != placeholderWidth || err != nil {
+		t.Errorf("%s: placeholder width = %d (%v), want %d", name, w, err, placeholderWidth)
 	}
 }
 
@@ -97,6 +118,31 @@ func TestBackfillThumbsAndForget(t *testing.T) {
 		t.Error("thumbnail lost after reload from DB")
 	}
 
+	// Превью, сделанное до появления заглушек, получает заглушку при
+	// следующем backfill — из файла превью, без пересоздания самого превью.
+	if th, _ := thumbOf("big.jpg"); th.Placeholder == "" {
+		t.Error("big.jpg: no placeholder after backfill")
+	}
+	old, _ := thumbOf("big.jpg")
+	old.Placeholder = ""
+	rememberThumb(old)
+	thumbPath := filepath.Join(uploadsDir, "thumbs", "big.jpg")
+	before, _ := os.Stat(thumbPath)
+	BackfillThumbs()
+	loadThumbIndex()
+	if th, _ := thumbOf("big.jpg"); th.Placeholder == "" {
+		t.Error("big.jpg: placeholder not backfilled")
+	}
+	if after, _ := os.Stat(thumbPath); !after.ModTime().Equal(before.ModTime()) {
+		t.Error("big.jpg: thumb regenerated just to add a placeholder")
+	}
+	// Файл превью не читается — заглушки нет, запись не портится.
+	gone := db.Thumbnail{Filename: "gone.jpg", Thumb: "gone.jpg", Width: 10, Height: 10}
+	addPlaceholder(gone)
+	if _, ok := thumbOf("gone.jpg"); ok {
+		t.Error("gone.jpg: remembered without a placeholder file")
+	}
+
 	// Удалили файл превью руками — повторный backfill его восстановит.
 	os.Remove(filepath.Join(uploadsDir, "thumbs", "big.jpg")) //nolint
 	BackfillThumbs()
@@ -116,7 +162,18 @@ func TestBackfillThumbsAndForget(t *testing.T) {
 func TestThumbRenderHelpers(t *testing.T) {
 	setupPublic(t)
 	rememberThumb(db.Thumbnail{Filename: "big.jpg", Thumb: "thumbs/big.jpg", Width: 1600, Height: 1000})
-	rememberThumb(db.Thumbnail{Filename: "small.jpg", Thumb: "small.jpg", Width: 600, Height: 400})
+	rememberThumb(db.Thumbnail{Filename: "small.jpg", Thumb: "small.jpg", Width: 600, Height: 400, Placeholder: "data:image/jpeg;base64,AAA="})
+	const phStyle = ` style="background: url(data:image/jpeg;base64,AAA=) center / cover no-repeat"`
+
+	if got := thumbAttrs("/uploads/small.jpg"); got != ` width="600" height="400"`+phStyle {
+		t.Errorf("thumbAttrs(small) = %q", got)
+	}
+	if got := thumbAttrs("big.jpg"); got != ` width="1600" height="1000"` {
+		t.Errorf("thumbAttrs(big) = %q", got)
+	}
+	if got := thumbAttrs("unknown.jpg"); got != "" {
+		t.Errorf("thumbAttrs(unknown) = %q", got)
+	}
 
 	for _, src := range []string{"big.jpg", "/uploads/big.jpg"} {
 		if got := thumbSrcset(src); got != "/uploads/thumbs/big.jpg 800w, /uploads/big.jpg 1600w" {
@@ -142,14 +199,16 @@ func TestThumbRenderHelpers(t *testing.T) {
 	html := `<p><img src="/uploads/big.jpg" alt="a"></p>` +
 		`<p><img src="/uploads/small.jpg" alt="b" /></p>` +
 		`<p><img src="https://example.com/x.jpg" alt="c"></p>` +
-		`<p><img src="/uploads/big.jpg" loading="eager" srcset="custom.jpg 1x" alt="d"></p>`
+		`<p><img src="/uploads/big.jpg" loading="eager" srcset="custom.jpg 1x" alt="d"></p>` +
+		`<p><img src="/uploads/small.jpg" style="border: 0" alt="e"></p>`
 	got := responsiveImages(html)
 	for _, want := range []string{
 		`<img src="/uploads/big.jpg" alt="a" srcset="/uploads/thumbs/big.jpg 800w, /uploads/big.jpg 1600w" sizes="` + proseImgSizes + `" width="1600" height="1000" loading="lazy" decoding="async">`,
-		`<img src="/uploads/small.jpg" alt="b" width="600" height="400" loading="lazy" decoding="async"/>`,
+		`<img src="/uploads/small.jpg" alt="b" width="600" height="400"` + phStyle + ` loading="lazy" decoding="async"/>`,
 		`<img src="https://example.com/x.jpg" alt="c" loading="lazy" decoding="async">`,
 		// заданное в посте не трогаем
 		`<img src="/uploads/big.jpg" loading="eager" srcset="custom.jpg 1x" alt="d" width="1600" height="1000" decoding="async">`,
+		`<img src="/uploads/small.jpg" style="border: 0" alt="e" width="600" height="400" loading="lazy" decoding="async">`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Errorf("responsiveImages missing\n  %s\nin\n  %s", want, got)
@@ -160,7 +219,7 @@ func TestThumbRenderHelpers(t *testing.T) {
 func TestPublicPagesUseThumbs(t *testing.T) {
 	setupPublic(t)
 	rememberThumb(db.Thumbnail{Filename: "body.jpg", Thumb: "thumbs/body.jpg", Width: 1600, Height: 1000})
-	rememberThumb(db.Thumbnail{Filename: "cover.jpg", Thumb: "thumbs/cover.jpg", Width: 1600, Height: 900})
+	rememberThumb(db.Thumbnail{Filename: "cover.jpg", Thumb: "thumbs/cover.jpg", Width: 1600, Height: 900, Placeholder: "data:image/jpeg;base64,CCC="})
 	sid, _ := db.CreateSeries("Trip", "trip", "", "", "cover.jpg", true, true, false, false)
 	db.CreatePost("p", "P", "", `<p><img src="/uploads/body.jpg" alt=""></p>`, "cover.jpg", true, int(sid)) //nolint
 	cards, _ := db.CreateSeries("Cards", "cards", "", "", "", false, true, false, false)
@@ -174,9 +233,12 @@ func TestPublicPagesUseThumbs(t *testing.T) {
 			`srcset="/uploads/thumbs/cover.jpg 800w, /uploads/cover.jpg 1600w"`, // обложка
 			`srcset="/uploads/thumbs/body.jpg 800w, /uploads/body.jpg 1600w"`,   // картинка в тексте
 			`loading="lazy"`,
+			`class="post-cover"`,
+			`width="1600" height="900" style="background: url(data:image/jpeg;base64,CCC=) center / cover no-repeat"`, // обложка с заглушкой
 		}},
 		{"blog", serve(Index, "GET /blog", "/blog").Body.String(), []string{
 			`srcset="/uploads/thumbs/cover.jpg 800w`,
+			`width="1600" height="900" style="background: url(data:image/jpeg;base64,CCC=) center / cover no-repeat"`,
 			`srcset="/uploads/thumbs/body.jpg 800w`,
 		}},
 		{"series photos", serve(SeriesView, "GET /series/{slug}", "/series/trip").Body.String(), []string{
