@@ -37,8 +37,7 @@
   </div>
   <h1>{{.Title}}</h1>
   {{if .Cover}}
-  <img src="/uploads/{{.Cover}}"{{with thumbSrcset .Cover}} srcset="{{.}}" sizes="{{coverSizes}}"{{end}} alt="{{.Title}}" data-lightbox
-       style="width:100%; max-height:480px; object-fit:cover; margin:1.5rem 0; cursor:pointer;">
+  <img class="post-cover" src="/uploads/{{.Cover}}"{{with thumbSrcset .Cover}} srcset="{{.}}" sizes="{{coverSizes}}"{{end}} {{thumbAttrs .Cover}} alt="{{.Title}}" data-lightbox>
   {{end}}
   <div class="prose">
     {{postHTML .BodyHTML}}

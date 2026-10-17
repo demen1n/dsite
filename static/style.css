@@ -70,7 +70,8 @@ p { margin-bottom: 1rem; }
 .feed-title { font-family: var(--sans); font-size: 1.2rem; font-weight: 600; margin-bottom: 0.6rem; line-height: 1.35; }
 .feed-title a { color: var(--text); text-decoration: none; }
 .feed-title a:hover { text-decoration: underline; }
-.feed-cover { width: 100%; margin-bottom: 1rem; display: block; }
+.feed-cover { width: 100%; height: auto; margin-bottom: 1rem; display: block; }
+.post-cover { width: 100%; height: auto; max-height: 480px; object-fit: cover; margin: 1.5rem 0; display: block; cursor: pointer; }
 a:has(> .feed-cover) { display: block; margin-bottom: 1rem; text-decoration: none; }
 a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
 .feed-body { font-size: 0.97rem; }

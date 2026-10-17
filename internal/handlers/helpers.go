@@ -208,6 +208,7 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 		"thumbSrcset": thumbSrcset,
 		"thumbSrc":    thumbSrc,
 		"thumbRatio":  thumbRatio,
+		"thumbAttrs":  thumbAttrs,
 		"coverSizes":  func() string { return coverImgSizes },
 		// postHTML — HTML поста с адаптивными картинками (см. responsiveImages).
 		"postHTML": func(s string) template.HTML { return template.HTML(responsiveImages(s)) },

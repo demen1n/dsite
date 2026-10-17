@@ -99,7 +99,7 @@ templates/
 
 **Sessions**: Stored in SQLite (`sessions` table). 30-day expiry. Expired sessions cleaned on startup and hourly. Single admin user.
 
-**Images**: Server-side resize/re-encode via `internal/imgproc` (EXIF-corrected, max 1600px wide, JPEG output) — replaced the old browser-side canvas resize. GIFs are stored as-is (unprocessed) to preserve animation. Server stores with a random hex filename. Upload validation checks both file extension (allowlist) and magic bytes (MIME content). `imgproc.Process` no longer self-throttles concurrency — callers must hold an `imgproc.Reserve()` slot for the duration of the call (see `internal/imgproc/imgproc.go`).
+**Images**: Server-side resize/re-encode via `internal/imgproc` (EXIF-corrected, max 1600px wide, JPEG output) — replaced the old browser-side canvas resize. GIFs are stored as-is (unprocessed) to preserve animation. Server stores with a random hex filename. Upload validation checks both file extension (allowlist) and magic bytes (MIME content). `imgproc.Process` no longer self-throttles concurrency — callers must hold an `imgproc.Reserve()` slot for the duration of the call (see `internal/imgproc/imgproc.go`). Every upload also gets an 800px thumbnail (`internal/handlers/thumbs.go`, used in `srcset`) and a 16px placeholder stored as a `data:` URI in `thumbnails.placeholder`, rendered as the `<img>` background so a blurred preview shows while the photo loads (none for GIFs — transparency). `BackfillThumbs` fills in missing thumbnails and placeholders on startup.
 
 **Slugs**: `slugify()` in `helpers.go` supports Cyrillic — transliterates to Latin before slugifying, so Russian category/post names work correctly.
 

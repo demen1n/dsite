@@ -1274,11 +1274,14 @@ type Thumbnail struct {
 	Thumb    string // путь относительно uploads/; = Filename — превью нет, показываем оригинал
 	Width    int    // размеры оригинала
 	Height   int
+	// Placeholder — data:-URI крошечной копии картинки для фона до загрузки;
+	// "" — нет.
+	Placeholder string
 }
 
 // ListThumbnails возвращает все превью — их держат в памяти для рендера.
 func ListThumbnails() ([]Thumbnail, error) {
-	rows, err := DB.Query(`SELECT filename, thumb, width, height FROM thumbnails`)
+	rows, err := DB.Query(`SELECT filename, thumb, width, height, placeholder FROM thumbnails`)
 	if err != nil {
 		return nil, err
 	}
@@ -1286,7 +1289,7 @@ func ListThumbnails() ([]Thumbnail, error) {
 	var list []Thumbnail
 	for rows.Next() {
 		var t Thumbnail
-		if err := rows.Scan(&t.Filename, &t.Thumb, &t.Width, &t.Height); err != nil {
+		if err := rows.Scan(&t.Filename, &t.Thumb, &t.Width, &t.Height, &t.Placeholder); err != nil {
 			return nil, err
 		}
 		list = append(list, t)
@@ -1295,9 +1298,9 @@ func ListThumbnails() ([]Thumbnail, error) {
 }
 
 func UpsertThumbnail(t Thumbnail) error {
-	_, err := DB.Exec(`INSERT INTO thumbnails (filename, thumb, width, height) VALUES (?,?,?,?)
-	                   ON CONFLICT(filename) DO UPDATE SET thumb=excluded.thumb, width=excluded.width, height=excluded.height`,
-		t.Filename, t.Thumb, t.Width, t.Height)
+	_, err := DB.Exec(`INSERT INTO thumbnails (filename, thumb, width, height, placeholder) VALUES (?,?,?,?,?)
+	                   ON CONFLICT(filename) DO UPDATE SET thumb=excluded.thumb, width=excluded.width, height=excluded.height, placeholder=excluded.placeholder`,
+		t.Filename, t.Thumb, t.Width, t.Height, t.Placeholder)
 	return err
 }
 
