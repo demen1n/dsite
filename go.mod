@@ -1,6 +1,6 @@
 module github.com/demen1n/dsite
 
-go 1.26.9
+go 1.27.3
 
 require (
 	github.com/yuin/goldmark v1.8.6
