@@ -19,7 +19,8 @@ services:
       # Optional: also push each backup archive to Yandex Disk (BACKUP_DIR
       # already defaults to /data/backups, on the persisted volume, so the
       # local copy needs no extra config). Get a token with the
-      # cloud_api:disk.write scope from an app at https://oauth.yandex.ru.
+      # cloud_api:disk.read and cloud_api:disk.write scopes from an app at
+      # https://oauth.yandex.ru (read is needed to prune old archives).
       # - BACKUP_REMOTE=yadisk
       # - YADISK_TOKEN=
     mem_limit: 512m
