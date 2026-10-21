@@ -44,6 +44,7 @@ INSECURE_COOKIES=true go run ./cmd/dsite
 | `SITE_TITLE`       | `My Blog`        | Название сайта                                  |
 | `SITE_DESC`        | `Фото и заметки` | Подзаголовок                                    |
 | `SITE_URL`         | _(автоопределение)_ | Канонический URL (напр. `https://example.com`) для sitemap/robots/фида. В production обязательно. |
+| `SITE_TZ`          | `UTC`            | Часовой пояс для показа дат, имя IANA (напр. `Asia/Vladivostok`) |
 | `INSECURE_COOKIES` | —                | `true` для локального запуска по HTTP           |
 | `TRUSTED_PROXY`    | —                | `true` если сервер за обратным прокси (доверять `X-Forwarded-For` для рейт-лимита логина) |
 | `BACKUP_DIR`        | `./backups`      | Локальная папка для архивов бэкапа (`dsite backup`, см. ниже) |

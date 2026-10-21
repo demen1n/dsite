@@ -14,7 +14,8 @@ type Config struct {
 	SiteDesc      string
 	SiteURL       string // e.g. https://demenin.ru — overrides auto-detected base URL
 	SecureCookies bool
-	TrustedProxy  bool // если true — доверяем X-Forwarded-For (только за обратным прокси)
+	TrustedProxy  bool   // если true — доверяем X-Forwarded-For (только за обратным прокси)
+	SiteTZ        string // IANA time zone dates are shown in, e.g. Asia/Vladivostok
 
 	BackupDir        string        // local directory for backup archives
 	BackupKeep       int           // local archives to retain; 0 keeps all
@@ -35,6 +36,7 @@ func LoadConfig() Config {
 		SiteURL:       os.Getenv("SITE_URL"),
 		SecureCookies: os.Getenv("INSECURE_COOKIES") != "true",
 		TrustedProxy:  os.Getenv("TRUSTED_PROXY") == "true",
+		SiteTZ:        getEnv("SITE_TZ", "UTC"),
 
 		BackupDir:        getEnv("BACKUP_DIR", "./backups"),
 		BackupKeep:       getEnvInt("BACKUP_KEEP", 7),

@@ -110,24 +110,64 @@ func TestWeekWord(t *testing.T) {
 // ───── relDate ─────
 
 func TestRelDate(t *testing.T) {
-	now := time.Now()
+	// Fixed midday "now", so the calendar-day boundaries can't shift
+	// depending on when the test happens to run.
+	now := time.Date(2026, 10, 21, 12, 0, 0, 0, time.UTC)
 
-	if got := relDate(now.Add(-1 * time.Hour)); got != "сегодня" {
+	if got := relDateAt(now.Add(-1*time.Hour), now); got != "сегодня" {
 		t.Errorf("relDate(today): got %q", got)
 	}
-	if got := relDate(now.Add(-25 * time.Hour)); got != "вчера" {
+	if got := relDateAt(now.Add(-25*time.Hour), now); got != "вчера" {
 		t.Errorf("relDate(yesterday): got %q", got)
 	}
-	if got := relDate(now.Add(-3 * 24 * time.Hour)); got != "3 дня назад" {
+	if got := relDateAt(now.Add(-3*24*time.Hour), now); got != "3 дня назад" {
 		t.Errorf("relDate(3 days): got %q", got)
 	}
-	if got := relDate(now.Add(-14 * 24 * time.Hour)); got != "2 недели назад" {
+	if got := relDateAt(now.Add(-14*24*time.Hour), now); got != "2 недели назад" {
 		t.Errorf("relDate(2 weeks): got %q", got)
 	}
 
 	old := time.Date(2020, 6, 15, 0, 0, 0, 0, time.UTC)
-	if got := relDate(old); got != "15 июня 2020" {
+	if got := relDateAt(old, now); got != "15 июня 2020" {
 		t.Errorf("relDate(old): got %q", got)
+	}
+}
+
+// withSiteLoc switches the site time zone for the duration of a test.
+func withSiteLoc(t *testing.T, name string) {
+	t.Helper()
+	loc, err := time.LoadLocation(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prev := siteLoc
+	SetSiteLocation(loc)
+	t.Cleanup(func() { SetSiteLocation(prev) })
+}
+
+func TestRelDate_CalendarDaysInSiteZone(t *testing.T) {
+	withSiteLoc(t, "Asia/Vladivostok") // UTC+10
+
+	// 2026-10-21 00:30 in Vladivostok.
+	now := time.Date(2026, 10, 20, 14, 30, 0, 0, time.UTC)
+
+	// 23:30 the previous evening in Vladivostok — only an hour ago, but
+	// already yesterday there.
+	if got := relDateAt(now.Add(-1*time.Hour), now); got != "вчера" {
+		t.Errorf("an hour ago, before local midnight: got %q, want вчера", got)
+	}
+	// 00:10 the same night — today.
+	if got := relDateAt(now.Add(-20*time.Minute), now); got != "сегодня" {
+		t.Errorf("after local midnight: got %q, want сегодня", got)
+	}
+}
+
+func TestRuDate_UsesSiteZone(t *testing.T) {
+	withSiteLoc(t, "Asia/Vladivostok")
+
+	// 20 Oct 15:00 UTC is already 21 Oct 01:00 in Vladivostok.
+	if got := ruDate(time.Date(2026, 10, 20, 15, 0, 0, 0, time.UTC)); got != "21 октября 2026" {
+		t.Errorf("ruDate = %q, want 21 октября 2026", got)
 	}
 }
 

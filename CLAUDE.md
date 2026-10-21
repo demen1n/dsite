@@ -57,6 +57,7 @@ First run: visit `/admin/setup` to create the admin account.
 | `SITE_TITLE`  | `My Blog`        | Site title             |
 | `SITE_DESC`   | `Фото и заметки` | Site subtitle          |
 | `SITE_URL`    | _(auto-detect)_  | Canonical base URL (e.g. `https://demenin.ru`), used in sitemap/robots/feeds |
+| `SITE_TZ`     | `UTC`            | IANA time zone dates are shown in (e.g. `Asia/Vladivostok`); an unknown zone fails startup |
 | `INSECURE_COOKIES` | —           | `true` for local development over plain HTTP |
 | `TRUSTED_PROXY`    | —           | `true` behind a reverse proxy (trusts `X-Forwarded-For` for login rate limiting) |
 | `BACKUP_DIR`        | `./backups`      | Local directory for backup archives (`dsite backup`, see below) |
@@ -100,6 +101,8 @@ templates/
 **Sessions**: Stored in SQLite (`sessions` table). 30-day expiry. Expired sessions cleaned on startup and hourly. Single admin user.
 
 **Images**: Server-side resize/re-encode via `internal/imgproc` (EXIF-corrected, max 1600px wide, JPEG output) — replaced the old browser-side canvas resize. GIFs are stored as-is (unprocessed) to preserve animation. Server stores with a random hex filename. Upload validation checks both file extension (allowlist) and magic bytes (MIME content). `imgproc.Process` no longer self-throttles concurrency — callers must hold an `imgproc.Reserve()` slot for the duration of the call (see `internal/imgproc/imgproc.go`). Every upload also gets an 800px thumbnail (`internal/handlers/thumbs.go`, used in `srcset`) and a 16px placeholder stored as a `data:` URI in `thumbnails.placeholder`, rendered as the `<img>` background so a blurred preview shows while the photo loads (none for GIFs — transparency). `BackfillThumbs` fills in missing thumbnails and placeholders on startup.
+
+**Time zone**: timestamps are stored and compared in UTC; only display converts to `SITE_TZ` (`relDate`/`ruDate`/`fmtDateShort`, `siteTime` in templates). «Сегодня»/«вчера» are calendar days in that zone. Sitemap/Atom keep UTC. tzdata is embedded in the binary (`time/tzdata`), so the zone resolves without OS zoneinfo. The admin editor's publication date uses the browser's zone (`editor.js`).
 
 **Slugs**: `slugify()` in `helpers.go` supports Cyrillic — transliterates to Latin before slugifying, so Russian category/post names work correctly.
 

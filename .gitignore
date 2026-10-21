@@ -26,6 +26,18 @@ Thumbs.db
 # Local scratch/backup files
 .backups/
 backups/
+/*.tar.gz
+
+# Stray photos/screenshots dropped into the repo root (tracked images live
+# under static/ and docs/)
+/*.png
+/*.PNG
+/*.jpg
+/*.JPG
+/*.jpeg
+/*.JPEG
+/*.webp
+/*.gif
 
 # Go
 vendor/

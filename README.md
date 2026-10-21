@@ -44,6 +44,7 @@ Open http://localhost:8080. On first run, visit `/admin/setup` to create the adm
 | `SITE_TITLE`       | `My Blog`        | Site title                                               |
 | `SITE_DESC`        | `Фото и заметки` | Site subtitle                                            |
 | `SITE_URL`         | _(auto-detect)_  | Canonical base URL (e.g. `https://example.com`), used in sitemap/robots/feed. Set it in production. |
+| `SITE_TZ`          | `UTC`            | Time zone dates are shown in, IANA name (e.g. `Europe/Berlin`) |
 | `INSECURE_COOKIES` | —                | Set to `true` for local development over HTTP            |
 | `TRUSTED_PROXY`    | —                | Set to `true` when behind a reverse proxy (trusts `X-Forwarded-For` for login rate limiting) |
 | `BACKUP_DIR`        | `./backups`      | Local directory for backup archives (`dsite backup`, see below) |
