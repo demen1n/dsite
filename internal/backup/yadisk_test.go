@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"testing"
 )
 
@@ -185,5 +186,25 @@ func TestYandexDisk_Prune_KeepsAllWhenUnderLimit(t *testing.T) {
 	}
 	if deleteCalled {
 		t.Error("Prune should not delete anything when the count is under keep")
+	}
+}
+
+func TestYandexDisk_Prune_ForbiddenListNamesTheScope(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /v1/disk/resources", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	})
+
+	srv := httptest.NewServer(mux)
+	defer srv.Close()
+
+	prevAPI := yaDiskAPI
+	yaDiskAPI = srv.URL + "/v1/disk/resources"
+	t.Cleanup(func() { yaDiskAPI = prevAPI })
+
+	y := YandexDisk{Token: "test-token", Dir: "/dsite-backups", Client: srv.Client()}
+	err := y.Prune(context.Background(), 5)
+	if err == nil || !strings.Contains(err.Error(), "cloud_api:disk.read") {
+		t.Fatalf("Prune error = %v, want a hint about the cloud_api:disk.read scope", err)
 	}
 }

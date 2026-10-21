@@ -27,8 +27,9 @@ var defaultHTTPClient = &http.Client{Timeout: defaultTimeout}
 
 // YandexDisk uploads backup archives to a folder in Yandex Disk via its
 // REST API: https://yandex.ru/dev/disk/api/reference/upload.html
-// Requires an OAuth token with the disk.write (or app_folder) scope,
-// obtained from an app registered at https://oauth.yandex.ru.
+// Requires an OAuth token with both the cloud_api:disk.write (upload, move to
+// trash) and cloud_api:disk.read (list the folder for Prune) scopes, obtained
+// from an app registered at https://oauth.yandex.ru.
 type YandexDisk struct {
 	Token  string
 	Dir    string // e.g. "/dsite-backups"
@@ -108,6 +109,11 @@ func (y YandexDisk) list(ctx context.Context) ([]string, error) {
 		return nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode == http.StatusForbidden {
+		// Upload only needs disk.write, so a token missing disk.read uploads
+		// fine and fails only here — say so instead of a bare 403.
+		return nil, fmt.Errorf("unexpected status %s (does the token have the cloud_api:disk.read scope?)", resp.Status)
+	}
 	if resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("unexpected status %s", resp.Status)
 	}

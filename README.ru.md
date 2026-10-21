@@ -52,7 +52,7 @@ INSECURE_COOKIES=true go run ./cmd/dsite
 | `BACKUP_REMOTE`     | —                | Куда дополнительно заливать архив: `yadisk` (пусто = только локально) |
 | `BACKUP_REMOTE_DIR` | `/dsite-backups` | Папка назначения на удалённом бэкенде |
 | `BACKUP_REMOTE_KEEP` | `30`           | Сколько архивов хранить на удалённом бэкенде; `0` — хранить всё |
-| `YADISK_TOKEN`      | —                | OAuth-токен Яндекс.Диска (нужен при `BACKUP_REMOTE=yadisk`) |
+| `YADISK_TOKEN`      | —                | OAuth-токен Яндекс.Диска (нужен при `BACKUP_REMOTE=yadisk`); права `cloud_api:disk.read` и `cloud_api:disk.write` |
 
 ## Docker
 

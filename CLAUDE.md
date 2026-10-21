@@ -65,7 +65,7 @@ First run: visit `/admin/setup` to create the admin account.
 | `BACKUP_REMOTE`     | —                | Off-site backend to also push archives to: `yadisk` (empty = local only) |
 | `BACKUP_REMOTE_DIR` | `/dsite-backups` | Destination folder on the remote backend |
 | `BACKUP_REMOTE_KEEP` | `30`           | Remote archives to retain; `0` keeps everything (unlike local, nothing else prunes the remote) |
-| `YADISK_TOKEN`      | —                | Yandex Disk OAuth token (required when `BACKUP_REMOTE=yadisk`); create an app at https://oauth.yandex.ru with the `cloud_api:disk.write` scope |
+| `YADISK_TOKEN`      | —                | Yandex Disk OAuth token (required when `BACKUP_REMOTE=yadisk`); create an app at https://oauth.yandex.ru with the `cloud_api:disk.read` and `cloud_api:disk.write` scopes (read is needed to list archives for pruning) |
 
 ## Architecture
 

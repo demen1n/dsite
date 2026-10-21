@@ -52,7 +52,7 @@ Open http://localhost:8080. On first run, visit `/admin/setup` to create the adm
 | `BACKUP_REMOTE`     | —                | Off-site backend to also push archives to: `yadisk` (empty = local only) |
 | `BACKUP_REMOTE_DIR` | `/dsite-backups` | Destination folder on the remote backend |
 | `BACKUP_REMOTE_KEEP` | `30`           | Remote archives to retain; `0` keeps everything |
-| `YADISK_TOKEN`      | —                | Yandex Disk OAuth token (required when `BACKUP_REMOTE=yadisk`) |
+| `YADISK_TOKEN`      | —                | Yandex Disk OAuth token (required when `BACKUP_REMOTE=yadisk`); needs the `cloud_api:disk.read` and `cloud_api:disk.write` scopes |
 
 ## Docker
 
