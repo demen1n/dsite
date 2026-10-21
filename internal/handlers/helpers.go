@@ -34,8 +34,9 @@ var (
 	uploadsDir     string
 	siteTitle      string
 	siteDesc       string
-	siteURL        string // canonical base URL, e.g. https://demenin.ru
-	homeAvatar     string // filename of profile photo, served from /uploads/
+	siteURL        string     // canonical base URL, e.g. https://demenin.ru
+	siteLoc        = time.UTC // time zone dates are shown in (SITE_TZ)
+	homeAvatar     string     // filename of profile photo, served from /uploads/
 	secureCookies  bool
 	trustedProxy   bool
 	md             goldmark.Markdown
@@ -182,8 +183,9 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 	funcMap = template.FuncMap{
 		"safeHTML":     func(s string) template.HTML { return template.HTML(s) },
 		"fmtDate":      ruDate,
-		"fmtDateShort": func(t time.Time) string { return t.Format("02.01.2006") },
+		"fmtDateShort": func(t time.Time) string { return t.In(siteLoc).Format("02.01.2006") },
 		"relDate":      relDate,
+		"siteTime":     func(t time.Time) time.Time { return t.In(siteLoc) },
 		"excerpt":      excerpt,
 		"postWord":     postWord,
 		"hasMore":      func(s string) bool { return strings.Contains(s, "<!--more-->") },
@@ -656,12 +658,20 @@ func excerpt(html string) string {
 	return cut + "…"
 }
 
+// SetSiteLocation задаёт часовой пояс, в котором сайт показывает даты (SITE_TZ).
+func SetSiteLocation(loc *time.Location) { siteLoc = loc }
+
 // relDate возвращает относительную дату на русском для свежих записей,
 // иначе — абсолютную дату.
-func relDate(t time.Time) string {
-	days := int(time.Since(t).Hours() / 24)
+func relDate(t time.Time) string { return relDateAt(t, time.Now()) }
+
+// relDateAt — relDate относительно момента now. «Сегодня»/«вчера» считаются
+// по календарным дням в часовом поясе сайта, а не по 24-часовым интервалам:
+// пост, вышедший вчера в 23:00, — «вчера», даже если прошёл всего час.
+func relDateAt(t, now time.Time) string {
+	days := calendarDays(t.In(siteLoc), now.In(siteLoc))
 	switch {
-	case days == 0:
+	case days <= 0:
 		return "сегодня"
 	case days == 1:
 		return "вчера"
@@ -681,7 +691,15 @@ var ruMonths = [...]string{"января", "февраля", "марта", "ап
 // ruDate — дата по-русски: «15 июня 2026». time.Format знает только
 // английские названия месяцев.
 func ruDate(t time.Time) string {
+	t = t.In(siteLoc)
 	return fmt.Sprintf("%d %s %d", t.Day(), ruMonths[t.Month()-1], t.Year())
+}
+
+// calendarDays — сколько смен даты между from и to (оба уже в нужном поясе).
+func calendarDays(from, to time.Time) int {
+	y1, m1, d1 := from.Date()
+	y2, m2, d2 := to.Date()
+	return int(time.Date(y2, m2, d2, 0, 0, 0, 0, time.UTC).Sub(time.Date(y1, m1, d1, 0, 0, 0, 0, time.UTC)).Hours() / 24)
 }
 
 func dayWord(n int) string {

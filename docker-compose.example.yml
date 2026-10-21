@@ -12,6 +12,7 @@ services:
       - SITE_TITLE=My Blog
       - SITE_DESC=Photos and notes
       - SITE_URL=https://example.com
+      - SITE_TZ=Europe/Berlin
       # Behind a reverse proxy on the same host: trust X-Forwarded-For
       # (otherwise the login rate limiter sees every visitor as the proxy IP).
       - TRUSTED_PROXY=true

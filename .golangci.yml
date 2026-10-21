@@ -73,12 +73,6 @@ linters:
       - path: _test\.go
         linters:
           - errcheck
-      # Standalone local maintenance CLI (run manually via `go run`), not
-      # part of the served application: cwebp args come from a CLI flag,
-      # not network input, and skip/cleanup errors are non-critical.
-      - path: cmd/recompress/main.go
-        linters:
-          - gosec
 
 formatters:
   enable:

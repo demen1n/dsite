@@ -18,6 +18,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	_ "time/tzdata" // SITE_TZ must resolve even if the runtime image has no zoneinfo
 )
 
 func main() {
@@ -90,6 +91,11 @@ func main() {
 		"home_bio":   `Пишу в [блоге](/blog), фотографирую — смотри [галерею](/gallery).`,
 	})
 	handlers.Init("./templates", cfg.UploadsDir, cfg.SiteTitle, cfg.SiteDesc, cfg.SiteURL, cfg.SecureCookies, cfg.TrustedProxy)
+	loc, err := time.LoadLocation(cfg.SiteTZ)
+	if err != nil {
+		log.Fatalf("SITE_TZ: %v", err)
+	}
+	handlers.SetSiteLocation(loc)
 	if err := handlers.RerenderMarkdown(); err != nil {
 		log.Printf("RerenderMarkdown: %v", err)
 	}
@@ -290,12 +296,38 @@ func runRestoreOnce(cfg config.Config, args []string) error {
 }
 
 // immutableCache sets a 1-year Cache-Control for uploads whose filenames are
-// content-addressed random hex strings and never change.
+// content-addressed random hex strings and never change. Only on successful
+// responses: a cached 404 would keep a file "missing" for a year even after
+// it's restored (e.g. from a backup).
 func immutableCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
-		next.ServeHTTP(w, r)
+		next.ServeHTTP(&cacheOnSuccess{ResponseWriter: w, value: "public, max-age=31536000, immutable"}, r)
 	})
+}
+
+// cacheOnSuccess sets Cache-Control just before the status line goes out,
+// and only if that status isn't an error.
+type cacheOnSuccess struct {
+	http.ResponseWriter
+	value       string
+	wroteHeader bool
+}
+
+func (c *cacheOnSuccess) WriteHeader(code int) {
+	if !c.wroteHeader {
+		c.wroteHeader = true
+		if code < 400 {
+			c.ResponseWriter.Header().Set("Cache-Control", c.value)
+		}
+	}
+	c.ResponseWriter.WriteHeader(code)
+}
+
+func (c *cacheOnSuccess) Write(b []byte) (int, error) {
+	if !c.wroteHeader {
+		c.WriteHeader(http.StatusOK)
+	}
+	return c.ResponseWriter.Write(b)
 }
 
 // cacheControl sets the given Cache-Control value on every response,
