@@ -65,11 +65,12 @@ async function uploadPhotos() {
       caption, categoryId, placeId, progress);
     let failed = res.failed;
     if (res.tooLarge.length) {
-      // Эти файлы сервер не взялся декодировать (слишком тяжёлые, например
-      // огромный прогрессивный JPEG) — уменьшаем их в браузере и шлём ещё раз.
+      // Эти файлы сервер не взялся декодировать (слишком огромные) —
+      // уменьшаем их в браузере и шлём ещё раз.
       progress.textContent = `Уменьшаю ${res.tooLarge.length} фото в браузере…`;
       const retry = (await Promise.all(res.tooLarge.map(async i => {
         try {
+          if (!await exceedsServerSize(files[i])) return null; // до 24 Мп — только сервер
           const r = await resizeImage(files[i], OVERSIZE_RESIZE_WIDTH, 0.92);
           return { blob: r.blob, ext: r.ext, name: files[i].name };
         } catch {
@@ -97,6 +98,18 @@ async function uploadPhotos() {
 // До какой ширины браузер уменьшает фото, которое сервер отверг как слишком
 // тяжёлое, — с запасом над итоговыми 1600px сервера.
 const OVERSIZE_RESIZE_WIDTH = 3200;
+
+// Браузерный ресайз — только аварийный путь для снимков крупнее 24 Мп
+// (6048×4024, дефолт никоновских камер): всё, что не больше, сервер обязан
+// обработать сам (и обрабатывает в любой кодировке) — качественнее canvas.
+const BROWSER_RESIZE_MIN_PIXELS = 6048 * 4024;
+
+async function exceedsServerSize(file) {
+  const bitmap = await createImageBitmap(file);
+  const big = bitmap.width * bitmap.height > BROWSER_RESIZE_MIN_PIXELS;
+  bitmap.close();
+  return big;
+}
 
 // sendPhotos отправляет файлы одним запросом и возвращает обновлённый список
 // галереи, индексы файлов (в порядке items), которые сервер отверг как

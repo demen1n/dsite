@@ -72,6 +72,18 @@ async function resizeImage(file, maxWidth, quality) {
 // слишком тяжёлую (413), — с запасом над итоговыми 1600px сервера.
 const OVERSIZE_RESIZE_WIDTH = 3200;
 
+// Браузерный ресайз — только аварийный путь для снимков крупнее 24 Мп
+// (6048×4024, дефолт никоновских камер): всё, что не больше, сервер обязан
+// обработать сам (и обрабатывает в любой кодировке) — качественнее canvas.
+const BROWSER_RESIZE_MIN_PIXELS = 6048 * 4024;
+
+async function exceedsServerSize(file) {
+  const bitmap = await createImageBitmap(file);
+  const big = bitmap.width * bitmap.height > BROWSER_RESIZE_MIN_PIXELS;
+  bitmap.close();
+  return big;
+}
+
 function postImage(file) {
   const fd = new FormData();
   fd.append('image', file);
@@ -157,10 +169,10 @@ bodyTA.addEventListener('drop', async e => {
     let url = null;
     try {
       let res = await postImage(uploadFile);
-      if (res.status === 413) {
-        // Сервер не берётся декодировать такой тяжёлый файл (например,
-        // огромный прогрессивный JPEG) — уменьшаем его в браузере и
-        // отправляем ещё раз; финальную обработку всё равно сделает сервер.
+      if (res.status === 413 && await exceedsServerSize(file)) {
+        // Сервер не берётся декодировать такой огромный файл — уменьшаем его
+        // в браузере и отправляем ещё раз; финальную обработку всё равно
+        // сделает сервер.
         const resized = await resizeImage(file, OVERSIZE_RESIZE_WIDTH, 0.92);
         const ext = resized.type === 'image/webp' ? '.webp' : '.jpg';
         res = await postImage(new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type }));
