@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"fmt"
 	"github.com/demen1n/dsite/internal/db"
 	"github.com/demen1n/dsite/internal/imgproc"
@@ -651,7 +652,12 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 	categoryID, _ := strconv.Atoi(r.FormValue("category_id"))
 	placeID, _ := strconv.Atoi(r.FormValue("place_id"))
 
-	for _, fh := range files {
+	// Files Process refused as too heavy to decode (by index in the form), so
+	// the browser can downscale those itself and resend them; and how many
+	// others failed for any other reason.
+	var tooLarge []string
+	failed := 0
+	for i, fh := range files {
 		// Each file's read+process+save runs under a single reserved slot, so
 		// concurrent upload requests can't each hold their full source buffer
 		// in RAM while queued (see imgproc.Reserve). A closure keeps the
@@ -659,6 +665,13 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 		func() {
 			release := imgproc.Reserve()
 			defer release()
+
+			ok := false
+			defer func() {
+				if !ok {
+					failed++
+				}
+			}()
 
 			f, err := fh.Open()
 			if err != nil {
@@ -692,6 +705,12 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 					filename, err = saveUpload(stored, ".jpg")
 				}
 			}
+			if errors.Is(err, imgproc.ErrTooLarge) {
+				log.Printf("photo %s: %v", fh.Filename, err)
+				tooLarge = append(tooLarge, strconv.Itoa(i))
+				ok = true // not a failure: the browser retries it downscaled
+				return
+			}
 			if err != nil {
 				log.Printf("process/save photo %s: %v", fh.Filename, err)
 				return
@@ -701,7 +720,14 @@ func UploadPhoto(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			registerThumb(filename, stored)
+			ok = true
 		}()
+	}
+	if len(tooLarge) > 0 {
+		w.Header().Set("X-Too-Large", strings.Join(tooLarge, ","))
+	}
+	if failed > 0 {
+		w.Header().Set("X-Upload-Failed", strconv.Itoa(failed))
 	}
 
 	// HTMX: возвращаем обновлённый список
@@ -1013,6 +1039,12 @@ func UploadImage(w http.ResponseWriter, r *http.Request) {
 			filename, err = saveUpload(processed, ".jpg")
 		}
 	}
+	if errors.Is(err, imgproc.ErrTooLarge) {
+		// The editor downscales the image in the browser and retries on 413.
+		log.Printf("upload image %s: %v", header.Filename, err)
+		http.Error(w, "image too large to process", http.StatusRequestEntityTooLarge)
+		return
+	}
 	if err != nil {
 		log.Printf("upload image %s: %v", header.Filename, err)
 		http.Error(w, "could not process image", 500)
@@ -1098,6 +1130,9 @@ func handleBoundedImageUpload(r *http.Request, field string, maxHeight int) (str
 		release := imgproc.Reserve()
 		data, _, _, err = imgproc.Process(data, uploadMaxWidth, maxHeight, uploadQuality)
 		release()
+		if errors.Is(err, imgproc.ErrTooLarge) {
+			return "", fmt.Errorf("изображение слишком тяжёлое для обработки на сервере — уменьшите его или пересохраните обычным (не прогрессивным) JPEG: %w", err)
+		}
 		if err != nil {
 			return "", fmt.Errorf("process image: %w", err)
 		}

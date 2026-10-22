@@ -3,6 +3,7 @@ package imgproc
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -165,9 +166,57 @@ func TestDimensionsJPEG(t *testing.T) {
 
 func TestProcessRejectsHugeImages(t *testing.T) {
 	defer Reserve()()
-	data := pngIHDROnly(t, 20000, 20000) // 400MP, well past the 40MP guard
+	data := pngIHDROnly(t, 20000, 20000) // 400MP, way past the decode budget
 	_, _, _, err := Process(data, 1600, 0, 85)
-	if err == nil {
-		t.Fatal("expected error for oversized image, got nil")
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("got %v, want ErrTooLarge", err)
+	}
+}
+
+// jpegHeaderOnly builds just SOI + a frame header (SOF0 or, if progressive,
+// SOF2) with 3 components at the given H/V sampling for the luma one —
+// enough for DecodeConfig and decodeCost; the SOS header (which DecodeConfig
+// wants to see for progressive frames) is followed by no actual scan data.
+func jpegHeaderOnly(w, h int, progressive bool, lumaHV byte) []byte {
+	sof := byte(0xC0)
+	if progressive {
+		sof = 0xC2
+	}
+	b := []byte{0xFF, 0xD8, 0xFF, sof, 0, 17, 8, byte(h >> 8), byte(h), byte(w >> 8), byte(w), 3,
+		1, lumaHV, 0,
+		2, 0x11, 1,
+		3, 0x11, 1,
+		0xFF, 0xDA, 0, 12, 3, 1, 0, 2, 0, 3, 0, 0, 63, 0,
+		0xFF, 0xD9}
+	return b
+}
+
+func TestJPEGSamples(t *testing.T) {
+	// image/jpeg encodes 4:2:0, so 640x480 is a full Y plane + two
+	// quarter-size chroma planes.
+	samples, progressive, ok := jpegSamples(makeJPEG(t, 640, 480))
+	if !ok || progressive || samples != 640*480*3/2 {
+		t.Errorf("got samples=%d progressive=%v ok=%v, want %d false true", samples, progressive, ok, 640*480*3/2)
+	}
+
+	samples, progressive, ok = jpegSamples(jpegHeaderOnly(100, 50, true, 0x11))
+	if !ok || !progressive || samples != 104*56*3 { // padded to whole 8x8 MCUs
+		t.Errorf("got samples=%d progressive=%v ok=%v, want %d true true", samples, progressive, ok, 104*56*3)
+	}
+}
+
+func TestProcessRejectsHeavyProgressiveJPEG(t *testing.T) {
+	defer Reserve()()
+	// A 36MP progressive 4:4:4 export — fine as a pixel count, but ~550MB
+	// for image/jpeg to decode.
+	_, _, _, err := Process(jpegHeaderOnly(8064, 4536, true, 0x11), 1600, 0, 85)
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("progressive: got %v, want ErrTooLarge", err)
+	}
+	// The same frame as baseline 4:2:0 fits the budget: it gets past the
+	// guard and only fails for lack of scan data.
+	_, _, _, err = Process(jpegHeaderOnly(8064, 4536, false, 0x22), 1600, 0, 85)
+	if err == nil || errors.Is(err, ErrTooLarge) {
+		t.Fatalf("baseline: got %v, want a decode error", err)
 	}
 }

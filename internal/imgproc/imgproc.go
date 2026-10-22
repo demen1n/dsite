@@ -6,6 +6,7 @@ package imgproc
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"image"
 	"image/color"
@@ -21,13 +22,21 @@ import (
 	_ "golang.org/x/image/webp"
 )
 
-// maxSourcePixels guards against pathological uploads (decompression-bomb
-// style images) blowing the process' memory budget before we ever get to
-// resize them down to something reasonable. 80MP covers real camera/phone
-// output with margin (even 48MP "high-res mode" phone shots) while keeping
-// peak memory for a single upload around ~350MB, safely inside the
-// container's 512MB limit alongside the rest of the app.
-const maxSourcePixels = 80_000_000 // ~80MP
+// maxDecodeBytes caps how much memory decoding (plus the first resize step)
+// of a single upload may take, as estimated by decodeCost before anything is
+// decoded. A plain pixel cap isn't enough: image/jpeg needs ~1 byte per
+// sample for a baseline JPEG, but for a progressive one it also keeps every
+// component's DCT coefficients as int32 until the last scan — ~5 bytes per
+// sample, so a 36MP progressive 4:4:4 export (a common Lightroom/Photoshop
+// output) needs well over 500MB and gets the whole process OOM-killed in the
+// 512MB container. This budget still fits any baseline phone/camera shot up
+// to ~80MP; anything heavier is refused with ErrTooLarge (the admin UI then
+// downscales it in the browser and retries).
+const maxDecodeBytes = 320 << 20
+
+// ErrTooLarge is returned by Process when decoding the image would take more
+// memory than maxDecodeBytes allows.
+var ErrTooLarge = errors.New("image too large to process")
 
 // procSem limits image processing to one image at a time process-wide. The
 // container this runs in is memory- and CPU-constrained (512MB, 0.5 CPU);
@@ -80,12 +89,12 @@ func Reserve() (release func()) {
 //
 // Callers must hold a Reserve() slot for the duration of this call.
 func Process(data []byte, maxWidth, maxHeight, quality int) (out []byte, w, h int, err error) {
-	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
+	cfg, format, err := image.DecodeConfig(bytes.NewReader(data))
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("decode config: %w", err)
 	}
-	if cfg.Width*cfg.Height > maxSourcePixels {
-		return nil, 0, 0, fmt.Errorf("image too large: %dx%d", cfg.Width, cfg.Height)
+	if cost := decodeCost(data, cfg, format); cost > maxDecodeBytes {
+		return nil, 0, 0, fmt.Errorf("%w: %dx%d %s needs ~%dMB to decode", ErrTooLarge, cfg.Width, cfg.Height, format, cost>>20)
 	}
 
 	src, _, err := image.Decode(bytes.NewReader(data))

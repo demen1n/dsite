@@ -68,6 +68,30 @@ async function resizeImage(file, maxWidth, quality) {
   return blob;
 }
 
+// До какой ширины браузер уменьшает картинку, которую сервер отверг как
+// слишком тяжёлую (413), — с запасом над итоговыми 1600px сервера.
+const OVERSIZE_RESIZE_WIDTH = 3200;
+
+function postImage(file) {
+  const fd = new FormData();
+  fd.append('image', file);
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', '/admin/upload');
+    xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText });
+    xhr.onerror = () => reject('нет связи с сервером');
+    xhr.send(fd);
+  });
+}
+
+function uploadErrorText(status, text) {
+  if (status >= 502 && status <= 504) {
+    return `сервер не ответил (${status}) — возможно, он упал или перезапускался во время обработки`;
+  }
+  text = (text || '').trim();
+  return text ? `${status}: ${text}` : String(status);
+}
+
 function previewCover(input) {
   if (!input.files.length) return;
   const thumb = document.getElementById('cover-thumb');
@@ -130,19 +154,23 @@ bodyTA.addEventListener('drop', async e => {
       uploadFile = new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type });
     }
 
-    const fd = new FormData();
-    fd.append('image', uploadFile);
-    const url = await new Promise((resolve, reject) => {
-      const xhr = new XMLHttpRequest();
-      xhr.open('POST', '/admin/upload');
-      xhr.onload = () => xhr.status === 200 ? resolve(xhr.responseText) : reject(xhr.responseText || xhr.status);
-      xhr.onerror = () => reject('network error');
-      xhr.send(fd);
-    }).catch(err => {
+    let url = null;
+    try {
+      let res = await postImage(uploadFile);
+      if (res.status === 413) {
+        // Сервер не берётся декодировать такой тяжёлый файл (например,
+        // огромный прогрессивный JPEG) — уменьшаем его в браузере и
+        // отправляем ещё раз; финальную обработку всё равно сделает сервер.
+        const resized = await resizeImage(file, OVERSIZE_RESIZE_WIDTH, 0.92);
+        const ext = resized.type === 'image/webp' ? '.webp' : '.jpg';
+        res = await postImage(new File([resized], file.name.replace(/\.\w+$/, ext), { type: resized.type }));
+      }
+      if (res.status !== 200) throw uploadErrorText(res.status, res.text);
+      url = res.text;
+    } catch (err) {
       bodyTA.value = bodyTA.value.replace(placeholder, '');
       alert('Ошибка загрузки на сервер: ' + err);
-      return null;
-    });
+    }
     if (!url) continue;
     const md = `![](${url})\n`;
     bodyTA.value = bodyTA.value.replace(placeholder, md);
