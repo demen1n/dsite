@@ -6,31 +6,56 @@ import (
 	"image/color"
 )
 
-// decodeCost estimates the peak bytes Process allocates for data: the decoded
-// image plus the decoder's scratch state, plus the first box-filter halving
-// in resize (an NRGBA a quarter of the source's area, i.e. 1 byte per source
-// pixel).
-func decodeCost(data []byte, cfg image.Config, format string) int64 {
-	px := int64(cfg.Width) * int64(cfg.Height)
-	if format == "jpeg" {
-		if samples, progressive, ok := jpegSamples(data); ok {
-			perSample := int64(1) // decoded YCbCr/Gray plane
-			if progressive {
-				perSample += 4 // int32 DCT coefficients kept across scans
-			}
-			return samples*perSample + px
+// memCost estimates the peak live bytes Process needs for data (beyond data
+// itself): the larger of the decode phase — the decoded image plus the
+// decoder's scratch state — and the resize phase that follows, when the
+// decoder's scratch is garbage but the decoded image, the box-filter
+// intermediates and CatmullRom's buffers are live. half means a JPEG decoded
+// by jpegdec.DecodeHalf; newW×newH is resize's target, or 0×0 if the image
+// is kept at its size.
+func memCost(data []byte, cfg image.Config, format string, half bool, newW, newH int) int64 {
+	w, h := int64(cfg.Width), int64(cfg.Height)
+	var img, scratch int64
+	if samples, progressive, ok := jpegSamples(data); format == "jpeg" && ok {
+		img = samples // decoded YCbCr/Gray planes, 1 byte per sample
+		if progressive {
+			scratch = 2 * samples // int16 DCT coefficients kept across scans
 		}
+	} else {
+		bpp := int64(4)
+		switch cfg.ColorModel {
+		case color.RGBA64Model, color.NRGBA64Model:
+			bpp = 8
+		}
+		img = w * h * bpp
 	}
-	bpp := int64(4)
-	switch cfg.ColorModel {
-	case color.RGBA64Model, color.NRGBA64Model:
-		bpp = 8
+	if half {
+		img, w, h = img/4, w/2, h/2
 	}
-	return px*bpp + px
+	cost := img + scratch
+	if newW > 0 {
+		cost = max(cost, img+resizeCost(w, h, int64(newW), int64(newH)))
+	}
+	return cost
+}
+
+// resizeCost mirrors resize's allocations shrinking a w×h image to newW×newH:
+// boxShrinkToward's NRGBA halvings (each live alongside the previous one
+// while it's being made), then CatmullRom's float64 scratch — 32 bytes per
+// pixel of a newW-wide, source-tall intermediate, the biggest of the lot for
+// a portrait photo — plus the NRGBA result.
+func resizeCost(w, h, newW, newH int64) int64 {
+	var prev, cur, peak int64
+	for w/2 >= newW && h/2 >= newH {
+		w, h = w/2, h/2
+		prev, cur = cur, w*h*4
+		peak = max(peak, prev+cur)
+	}
+	return max(peak, cur+newW*h*32+newW*newH*4)
 }
 
 // jpegSamples walks data's markers up to the frame header (SOF) and returns
-// how many samples image/jpeg will allocate for it — every component padded
+// how many samples the decoder allocates for it — every component padded
 // out to whole MCUs, as the decoder does — and whether it's progressive.
 func jpegSamples(data []byte) (samples int64, progressive, ok bool) {
 	if len(data) < 4 || data[0] != 0xFF || data[1] != 0xD8 {

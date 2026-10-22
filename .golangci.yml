@@ -68,6 +68,12 @@ linters:
       - path: internal/db/db.go
         linters:
           - errcheck
+      # Fork of the stdlib image/jpeg decoder: kept as close to upstream as
+      # possible so it's easy to diff against; its == comparisons are against
+      # its own unwrapped sentinel errors.
+      - path: internal/imgproc/jpegdec/
+        linters:
+          - errorlint
       # Test files: assertions do the real checking; ignoring setup/teardown
       # errors (Setenv, Close, ...) is standard practice and not worth the noise.
       - path: _test\.go

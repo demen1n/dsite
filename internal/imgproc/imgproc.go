@@ -16,22 +16,27 @@ import (
 
 	"golang.org/x/image/draw"
 
+	"github.com/demen1n/dsite/internal/imgproc/jpegdec"
+
 	_ "image/gif"
 	_ "image/png"
 
 	_ "golang.org/x/image/webp"
 )
 
-// maxDecodeBytes caps how much memory decoding (plus the first resize step)
-// of a single upload may take, as estimated by decodeCost before anything is
-// decoded. A plain pixel cap isn't enough: image/jpeg needs ~1 byte per
-// sample for a baseline JPEG, but for a progressive one it also keeps every
-// component's DCT coefficients as int32 until the last scan — ~5 bytes per
-// sample, so a 36MP progressive 4:4:4 export (a common Lightroom/Photoshop
-// output) needs well over 500MB and gets the whole process OOM-killed in the
-// 512MB container. This budget still fits any baseline phone/camera shot up
-// to ~80MP; anything heavier is refused with ErrTooLarge (the admin UI then
-// downscales it in the browser and retries).
+// maxDecodeBytes caps how much memory processing a single upload may take,
+// as estimated by memCost before anything is decoded. A plain pixel cap
+// isn't enough: a progressive JPEG also needs its DCT coefficients kept
+// around until the last scan, which can dwarf the image itself, and
+// resizing a portrait photo needs a big float64 scratch buffer. JPEGs go
+// through jpegdec (int16 coefficients, and a half-resolution image when the
+// photo is going to be shrunk by 2x or more anyway), so anything up to
+// 6048x4024 — the default size of a 24MP camera — fits in any encoding and
+// orientation (~180MB worst case), as does e.g. a 36MP progressive 4:4:4
+// export (~240MB). Heavier images are refused with ErrTooLarge rather than
+// getting the process OOM-killed in its 512MB container (GOMEMLIMIT=400MiB,
+// leaving room for the source file itself and the rest of the app); the
+// admin UI then downscales them in the browser and retries.
 const maxDecodeBytes = 320 << 20
 
 // ErrTooLarge is returned by Process when decoding the image would take more
@@ -93,17 +98,35 @@ func Process(data []byte, maxWidth, maxHeight, quality int) (out []byte, w, h in
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("decode config: %w", err)
 	}
-	if cost := decodeCost(data, cfg, format); cost > maxDecodeBytes {
+	o := jpegOrientation(data)
+	swapped := o >= 5 // o 5-8 swap width/height on display
+
+	// A JPEG that resize would box-halve at least once anyway is decoded
+	// straight to half resolution: same pixels, but the full-size image is
+	// never allocated.
+	newW, newH, shrink := targetSize(cfg.Width, cfg.Height, maxWidth, maxHeight, swapped)
+	half := format == "jpeg" && shrink && cfg.Width/2 >= newW && cfg.Height/2 >= newH
+	if !shrink {
+		newW, newH = 0, 0
+	}
+	if cost := memCost(data, cfg, format, half, newW, newH); cost > maxDecodeBytes {
 		return nil, 0, 0, fmt.Errorf("%w: %dx%d %s needs ~%dMB to decode", ErrTooLarge, cfg.Width, cfg.Height, format, cost>>20)
 	}
 
-	src, _, err := image.Decode(bytes.NewReader(data))
+	var src image.Image
+	switch {
+	case half:
+		src, err = jpegdec.DecodeHalf(bytes.NewReader(data))
+	case format == "jpeg":
+		src, err = jpegdec.Decode(bytes.NewReader(data))
+	default:
+		src, _, err = image.Decode(bytes.NewReader(data))
+	}
 	if err != nil {
 		return nil, 0, 0, fmt.Errorf("decode: %w", err)
 	}
 
-	o := jpegOrientation(data)
-	img := resize(src, maxWidth, maxHeight, o >= 5) // o 5-8 swap width/height on display
+	img := resize(src, maxWidth, maxHeight, swapped)
 	img = applyOrientation(img, o)
 
 	buf := new(bytes.Buffer)
@@ -131,7 +154,28 @@ func Dimensions(data []byte) (w, h int, err error) {
 // actually see.
 func resize(src image.Image, maxWidth, maxHeight int, swapped bool) image.Image {
 	b := src.Bounds()
-	w, h := b.Dx(), b.Dy()
+	newW, newH, ok := targetSize(b.Dx(), b.Dy(), maxWidth, maxHeight, swapped)
+	if !ok {
+		return src
+	}
+
+	// draw.CatmullRom is a separable two-pass filter: its first pass keeps
+	// the full source height while only shrinking the width, so for a large
+	// ratio (e.g. a 48MP phone photo down to 1600px) that intermediate
+	// buffer alone can run into hundreds of MB. Pre-shrink with a cheap box
+	// filter (which needs no such intermediate) so CatmullRom only ever has
+	// to bridge at most ~2x, keeping peak memory proportional to the output.
+	src = boxShrinkToward(src, newW, newH)
+	b = src.Bounds()
+
+	dst := image.NewNRGBA(image.Rect(0, 0, newW, newH))
+	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
+	return dst
+}
+
+// targetSize returns the size (in source orientation) resize scales a w×h
+// source down to, or ok=false if it already fits and stays as is.
+func targetSize(w, h, maxWidth, maxHeight int, swapped bool) (newW, newH int, ok bool) {
 	displayW, displayH := w, h
 	if swapped {
 		displayW, displayH = h, w
@@ -147,23 +191,9 @@ func resize(src image.Image, maxWidth, maxHeight int, swapped bool) image.Image 
 		}
 	}
 	if scale >= 1 {
-		return src
+		return w, h, false
 	}
-	newW := int(math.Round(float64(w) * scale))
-	newH := int(math.Round(float64(h) * scale))
-
-	// draw.CatmullRom is a separable two-pass filter: its first pass keeps
-	// the full source height while only shrinking the width, so for a large
-	// ratio (e.g. a 48MP phone photo down to 1600px) that intermediate
-	// buffer alone can run into hundreds of MB. Pre-shrink with a cheap box
-	// filter (which needs no such intermediate) so CatmullRom only ever has
-	// to bridge at most ~2x, keeping peak memory proportional to the output.
-	src = boxShrinkToward(src, newW, newH)
-	b = src.Bounds()
-
-	dst := image.NewNRGBA(image.Rect(0, 0, newW, newH))
-	draw.CatmullRom.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
-	return dst
+	return int(math.Round(float64(w) * scale)), int(math.Round(float64(h) * scale)), true
 }
 
 // boxShrinkToward halves src's dimensions by averaging 2x2 blocks, repeating

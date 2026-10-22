@@ -205,32 +205,70 @@ func TestJPEGSamples(t *testing.T) {
 	}
 }
 
-func TestProcessRejectsHeavyProgressiveJPEG(t *testing.T) {
+func TestProcessDecodeBudget(t *testing.T) {
 	defer Reserve()()
-	// A 36MP progressive 4:4:4 export — fine as a pixel count, but ~550MB
-	// for image/jpeg to decode.
-	_, _, _, err := Process(jpegHeaderOnly(8064, 4536, true, 0x11), 1600, 0, 85)
-	if !errors.Is(err, ErrTooLarge) {
-		t.Fatalf("progressive: got %v, want ErrTooLarge", err)
+	// Header-only fixtures: an image the budget allows gets past the guard
+	// and only fails for lack of scan data; one it doesn't gets ErrTooLarge.
+	for _, tc := range []struct {
+		name        string
+		data        []byte
+		maxWidth    int
+		wantRefused bool
+	}{
+		// Anything a 24MP camera produces by default must go through the
+		// server, in any encoding — the heaviest being progressive 4:4:4,
+		// whether or not it's shrunk enough to decode at half resolution.
+		{"24MP progressive 4:4:4", jpegHeaderOnly(6048, 4024, true, 0x11), 1600, false},
+		{"24MP progressive 4:4:4 portrait", jpegHeaderOnly(4024, 6048, true, 0x11), 1600, false},
+		{"24MP progressive 4:4:4 full-res", jpegHeaderOnly(6048, 4024, true, 0x11), 10000, false},
+		{"24MP baseline 4:2:0", jpegHeaderOnly(6048, 4024, false, 0x22), 1600, false},
+		// The 36MP Lightroom export that used to OOM the server.
+		{"36MP progressive 4:4:4", jpegHeaderOnly(8064, 4536, true, 0x11), 1600, false},
+		{"108MP progressive 4:4:4", jpegHeaderOnly(12000, 9000, true, 0x11), 1600, true},
+	} {
+		_, _, _, err := Process(tc.data, tc.maxWidth, 0, 85)
+		if refused := errors.Is(err, ErrTooLarge); refused != tc.wantRefused || err == nil {
+			t.Errorf("%s: got %v, want refused=%v", tc.name, err, tc.wantRefused)
+		}
 	}
-	// The same frame as baseline 4:2:0 fits the budget: it gets past the
-	// guard and only fails for lack of scan data.
-	_, _, _, err = Process(jpegHeaderOnly(8064, 4536, false, 0x22), 1600, 0, 85)
-	if err == nil || errors.Is(err, ErrTooLarge) {
-		t.Fatalf("baseline: got %v, want a decode error", err)
+
+	// 16-bit RGBA PNG is the heaviest non-JPEG case.
+	png24 := image.Config{ColorModel: color.RGBA64Model, Width: 6048, Height: 4024}
+	if cost := memCost(nil, png24, "png", false, 1600, 1064); cost > maxDecodeBytes {
+		t.Errorf("24MP 16-bit PNG: cost %dMB over the %dMB budget", cost>>20, maxDecodeBytes>>20)
 	}
 }
 
-func TestDecodeCostNonJPEG(t *testing.T) {
-	if got := decodeCost(nil, image.Config{ColorModel: color.NRGBAModel, Width: 100, Height: 10}, "png"); got != 100*10*5 {
-		t.Errorf("8-bit: got %d, want %d", got, 100*10*5)
+func TestMemCost(t *testing.T) {
+	data := jpegHeaderOnly(800, 600, true, 0x11)
+	cfg := image.Config{Width: 800, Height: 600}
+	samples := int64(800 * 600 * 3)
+	if got, want := memCost(data, cfg, "jpeg", false, 0, 0), samples+2*samples; got != want {
+		t.Errorf("kept as is: got %d, want %d", got, want)
 	}
-	if got := decodeCost(nil, image.Config{ColorModel: color.RGBA64Model, Width: 100, Height: 10}, "png"); got != 100*10*9 {
-		t.Errorf("16-bit: got %d, want %d", got, 100*10*9)
+	// Decoded at half (400x300), the coefficients outweigh resizing to 100x75.
+	if got, want := memCost(data, cfg, "jpeg", true, 100, 75), samples/4+2*samples; got != want {
+		t.Errorf("half: got %d, want %d", got, want)
+	}
+	// Resizing dominates a baseline image: two box halvings (800x600 ->
+	// 400x300 -> 200x150) to a 150x112 target, then CatmullRom's scratch.
+	data = jpegHeaderOnly(800, 600, false, 0x11)
+	want := samples + 200*150*4 + 150*150*32 + 150*112*4
+	if got := memCost(data, cfg, "jpeg", false, 150, 112); got != want {
+		t.Errorf("resize: got %d, want %d", got, want)
+	}
+}
+
+func TestMemCostNonJPEG(t *testing.T) {
+	if got := memCost(nil, image.Config{ColorModel: color.NRGBAModel, Width: 100, Height: 10}, "png", false, 0, 0); got != 100*10*4 {
+		t.Errorf("8-bit: got %d, want %d", got, 100*10*4)
+	}
+	if got := memCost(nil, image.Config{ColorModel: color.RGBA64Model, Width: 100, Height: 10}, "png", false, 0, 0); got != 100*10*8 {
+		t.Errorf("16-bit: got %d, want %d", got, 100*10*8)
 	}
 	// A JPEG whose header we can't parse falls back to the 4 bytes/pixel guess.
-	if got := decodeCost([]byte("junk"), image.Config{ColorModel: color.YCbCrModel, Width: 100, Height: 10}, "jpeg"); got != 100*10*5 {
-		t.Errorf("unparsable jpeg: got %d, want %d", got, 100*10*5)
+	if got := memCost([]byte("junk"), image.Config{ColorModel: color.YCbCrModel, Width: 100, Height: 10}, "jpeg", false, 0, 0); got != 100*10*4 {
+		t.Errorf("unparsable jpeg: got %d, want %d", got, 100*10*4)
 	}
 }
 

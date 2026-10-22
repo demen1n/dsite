@@ -48,10 +48,10 @@ func smallJPEG(t *testing.T) []byte {
 }
 
 // heavyJPEG — только заголовок (SOF2 + SOS без данных) прогрессивного
-// 8064x4536 4:4:4 JPEG: по пикселям в норме, но image/jpeg понадобилось бы
-// ~550MB, так что imgproc отвергает его ещё до декодирования.
+// 12000x9000 4:4:4 JPEG (108MP): даже с int16-коэффициентами декодеру
+// понадобилось бы ~650MB, так что imgproc отвергает его ещё до декодирования.
 func heavyJPEG() []byte {
-	const w, h = 8064, 4536
+	const w, h = 12000, 9000
 	return []byte{0xFF, 0xD8, 0xFF, 0xC2, 0, 17, 8, h >> 8, h & 0xFF, w >> 8, w & 0xFF, 3,
 		1, 0x11, 0, 2, 0x11, 1, 3, 0x11, 1,
 		0xFF, 0xDA, 0, 12, 3, 1, 0, 2, 0, 3, 0, 0, 63, 0,
@@ -108,7 +108,7 @@ func TestUploadAvatarTooLarge(t *testing.T) {
 	setupPublic(t)
 
 	rec := postFiles(t, UploadAvatar, "/admin/settings/avatar", "avatar", uploadFile{"big.jpg", heavyJPEG()})
-	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "слишком тяжёлое") {
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "слишком большое") {
 		t.Fatalf("status %d body %q, want 400 with an explanation", rec.Code, rec.Body.String())
 	}
 }

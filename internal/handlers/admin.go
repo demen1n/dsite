@@ -1131,7 +1131,7 @@ func handleBoundedImageUpload(r *http.Request, field string, maxHeight int) (str
 		data, _, _, err = imgproc.Process(data, uploadMaxWidth, maxHeight, uploadQuality)
 		release()
 		if errors.Is(err, imgproc.ErrTooLarge) {
-			return "", fmt.Errorf("изображение слишком тяжёлое для обработки на сервере — уменьшите его или пересохраните обычным (не прогрессивным) JPEG: %w", err)
+			return "", fmt.Errorf("изображение слишком большое для обработки на сервере — уменьшите его (до 24 Мп, 6048×4024, проходит всегда): %w", err)
 		}
 		if err != nil {
 			return "", fmt.Errorf("process image: %w", err)
