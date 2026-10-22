@@ -220,3 +220,42 @@ func TestProcessRejectsHeavyProgressiveJPEG(t *testing.T) {
 		t.Fatalf("baseline: got %v, want a decode error", err)
 	}
 }
+
+func TestDecodeCostNonJPEG(t *testing.T) {
+	if got := decodeCost(nil, image.Config{ColorModel: color.NRGBAModel, Width: 100, Height: 10}, "png"); got != 100*10*5 {
+		t.Errorf("8-bit: got %d, want %d", got, 100*10*5)
+	}
+	if got := decodeCost(nil, image.Config{ColorModel: color.RGBA64Model, Width: 100, Height: 10}, "png"); got != 100*10*9 {
+		t.Errorf("16-bit: got %d, want %d", got, 100*10*9)
+	}
+	// A JPEG whose header we can't parse falls back to the 4 bytes/pixel guess.
+	if got := decodeCost([]byte("junk"), image.Config{ColorModel: color.YCbCrModel, Width: 100, Height: 10}, "jpeg"); got != 100*10*5 {
+		t.Errorf("unparsable jpeg: got %d, want %d", got, 100*10*5)
+	}
+}
+
+func TestJPEGSamplesMalformed(t *testing.T) {
+	hdr := jpegHeaderOnly(100, 50, false, 0x11)
+	for name, data := range map[string][]byte{
+		"empty":         nil,
+		"not jpeg":      []byte("\x89PNG\r\n\x1a\n...."),
+		"no marker":     {0xFF, 0xD8, 0x00, 0x00, 0x00, 0x00},
+		"sos first":     {0xFF, 0xD8, 0xFF, 0xDA, 0, 2, 0, 0},
+		"eoi first":     {0xFF, 0xD8, 0xFF, 0xD9, 0, 0},
+		"bad length":    {0xFF, 0xD8, 0xFF, 0xE0, 0, 1, 0, 0},
+		"truncated seg": {0xFF, 0xD8, 0xFF, 0xE0, 0, 50, 0, 0},
+		"short sof":     {0xFF, 0xD8, 0xFF, 0xC0, 0, 5, 8, 0, 1},
+		"no components": {0xFF, 0xD8, 0xFF, 0xC0, 0, 8, 8, 0, 1, 0, 1, 0},
+		"cut sof":       hdr[:15],
+	} {
+		if _, _, ok := jpegSamples(data); ok {
+			t.Errorf("%s: ok = true, want false", name)
+		}
+	}
+
+	// Fill bytes, a standalone marker and an APP segment before SOF are skipped.
+	data := append([]byte{0xFF, 0xD8, 0xFF, 0xFF, 0xFF, 0xD0, 0xFF, 0xE0, 0, 4, 'h', 'i'}, hdr[2:]...)
+	if samples, _, ok := jpegSamples(data); !ok || samples != 104*56*3 {
+		t.Errorf("with junk before SOF: samples=%d ok=%v, want %d true", samples, ok, 104*56*3)
+	}
+}
