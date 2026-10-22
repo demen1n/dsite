@@ -90,7 +90,11 @@ a:has(> .feed-cover) .feed-cover { margin-bottom: 0; }
 .post-tags, .feed-meta-tags { padding-left: 0.6rem; border-left: 1px solid var(--border); }
 
 /* ── Pagination ── */
-.pagination { display: flex; justify-content: space-between; padding: 2rem 0 1rem; font-family: var(--sans); }
+.pagination { display: flex; justify-content: space-between; align-items: baseline; padding: 2rem 0 1rem; font-family: var(--sans); }
+.pagination--top { padding: 0 0 1.5rem; }
+.pagination > * { flex: 1; }
+.pagination > :last-child { text-align: right; }
+.page-num { text-align: center; color: var(--muted); font-size: 0.8rem; }
 .page-btn { color: var(--muted); text-decoration: none; font-size: 0.9rem; }
 .page-btn:hover { color: var(--text); }
 .page-btn--off { pointer-events: none; }

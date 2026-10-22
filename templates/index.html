@@ -20,6 +20,9 @@
 {{end}}
 
 {{if .Posts}}
+{{if and (gt .Page 1) (gt .TotalPages 1)}}
+<nav class="pagination pagination--top">{{template "pager" .}}</nav>
+{{end}}
 <div class="feed">
   {{range .Posts}}
   <article class="feed-entry">
@@ -47,19 +50,7 @@
 </div>
 
 {{if gt .TotalPages 1}}
-<nav class="pagination">
-  {{if .HasPrev}}
-  <a href="{{.BasePath}}?page={{sub .Page 1}}" class="page-btn">← Позднее</a>
-  {{else}}
-  <span class="page-btn page-btn--off"></span>
-  {{end}}
-
-  {{if .HasNext}}
-  <a href="{{.BasePath}}?page={{add .Page 1}}" class="page-btn">Ранее →</a>
-  {{else}}
-  <span class="page-btn page-btn--off"></span>
-  {{end}}
-</nav>
+<nav class="pagination">{{template "pager" .}}</nav>
 {{end}}
 
 {{else}}
@@ -67,4 +58,20 @@
 {{end}}
 
 {{end}}
+{{end}}
+
+{{define "pager"}}
+  {{if .HasPrev}}
+  <a href="{{.BasePath}}?page={{sub .Page 1}}" class="page-btn">← Позднее</a>
+  {{else}}
+  <span class="page-btn page-btn--off"></span>
+  {{end}}
+
+  <span class="page-num">{{.Page}} / {{.TotalPages}}</span>
+
+  {{if .HasNext}}
+  <a href="{{.BasePath}}?page={{add .Page 1}}" class="page-btn">Ранее →</a>
+  {{else}}
+  <span class="page-btn page-btn--off"></span>
+  {{end}}
 {{end}}
