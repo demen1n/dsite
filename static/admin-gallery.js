@@ -54,16 +54,63 @@ async function uploadPhotos() {
     return result;
   }));
 
+  const finish = (text) => {
+    progress.textContent = text;
+    btn.disabled = false;
+    btn.textContent = 'Загрузить';
+  };
+
+  try {
+    let res = await sendPhotos(results.map(({ blob, ext }, i) => ({ blob, ext, name: files[i].name })),
+      caption, categoryId, placeId, progress);
+    let failed = res.failed;
+    if (res.tooLarge.length) {
+      // Эти файлы сервер не взялся декодировать (слишком тяжёлые, например
+      // огромный прогрессивный JPEG) — уменьшаем их в браузере и шлём ещё раз.
+      progress.textContent = `Уменьшаю ${res.tooLarge.length} фото в браузере…`;
+      const retry = (await Promise.all(res.tooLarge.map(async i => {
+        try {
+          const r = await resizeImage(files[i], OVERSIZE_RESIZE_WIDTH, 0.92);
+          return { blob: r.blob, ext: r.ext, name: files[i].name };
+        } catch {
+          return null; // браузер не смог декодировать — считаем неудачей
+        }
+      }))).filter(Boolean);
+      failed += res.tooLarge.length - retry.length;
+      if (retry.length) {
+        res = await sendPhotos(retry, caption, categoryId, placeId, progress);
+        failed += res.failed + res.tooLarge.length;
+      }
+    }
+    document.getElementById('gallery-list').innerHTML = res.html;
+    initDraggable();
+    input.value = '';
+    document.getElementById('photo-caption').value = '';
+    finish(failed
+      ? `Загружено ${total - failed} из ${total}, не удалось обработать: ${failed} (подробности в логе сервера)`
+      : `✓ Загружено ${total} фото`);
+  } catch (err) {
+    finish('Ошибка загрузки: ' + err);
+  }
+}
+
+// До какой ширины браузер уменьшает фото, которое сервер отверг как слишком
+// тяжёлое, — с запасом над итоговыми 1600px сервера.
+const OVERSIZE_RESIZE_WIDTH = 3200;
+
+// sendPhotos отправляет файлы одним запросом и возвращает обновлённый список
+// галереи, индексы файлов (в порядке items), которые сервер отверг как
+// слишком тяжёлые (X-Too-Large), и число прочих неудач (X-Upload-Failed).
+function sendPhotos(items, caption, categoryId, placeId, progress) {
   const form = new FormData();
   form.append('caption', caption);
   form.append('category_id', categoryId);
   form.append('place_id', placeId);
-  results.forEach(({ blob, ext }, i) => {
-    const name = ext ? files[i].name.replace(/\.\w+$/, ext) : files[i].name;
-    form.append('photos', new File([blob], name, { type: blob.type }));
+  items.forEach(({ blob, ext, name }) => {
+    form.append('photos', new File([blob], ext ? name.replace(/\.\w+$/, ext) : name, { type: blob.type }));
   });
 
-  await new Promise((resolve, reject) => {
+  return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/admin/gallery/upload');
     xhr.upload.onprogress = e => {
@@ -73,28 +120,17 @@ async function uploadPhotos() {
       }
     };
     xhr.onload = () => {
-      if (xhr.status === 200) {
-        document.getElementById('gallery-list').innerHTML = xhr.responseText;
-        initDraggable();
-        input.value = '';
-        document.getElementById('photo-caption').value = '';
-        progress.textContent = `✓ Загружено ${total} фото`;
-        btn.textContent = 'Загрузить';
-        btn.disabled = false;
-        resolve();
-      } else {
-        progress.textContent = 'Ошибка загрузки';
-        btn.disabled = false;
-        btn.textContent = 'Загрузить';
-        reject();
+      if (xhr.status !== 200) {
+        reject(xhr.status >= 502 && xhr.status <= 504
+          ? `сервер не ответил (${xhr.status}) — возможно, он упал или перезапускался во время обработки`
+          : `${xhr.status} ${xhr.responseText.trim()}`.trim());
+        return;
       }
+      const tooLarge = (xhr.getResponseHeader('X-Too-Large') || '').split(',').filter(Boolean).map(Number);
+      const failed = Number(xhr.getResponseHeader('X-Upload-Failed') || 0);
+      resolve({ html: xhr.responseText, tooLarge, failed });
     };
-    xhr.onerror = () => {
-      progress.textContent = 'Ошибка загрузки';
-      btn.disabled = false;
-      btn.textContent = 'Загрузить';
-      reject();
-    };
+    xhr.onerror = () => reject('нет связи с сервером');
     xhr.send(form);
   });
 }

@@ -3,6 +3,7 @@ package imgproc
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -165,9 +166,96 @@ func TestDimensionsJPEG(t *testing.T) {
 
 func TestProcessRejectsHugeImages(t *testing.T) {
 	defer Reserve()()
-	data := pngIHDROnly(t, 20000, 20000) // 400MP, well past the 40MP guard
+	data := pngIHDROnly(t, 20000, 20000) // 400MP, way past the decode budget
 	_, _, _, err := Process(data, 1600, 0, 85)
-	if err == nil {
-		t.Fatal("expected error for oversized image, got nil")
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("got %v, want ErrTooLarge", err)
+	}
+}
+
+// jpegHeaderOnly builds just SOI + a frame header (SOF0 or, if progressive,
+// SOF2) with 3 components at the given H/V sampling for the luma one —
+// enough for DecodeConfig and decodeCost; the SOS header (which DecodeConfig
+// wants to see for progressive frames) is followed by no actual scan data.
+func jpegHeaderOnly(w, h int, progressive bool, lumaHV byte) []byte {
+	sof := byte(0xC0)
+	if progressive {
+		sof = 0xC2
+	}
+	b := []byte{0xFF, 0xD8, 0xFF, sof, 0, 17, 8, byte(h >> 8), byte(h), byte(w >> 8), byte(w), 3,
+		1, lumaHV, 0,
+		2, 0x11, 1,
+		3, 0x11, 1,
+		0xFF, 0xDA, 0, 12, 3, 1, 0, 2, 0, 3, 0, 0, 63, 0,
+		0xFF, 0xD9}
+	return b
+}
+
+func TestJPEGSamples(t *testing.T) {
+	// image/jpeg encodes 4:2:0, so 640x480 is a full Y plane + two
+	// quarter-size chroma planes.
+	samples, progressive, ok := jpegSamples(makeJPEG(t, 640, 480))
+	if !ok || progressive || samples != 640*480*3/2 {
+		t.Errorf("got samples=%d progressive=%v ok=%v, want %d false true", samples, progressive, ok, 640*480*3/2)
+	}
+
+	samples, progressive, ok = jpegSamples(jpegHeaderOnly(100, 50, true, 0x11))
+	if !ok || !progressive || samples != 104*56*3 { // padded to whole 8x8 MCUs
+		t.Errorf("got samples=%d progressive=%v ok=%v, want %d true true", samples, progressive, ok, 104*56*3)
+	}
+}
+
+func TestProcessRejectsHeavyProgressiveJPEG(t *testing.T) {
+	defer Reserve()()
+	// A 36MP progressive 4:4:4 export — fine as a pixel count, but ~550MB
+	// for image/jpeg to decode.
+	_, _, _, err := Process(jpegHeaderOnly(8064, 4536, true, 0x11), 1600, 0, 85)
+	if !errors.Is(err, ErrTooLarge) {
+		t.Fatalf("progressive: got %v, want ErrTooLarge", err)
+	}
+	// The same frame as baseline 4:2:0 fits the budget: it gets past the
+	// guard and only fails for lack of scan data.
+	_, _, _, err = Process(jpegHeaderOnly(8064, 4536, false, 0x22), 1600, 0, 85)
+	if err == nil || errors.Is(err, ErrTooLarge) {
+		t.Fatalf("baseline: got %v, want a decode error", err)
+	}
+}
+
+func TestDecodeCostNonJPEG(t *testing.T) {
+	if got := decodeCost(nil, image.Config{ColorModel: color.NRGBAModel, Width: 100, Height: 10}, "png"); got != 100*10*5 {
+		t.Errorf("8-bit: got %d, want %d", got, 100*10*5)
+	}
+	if got := decodeCost(nil, image.Config{ColorModel: color.RGBA64Model, Width: 100, Height: 10}, "png"); got != 100*10*9 {
+		t.Errorf("16-bit: got %d, want %d", got, 100*10*9)
+	}
+	// A JPEG whose header we can't parse falls back to the 4 bytes/pixel guess.
+	if got := decodeCost([]byte("junk"), image.Config{ColorModel: color.YCbCrModel, Width: 100, Height: 10}, "jpeg"); got != 100*10*5 {
+		t.Errorf("unparsable jpeg: got %d, want %d", got, 100*10*5)
+	}
+}
+
+func TestJPEGSamplesMalformed(t *testing.T) {
+	hdr := jpegHeaderOnly(100, 50, false, 0x11)
+	for name, data := range map[string][]byte{
+		"empty":         nil,
+		"not jpeg":      []byte("\x89PNG\r\n\x1a\n...."),
+		"no marker":     {0xFF, 0xD8, 0x00, 0x00, 0x00, 0x00},
+		"sos first":     {0xFF, 0xD8, 0xFF, 0xDA, 0, 2, 0, 0},
+		"eoi first":     {0xFF, 0xD8, 0xFF, 0xD9, 0, 0},
+		"bad length":    {0xFF, 0xD8, 0xFF, 0xE0, 0, 1, 0, 0},
+		"truncated seg": {0xFF, 0xD8, 0xFF, 0xE0, 0, 50, 0, 0},
+		"short sof":     {0xFF, 0xD8, 0xFF, 0xC0, 0, 5, 8, 0, 1},
+		"no components": {0xFF, 0xD8, 0xFF, 0xC0, 0, 8, 8, 0, 1, 0, 1, 0},
+		"cut sof":       hdr[:15],
+	} {
+		if _, _, ok := jpegSamples(data); ok {
+			t.Errorf("%s: ok = true, want false", name)
+		}
+	}
+
+	// Fill bytes, a standalone marker and an APP segment before SOF are skipped.
+	data := append([]byte{0xFF, 0xD8, 0xFF, 0xFF, 0xFF, 0xD0, 0xFF, 0xE0, 0, 4, 'h', 'i'}, hdr[2:]...)
+	if samples, _, ok := jpegSamples(data); !ok || samples != 104*56*3 {
+		t.Errorf("with junk before SOF: samples=%d ok=%v, want %d true", samples, ok, 104*56*3)
 	}
 }
