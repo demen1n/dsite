@@ -410,3 +410,49 @@ func TestViewPostRelated(t *testing.T) {
 		t.Error("related block shown with nothing to show")
 	}
 }
+
+func TestGalleryCanonical(t *testing.T) {
+	setupPublic(t)
+	if err := db.CreateCategory("Пейзаж", "pejzazh"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.CreatePlace("Токио", "tokio"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddPhoto("a.jpg", "", 1, 1, 10, 10); err != nil {
+		t.Fatal(err)
+	}
+
+	const canon = `<link rel="canonical" href="https://example.com/gallery?cat=pejzazh&amp;place=tokio">`
+	const noindex = `<meta name="robots" content="noindex, follow">`
+	for _, tc := range []struct {
+		target    string
+		code      int
+		canonical string
+		noindex   bool
+	}{
+		{"/gallery", 200, `href="https://example.com/gallery"`, false},
+		{"/gallery?cat=pejzazh&utm_source=x", 200, `href="https://example.com/gallery?cat=pejzazh"`, false},
+		{"/gallery?place=tokio", 200, `href="https://example.com/gallery?place=tokio"`, false},
+		{"/gallery?place=tokio&cat=pejzazh", 200, canon, true},
+		{"/gallery?cat=pejzazh&place=tokio", 200, canon, true},
+		{"/gallery?cat=nope", 404, "", false},
+		{"/gallery?place=nope", 404, "", false},
+	} {
+		rec := serve(Gallery, "GET /gallery", tc.target)
+		if rec.Code != tc.code {
+			t.Errorf("%s: status = %d, want %d", tc.target, rec.Code, tc.code)
+			continue
+		}
+		if tc.code != 200 {
+			continue
+		}
+		body := rec.Body.String()
+		if !strings.Contains(body, tc.canonical) {
+			t.Errorf("%s: no %s", tc.target, tc.canonical)
+		}
+		if got := strings.Contains(body, noindex); got != tc.noindex {
+			t.Errorf("%s: noindex = %v, want %v", tc.target, got, tc.noindex)
+		}
+	}
+}

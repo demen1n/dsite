@@ -11,6 +11,7 @@
   <script src="{{static "htmx.min.js"}}" defer></script>
   <meta name="description" content="{{if .OGDescription}}{{.OGDescription}}{{else}}{{.SiteDesc}}{{end}}">
   {{if .Canonical}}<link rel="canonical" href="{{.Canonical}}">{{end}}
+  {{if .Robots}}<meta name="robots" content="{{.Robots}}">{{end}}
   <meta property="og:title" content="{{if .Title}}{{.Title}} — {{.SiteTitle}}{{else}}{{.SiteTitle}}{{end}}">
   <meta property="og:description" content="{{if .OGDescription}}{{.OGDescription}}{{else}}{{.SiteDesc}}{{end}}">
   <meta property="og:type" content="{{if .OGType}}{{.OGType}}{{else if .OGDescription}}article{{else}}website{{end}}">
