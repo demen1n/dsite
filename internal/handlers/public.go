@@ -378,10 +378,74 @@ func Gallery(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "DB error", 500)
 		return
 	}
+	catName, catOK := categoryName(cats, cat)
+	placeName, placeOK := placeName(places, place)
+	if !catOK || !placeOK {
+		NotFound(w, r)
+		return
+	}
 	data := GalleryData{Photos: photos, Categories: cats, Places: places, ActiveCat: cat, ActivePlace: place}
-	pd := page("Галерея", data)
-	pd.Canonical = baseURL(r) + r.URL.RequestURI()
+	title := "Галерея"
+	if names := nonEmpty(catName, placeName); len(names) > 0 {
+		title += ": " + strings.Join(names, ", ")
+	}
+	pd := page(title, data)
+	// Canonical строится из известных параметров в фиксированном порядке, а не
+	// из RequestURI: иначе ?place=x&cat=y, ?cat=y&place=x и ?cat=y&utm=… —
+	// разные «канонические» страницы с одним содержимым. Пересечения «тема ×
+	// место» — почти дубли одиночных фильтров, их (и пустые выборки) не
+	// индексируем, но ссылки с них обходим.
+	q := url.Values{}
+	if cat != "" {
+		q.Set("cat", cat)
+	}
+	if place != "" {
+		q.Set("place", place)
+	}
+	pd.Canonical = baseURL(r) + "/gallery"
+	if len(q) > 0 {
+		pd.Canonical += "?" + q.Encode()
+	}
+	if (cat != "" && place != "") || len(photos) == 0 {
+		pd.Robots = "noindex, follow"
+	}
 	render(w, "gallery.html", pd)
+}
+
+// categoryName ищет категорию по slug; пустой slug («все») — найдена.
+func categoryName(cats []db.Category, slug string) (string, bool) {
+	if slug == "" {
+		return "", true
+	}
+	for _, c := range cats {
+		if c.Slug == slug {
+			return c.Name, true
+		}
+	}
+	return "", false
+}
+
+// placeName ищет место по slug; пустой slug («везде») — найдено.
+func placeName(places []db.Place, slug string) (string, bool) {
+	if slug == "" {
+		return "", true
+	}
+	for _, p := range places {
+		if p.Slug == slug {
+			return p.Name, true
+		}
+	}
+	return "", false
+}
+
+func nonEmpty(ss ...string) []string {
+	var out []string
+	for _, s := range ss {
+		if s != "" {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // GET /gallery/filter  — HTMX: returns only the photo grid fragment

@@ -52,7 +52,7 @@
        hx-push-url="/gallery{{if .Data.ActivePlace}}?place={{.Data.ActivePlace}}{{end}}"
        class="{{if eq .Data.ActiveCat ""}}active{{end}}">Все</a>
     {{range .Data.Categories}}
-    <a href="/gallery?cat={{.Slug}}{{if $.Data.ActivePlace}}&place={{$.Data.ActivePlace}}{{end}}"
+    <a href="/gallery?cat={{.Slug}}{{if $.Data.ActivePlace}}&place={{$.Data.ActivePlace}}{{end}}"{{if $.Data.ActivePlace}} rel="nofollow"{{end}}
        hx-get="/gallery/filter?cat={{.Slug}}{{if $.Data.ActivePlace}}&place={{$.Data.ActivePlace}}{{end}}"
        hx-target="#gallery-grid"
        hx-swap="outerHTML"
@@ -76,7 +76,7 @@
          hx-push-url="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"
          class="{{if eq .Data.ActivePlace ""}}active{{end}}">Везде</a>
       {{range .Data.Places}}
-      <a href="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
+      <a href="/gallery?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"{{if $.Data.ActiveCat}} rel="nofollow"{{end}}
          hx-get="/gallery/filter?place={{.Slug}}{{if $.Data.ActiveCat}}&cat={{$.Data.ActiveCat}}{{end}}"
          hx-target="#gallery-grid"
          hx-swap="outerHTML"

@@ -438,6 +438,7 @@ type PageData struct {
 	OGImage       string // absolute URL
 	OGType        string // og:type; пусто — article при OGDescription, иначе website
 	Canonical     string
+	Robots        string // <meta name="robots">; пусто — тег не выводится
 	ResumeHidden  bool
 }
 
