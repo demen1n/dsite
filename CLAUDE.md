@@ -8,7 +8,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Deployment
 
-`main` is branch-protected: changes land via PR (0 required approvals, but `test`+`lint` status checks must pass; no direct pushes, even for admins). Merging a PR into `main` → GitHub Actions CI/CD automatically builds and deploys to Beget (demenin.ru). CI (`.github/workflows/ci.yml`) runs gofmt/vet/tests, golangci-lint (config in `.golangci.yml`), ESLint over `static/*.js` (config in `eslint.config.js`), and uploads coverage to Codecov on every push and PR.
+`main` is branch-protected: changes land via PR (0 required approvals, but `test`+`lint` status checks must pass; no direct pushes, even for admins). Merging a PR into `main` → GitHub Actions CI/CD automatically builds and deploys to Beget (demenin.ru). `deploy.yml` pushes the image as `sha-<commit>` (plus `:latest`), and on the VPS retags that sha image as the local `:latest` the server's compose file runs, keeping the old one as `:previous`; deploys are serialized (`concurrency`), and if the new container doesn't answer on `127.0.0.1:8080` within ~60s the job rolls back to `:previous` and fails. Workflow actions are pinned to commit SHAs (kept current by `.github/dependabot.yml`). CI (`.github/workflows/ci.yml`) runs gofmt/vet/tests, golangci-lint (config in `.golangci.yml`), ESLint over `static/*.js` (config in `eslint.config.js`), and uploads coverage to Codecov on every push and PR.
 
 ## Commands
 
