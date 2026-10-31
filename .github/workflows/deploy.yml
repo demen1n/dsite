@@ -74,7 +74,9 @@ jobs:
               docker tag "$IMAGE:latest" "$IMAGE:previous"
             fi
             docker tag "$NEW" "$IMAGE:latest"
-            docker compose up -d
+            # --force-recreate: compose doesn't notice that the local :latest
+            # now points at a different image and would keep the old container.
+            docker compose up -d --force-recreate
 
             healthy() {
               want=$(docker image inspect -f '{{.Id}}' "$NEW")
@@ -104,6 +106,6 @@ jobs:
             docker compose logs --tail 50 dsite >&2 || true
             if docker image inspect "$IMAGE:previous" >/dev/null 2>&1; then
               docker tag "$IMAGE:previous" "$IMAGE:latest"
-              docker compose up -d
+              docker compose up -d --force-recreate
             fi
             exit 1
