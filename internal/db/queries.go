@@ -1082,6 +1082,7 @@ type FileUsage struct {
 	PostTitles   []string
 	SeriesTitles []string
 	IsAvatar     bool
+	InHomeBio    bool
 	InResume     bool
 }
 
@@ -1090,7 +1091,7 @@ type FileUsage struct {
 // guard) agrees on the same definition instead of each re-deriving it from
 // individual fields and risking drift as fields get added.
 func (u FileUsage) InUse() bool {
-	return u.InGallery || u.IsAvatar || u.InResume || len(u.PostTitles) > 0 || len(u.SeriesTitles) > 0
+	return u.InGallery || u.IsAvatar || u.InHomeBio || u.InResume || len(u.PostTitles) > 0 || len(u.SeriesTitles) > 0
 }
 
 func GetFileUsage(filename string) (FileUsage, error) {
@@ -1136,7 +1137,9 @@ func GetFileUsage(filename string) (FileUsage, error) {
 		return u, err
 	}
 
-	u.IsAvatar = GetAllSettings()["home_avatar"] == filename
+	settings := GetAllSettings()
+	u.IsAvatar = settings["home_avatar"] == filename
+	u.InHomeBio = strings.Contains(settings["home_bio"], filename)
 	if resume, err := GetResume(); err == nil {
 		u.InResume = strings.Contains(resume.BodyMD, filename)
 	}
@@ -1215,10 +1218,19 @@ func GetAllFileUsage(filenames []string) (map[string]FileUsage, error) {
 		return nil, err
 	}
 
-	if avatar := GetAllSettings()["home_avatar"]; avatar != "" {
+	settings := GetAllSettings()
+	if avatar := settings["home_avatar"]; avatar != "" {
 		if u, ok := usage[avatar]; ok {
 			u.IsAvatar = true
 			usage[avatar] = u
+		}
+	}
+	if bio := settings["home_bio"]; bio != "" {
+		for fn, u := range usage {
+			if strings.Contains(bio, fn) {
+				u.InHomeBio = true
+				usage[fn] = u
+			}
 		}
 	}
 

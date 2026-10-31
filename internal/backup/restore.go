@@ -3,12 +3,15 @@ package backup
 import (
 	"archive/tar"
 	"compress/gzip"
+	"database/sql"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+
+	_ "modernc.org/sqlite" // checkSQLite
 )
 
 // RestoreConfig controls where a backup archive gets unpacked to.
@@ -66,13 +69,22 @@ func Restore(cfg RestoreConfig) error {
 		}
 		switch {
 		case hdr.Name == "data.db":
+			if hdr.Typeflag != tar.TypeReg || sawDB {
+				return fmt.Errorf("archive: data.db must be a single regular file")
+			}
 			if err := extractFile(tr, dbTmp); err != nil {
 				return fmt.Errorf("extract data.db: %w", err)
 			}
 			sawDB = true
 		case strings.HasPrefix(hdr.Name, "uploads/") && hdr.Typeflag == tar.TypeReg:
-			rel := strings.TrimPrefix(hdr.Name, "uploads/")
-			dest := filepath.Join(uploadsTmp, filepath.FromSlash(rel))
+			// Reject "uploads/../x" and friends: anything that would land
+			// outside the staging dir. Only regular files and their parent
+			// dirs are ever created, so there are no symlinks to escape via.
+			rel := filepath.FromSlash(strings.TrimPrefix(hdr.Name, "uploads/"))
+			if !filepath.IsLocal(rel) {
+				return fmt.Errorf("archive: unsafe path %q", hdr.Name)
+			}
+			dest := filepath.Join(uploadsTmp, rel)
 			if err := os.MkdirAll(filepath.Dir(dest), 0750); err != nil {
 				return fmt.Errorf("mkdir %s: %w", filepath.Dir(dest), err)
 			}
@@ -86,25 +98,89 @@ func Restore(cfg RestoreConfig) error {
 		return fmt.Errorf("archive has no data.db entry")
 	}
 
-	// Clear any stale WAL/SHM sidecars left by whatever DB currently sits at
-	// DBPath — otherwise SQLite may try to replay their frames against the
-	// freshly-restored file on next open.
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		_ = os.Remove(cfg.DBPath + suffix)
-	}
-	if err := os.Rename(dbTmp, cfg.DBPath); err != nil {
-		return fmt.Errorf("install restored db: %w", err)
-	}
-
-	if err := os.RemoveAll(cfg.UploadsDir); err != nil {
-		return fmt.Errorf("clear uploads dir: %w", err)
+	if err := checkSQLite(dbTmp); err != nil {
+		return fmt.Errorf("archive data.db: %w", err)
 	}
 	if !sawUploads {
-		// Archive predates uploads, or the site simply has none — leave a
+		// Archive predates uploads, or the site simply has none — install a
 		// fresh empty dir rather than none at all.
-		return os.MkdirAll(cfg.UploadsDir, 0750)
+		if err := os.MkdirAll(uploadsTmp, 0750); err != nil {
+			return fmt.Errorf("mkdir %s: %w", uploadsTmp, err)
+		}
 	}
-	return os.Rename(uploadsTmp, cfg.UploadsDir)
+	return install(cfg, dbTmp, uploadsTmp)
+}
+
+// install swaps the staged DB and uploads dir into place. The current ones
+// (DB plus any -wal/-shm sidecars — stale sidecars must not be replayed
+// against the restored file) are first moved aside to "<path>.old" and only
+// deleted once both renames succeed; if anything fails midway, whatever was
+// already moved is put back, so the live paths end up either fully restored
+// or as they were.
+func install(cfg RestoreConfig, dbTmp, uploadsTmp string) (err error) {
+	type move struct{ from, to string }
+	var done []move
+	rename := func(from, to string) error {
+		if err := os.Rename(from, to); err != nil {
+			return err
+		}
+		done = append(done, move{from, to})
+		return nil
+	}
+	defer func() {
+		if err == nil {
+			return
+		}
+		for i := len(done) - 1; i >= 0; i-- {
+			if rerr := os.Rename(done[i].to, done[i].from); rerr != nil {
+				err = errors.Join(err, fmt.Errorf("rollback %s: %w", done[i].from, rerr))
+			}
+		}
+	}()
+
+	var olds []string
+	for _, p := range []string{cfg.DBPath, cfg.DBPath + "-wal", cfg.DBPath + "-shm", cfg.UploadsDir} {
+		old := p + ".old"
+		if err := os.RemoveAll(old); err != nil {
+			return fmt.Errorf("clear %s: %w", old, err)
+		}
+		if err := rename(p, old); err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return fmt.Errorf("move aside %s: %w", p, err)
+		}
+		olds = append(olds, old)
+	}
+	if err := rename(dbTmp, cfg.DBPath); err != nil {
+		return fmt.Errorf("install restored db: %w", err)
+	}
+	if err := rename(uploadsTmp, cfg.UploadsDir); err != nil {
+		return fmt.Errorf("install restored uploads: %w", err)
+	}
+	for _, old := range olds {
+		_ = os.RemoveAll(old)
+	}
+	return nil
+}
+
+// checkSQLite makes sure path is an intact SQLite database before it
+// replaces the live one — a garbage data.db in an otherwise valid archive
+// would otherwise silently take the site down.
+func checkSQLite(path string) error {
+	d, err := sql.Open("sqlite", "file:"+path+"?mode=ro")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = d.Close() }()
+	var res string
+	if err := d.QueryRow(`PRAGMA integrity_check`).Scan(&res); err != nil {
+		return err
+	}
+	if res != "ok" {
+		return fmt.Errorf("integrity_check: %s", res)
+	}
+	return nil
 }
 
 func extractFile(r io.Reader, dest string) error {

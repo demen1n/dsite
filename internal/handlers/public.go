@@ -733,13 +733,14 @@ func Feed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	base := baseURL(r)
+	title := settings().title
 
 	feed := atomFeed{
 		Xmlns:  "http://www.w3.org/2005/Atom",
-		Title:  siteTitle,
+		Title:  title,
 		Link:   atomLink{Href: base + "/feed.xml", Rel: "self"},
 		ID:     base + "/",
-		Author: atomAuthor{Name: siteTitle},
+		Author: atomAuthor{Name: title},
 	}
 
 	if len(posts) > 0 {

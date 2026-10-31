@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	dsitedb "github.com/demen1n/dsite/internal/db"
 )
@@ -298,6 +299,45 @@ func TestRotate_KeepsOnlyNewest(t *testing.T) {
 		if remaining[i] != want[i] {
 			t.Errorf("remaining files: got %v, want %v", remaining, want)
 			break
+		}
+	}
+}
+
+func TestLastBackupAndNextDelay(t *testing.T) {
+	dir := t.TempDir()
+	if got := LastBackup(dir); !got.IsZero() {
+		t.Errorf("LastBackup(empty) = %v, want zero", got)
+	}
+	for _, n := range []string{
+		namePrefix + "20261030-120000" + nameSuffix,
+		namePrefix + "20261031-080000" + nameSuffix,
+		".partial-20261031-090000" + nameSuffix, // unfinished run: ignored
+	} {
+		if err := os.WriteFile(filepath.Join(dir, n), nil, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	last := LastBackup(dir)
+	want := time.Date(2026, 10, 31, 8, 0, 0, 0, time.UTC)
+	if !last.Equal(want) {
+		t.Fatalf("LastBackup = %v, want %v", last, want)
+	}
+
+	const day, minD = 24 * time.Hour, 5 * time.Minute
+	for _, c := range []struct {
+		name string
+		last time.Time
+		now  time.Time
+		want time.Duration
+	}{
+		{"no backups yet", time.Time{}, want, minD},
+		{"remaining interval", want, want.Add(6 * time.Hour), 18 * time.Hour},
+		{"overdue", want, want.Add(3 * day), minD},
+		{"almost due", want, want.Add(day - time.Minute), minD},
+		{"clock skew", want.Add(day), want, day},
+	} {
+		if got := NextDelay(c.last, c.now, day, minD); got != c.want {
+			t.Errorf("%s: NextDelay = %v, want %v", c.name, got, c.want)
 		}
 	}
 }

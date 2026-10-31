@@ -38,6 +38,7 @@
           {{range .Usage.PostTitles}}<span class="badge badge-gray" title="Пост">{{.}}</span> {{end}}
           {{range .Usage.SeriesTitles}}<span class="badge badge-gray" title="Серия">{{.}}</span> {{end}}
           {{if .Usage.IsAvatar}}<span class="badge badge-gray">Аватар</span> {{end}}
+          {{if .Usage.InHomeBio}}<span class="badge badge-gray">Главная</span> {{end}}
           {{if .Usage.InResume}}<span class="badge badge-gray">Резюме</span> {{end}}
           {{if .Unused}}<span style="color:var(--muted); font-size:0.85rem">нигде</span>{{end}}
         </td>

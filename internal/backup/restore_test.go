@@ -142,3 +142,135 @@ func writeArchiveWithoutDB(t *testing.T, dest string) {
 		t.Fatal(err)
 	}
 }
+
+type tarEntry struct {
+	name string
+	body []byte
+}
+
+// writeTarGz hand-builds a tar.gz of regular-file entries, for archives Run
+// would never produce.
+func writeTarGz(t *testing.T, dest string, entries ...tarEntry) {
+	t.Helper()
+	f, err := os.Create(dest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = f.Close() }()
+	gw := gzip.NewWriter(f)
+	tw := tar.NewWriter(gw)
+	for _, e := range entries {
+		if err := tw.WriteHeader(&tar.Header{Name: e.name, Size: int64(len(e.body)), Mode: 0600, Typeflag: tar.TypeReg}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := tw.Write(e.body); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gw.Close(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// validDBBytes returns the bytes of a real (empty-schema) SQLite file.
+func validDBBytes(t *testing.T) []byte {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "v.db")
+	d, err := sql.Open("sqlite", path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := d.Exec(`CREATE TABLE x (id INTEGER)`); err != nil {
+		t.Fatal(err)
+	}
+	_ = d.Close()
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return b
+}
+
+// A rejected archive must leave the live DB and uploads untouched.
+func assertUntouched(t *testing.T, dbPath, uploadsDir string) {
+	t.Helper()
+	if got, err := os.ReadFile(dbPath); err != nil || string(got) != "live db" {
+		t.Errorf("live db changed: %q, %v", got, err)
+	}
+	if got, err := os.ReadFile(filepath.Join(uploadsDir, "live.jpg")); err != nil || string(got) != "live" {
+		t.Errorf("live upload changed: %q, %v", got, err)
+	}
+}
+
+func TestRestore_RejectsBadArchives(t *testing.T) {
+	db := validDBBytes(t)
+	cases := map[string][]tarEntry{
+		"path traversal":    {{"data.db", db}, {"uploads/../escaped.txt", []byte("x")}},
+		"deep traversal":    {{"data.db", db}, {"uploads/a/../../../escaped.txt", []byte("x")}},
+		"absolute":          {{"data.db", db}, {"uploads//etc/escaped.txt", []byte("x")}},
+		"garbage data.db":   {{"data.db", []byte("not a database")}, {"uploads/a.jpg", []byte("x")}},
+		"duplicate data.db": {{"data.db", db}, {"data.db", db}},
+	}
+	for name, entries := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			archive := filepath.Join(dir, "bad.tar.gz")
+			writeTarGz(t, archive, entries...)
+
+			target := filepath.Join(dir, "site")
+			dbPath := filepath.Join(target, "data.db")
+			uploadsDir := filepath.Join(target, "uploads")
+			if err := os.MkdirAll(uploadsDir, 0750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(dbPath, []byte("live db"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(uploadsDir, "live.jpg"), []byte("live"), 0600); err != nil {
+				t.Fatal(err)
+			}
+
+			if err := Restore(RestoreConfig{ArchivePath: archive, DBPath: dbPath, UploadsDir: uploadsDir}); err == nil {
+				t.Fatal("Restore: want error")
+			}
+			assertUntouched(t, dbPath, uploadsDir)
+			for _, p := range []string{filepath.Join(target, "escaped.txt"), filepath.Join(dir, "escaped.txt")} {
+				if _, err := os.Stat(p); !os.IsNotExist(err) {
+					t.Errorf("%s written outside the staging dir", p)
+				}
+			}
+		})
+	}
+}
+
+// If installing the restored uploads dir fails, the DB swap is rolled back.
+func TestRestore_InstallRollsBack(t *testing.T) {
+	dir := t.TempDir()
+	dbPath := filepath.Join(dir, "data.db")
+	uploadsDir := filepath.Join(dir, "uploads")
+	if err := os.MkdirAll(uploadsDir, 0750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(dbPath, []byte("live db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(uploadsDir, "live.jpg"), []byte("live"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	dbTmp := filepath.Join(dir, "new.db")
+	if err := os.WriteFile(dbTmp, []byte("new db"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	// uploadsTmp doesn't exist → the second rename fails.
+	err := install(RestoreConfig{DBPath: dbPath, UploadsDir: uploadsDir}, dbTmp, filepath.Join(dir, "missing"))
+	if err == nil {
+		t.Fatal("install: want error")
+	}
+	assertUntouched(t, dbPath, uploadsDir)
+	if _, err := os.Stat(dbTmp); err != nil {
+		t.Errorf("staged db should be back in place for cleanup: %v", err)
+	}
+}

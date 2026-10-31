@@ -63,27 +63,36 @@ func main() {
 		}
 	}()
 	if cfg.BackupInterval > 0 {
-		if remote, err := backup.NewRemote(cfg.BackupRemote, cfg.YaDiskToken, cfg.BackupRemoteDir); err != nil {
-			log.Printf("backup: %v — automatic backups disabled", err)
-		} else {
-			go func() {
-				for range time.Tick(cfg.BackupInterval) {
-					path, err := backup.Run(context.Background(), backup.Config{
-						DB:         db.DB,
-						UploadsDir: cfg.UploadsDir,
-						OutDir:     cfg.BackupDir,
-						Keep:       cfg.BackupKeep,
-						Remote:     remote,
-						RemoteKeep: cfg.BackupRemoteKeep,
-					})
-					if err != nil {
-						log.Printf("backup: %v", err)
-					} else {
-						log.Println("backup: completed,", path)
-					}
-				}
-			}()
+		// A broken remote config shouldn't also stop local backups.
+		remote, err := backup.NewRemote(cfg.BackupRemote, cfg.YaDiskToken, cfg.BackupRemoteDir)
+		if err != nil {
+			log.Printf("backup: %v — off-site copies disabled, local backups continue", err)
+			remote = nil
 		}
+		// Count the interval from the last archive, not from startup:
+		// otherwise every redeploy resets the timer and with deploys more
+		// often than BACKUP_INTERVAL no backup would ever run.
+		delay := backup.NextDelay(backup.LastBackup(cfg.BackupDir), time.Now(), cfg.BackupInterval, 5*time.Minute)
+		log.Printf("backup: next automatic backup in %s", delay.Round(time.Second))
+		go func() {
+			timer := time.NewTimer(delay)
+			for range timer.C {
+				path, err := backup.Run(context.Background(), backup.Config{
+					DB:         db.DB,
+					UploadsDir: cfg.UploadsDir,
+					OutDir:     cfg.BackupDir,
+					Keep:       cfg.BackupKeep,
+					Remote:     remote,
+					RemoteKeep: cfg.BackupRemoteKeep,
+				})
+				if err != nil {
+					log.Printf("backup: %v", err)
+				} else {
+					log.Println("backup: completed,", path)
+				}
+				timer.Reset(cfg.BackupInterval)
+			}
+		}()
 	}
 	db.SeedSettings(map[string]string{
 		"site_title": cfg.SiteTitle,

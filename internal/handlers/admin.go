@@ -892,10 +892,19 @@ func DeletePhoto(w http.ResponseWriter, r *http.Request) {
 		NotFound(w, r)
 		return
 	}
-	if err := os.Remove(filepath.Join(uploadsDir, filename)); err != nil {
-		log.Printf("remove photo %s: %v", filename, err)
+	// The same file may still back another gallery entry, a post/series cover
+	// or body, the avatar, etc. (AddToGallery reuses existing uploads) — only
+	// delete it from disk once nothing references it. On a lookup error keep
+	// the file: an orphan can be cleaned up in /admin/uploads, a deleted
+	// in-use photo can't be brought back.
+	if usage, err := db.GetFileUsage(filename); err != nil {
+		log.Printf("file usage %s: %v", filename, err)
+	} else if !usage.InUse() {
+		if err := os.Remove(filepath.Join(uploadsDir, filename)); err != nil {
+			log.Printf("remove photo %s: %v", filename, err)
+		}
+		forgetThumb(filename)
 	}
-	forgetThumb(filename)
 
 	photos, _ := db.ListPhotos("", "")
 	cats, _ := db.ListCategories()

@@ -274,19 +274,50 @@ document.addEventListener('keydown', e => {
 });
 
 const DRAFT_KEY = window.DRAFT_KEY;
+const NEW_DRAFT_KEY = 'dsite_editor_new';
 let autoSaveTimer;
 
+// localStorage can throw (private mode, quota, blocked storage) — the draft
+// is a best-effort safety net, so never let that break the editor.
+function draftGet(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+function draftDel(key) {
+  try { localStorage.removeItem(key); } catch { /* ignore */ }
+}
+
+// What the server rendered into the form, i.e. what is actually saved.
+// defaultValue, not value: the browser may have restored edits into the
+// textareas on reload.
+function savedState() {
+  return {
+    title: document.getElementById('title').defaultValue,
+    body:  document.getElementById('body').defaultValue,
+    tags:  document.getElementById('tags-hidden').value,
+  };
+}
+
+function sameContent(draft, state) {
+  const norm = s => (s || '').replace(/\r\n/g, '\n').trim();
+  return norm(draft.title) === norm(state.title)
+    && norm(draft.body) === norm(state.body)
+    && (draft.tags || '') === (state.tags || '');
+}
+
 (function draftLoad() {
-  const saved = localStorage.getItem(DRAFT_KEY);
-  if (!saved) return;
-  let draft;
-  try { draft = JSON.parse(saved); } catch { return; }
-
-  const titleEl = document.getElementById('title');
-  const bodyEl  = document.getElementById('body');
-  const tagsEl  = document.getElementById('tags-hidden');
-
-  if (draft.title === titleEl.value && draft.body === bodyEl.value && draft.tags === tagsEl.value) return;
+  const saved = savedState();
+  // The draft is only dropped once the server has it: on submit it's kept
+  // (the save may still fail — 413/500, expired session, lost connection),
+  // and cleared here when the page the save redirected to shows the same
+  // content. A new post's draft lives under NEW_DRAFT_KEY and lands on the
+  // post's own edit page, so check that one too.
+  if (DRAFT_KEY !== NEW_DRAFT_KEY) {
+    const nd = draftGet(NEW_DRAFT_KEY);
+    if (nd && sameContent(nd, saved)) draftDel(NEW_DRAFT_KEY);
+  }
+  const draft = draftGet(DRAFT_KEY);
+  if (!draft) return;
+  if (sameContent(draft, saved)) { draftDel(DRAFT_KEY); return; }
 
   const bar = document.createElement('div');
   bar.id = 'autosave-bar';
@@ -313,17 +344,20 @@ function draftRestore() {
 }
 
 function draftDiscard() {
-  localStorage.removeItem(DRAFT_KEY);
+  draftDel(DRAFT_KEY);
   document.getElementById('autosave-bar')?.remove();
 }
 
 function draftSave() {
-  localStorage.setItem(DRAFT_KEY, JSON.stringify({
-    title: document.getElementById('title').value,
-    body:  document.getElementById('body').value,
-    tags:  document.getElementById('tags-hidden').value,
-    ts:    Date.now(),
-  }));
+  clearTimeout(autoSaveTimer);
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({
+      title: document.getElementById('title').value,
+      body:  document.getElementById('body').value,
+      tags:  document.getElementById('tags-hidden').value,
+      ts:    Date.now(),
+    }));
+  } catch { /* storage full or unavailable — nothing better to do */ }
 }
 
 ['title', 'body', 'tags-hidden'].forEach(id => {
@@ -333,8 +367,13 @@ function draftSave() {
   });
 });
 
+// Flush the debounced autosave right away instead of dropping the draft:
+// whether the save worked is only known on the page it redirects to.
 document.getElementById('post-form').addEventListener('submit', () => {
-  localStorage.removeItem(DRAFT_KEY);
+  if (autoSaveTimer) draftSave();
+});
+window.addEventListener('pagehide', () => {
+  if (autoSaveTimer) draftSave();
 });
 
 let pickerLoaded = false;

@@ -6,6 +6,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -255,5 +257,36 @@ func TestScheduledPost(t *testing.T) {
 	}
 	if strings.Contains(body, `href="/post/zavtra" target="_blank"`) {
 		t.Error("admin list links to the not-yet-public post")
+	}
+}
+
+// Удаление записи галереи не должно удалять файл, который ещё где-то
+// используется (AddToGallery переиспользует файлы постов).
+func TestDeletePhotoKeepsSharedFile(t *testing.T) {
+	setupPublic(t)
+	for _, fn := range []string{"shared.jpg", "lonely.jpg"} {
+		if err := os.WriteFile(filepath.Join(uploadsDir, fn), []byte("x"), 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := db.AddPhoto(fn, "", 0, 0, 1, 1); err != nil {
+			t.Fatalf("AddPhoto: %v", err)
+		}
+	}
+	if _, err := db.CreatePost("p", "Post", "![](/uploads/shared.jpg)", "", "", true, 0); err != nil {
+		t.Fatalf("CreatePost: %v", err)
+	}
+	photos, _ := db.ListPhotos("", "")
+	for _, p := range photos {
+		rec := postURLForm(DeletePhoto, "POST /admin/gallery/{id}/delete",
+			"/admin/gallery/"+strconv.Itoa(p.ID)+"/delete", url.Values{})
+		if rec.Code != http.StatusOK {
+			t.Fatalf("delete %s: status %d", p.Filename, rec.Code)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(uploadsDir, "shared.jpg")); err != nil {
+		t.Errorf("shared.jpg (used by a post) was removed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(uploadsDir, "lonely.jpg")); !os.IsNotExist(err) {
+		t.Errorf("lonely.jpg (unused) should be removed, stat err = %v", err)
 	}
 }
