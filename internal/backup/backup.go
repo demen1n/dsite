@@ -137,6 +137,27 @@ func NextDelay(last, now time.Time, interval, minDelay time.Duration) time.Durat
 	return d
 }
 
+// Schedule runs Run with cfg first after firstDelay, then every interval,
+// until ctx is cancelled; it returns once the loop has stopped (a run in
+// progress is cancelled through ctx), so callers can wait for it before
+// closing the DB. onDone, if set, gets each run's result.
+func Schedule(ctx context.Context, cfg Config, firstDelay, interval time.Duration, onDone func(path string, err error)) {
+	timer := time.NewTimer(firstDelay)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		path, err := Run(ctx, cfg)
+		if onDone != nil {
+			onDone(path, err)
+		}
+		timer.Reset(interval)
+	}
+}
+
 // rotate deletes the oldest backups in dir beyond the newest keep, based on
 // the sortable timestamp embedded in the filename.
 func rotate(dir string, keep int) {

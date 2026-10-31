@@ -341,3 +341,77 @@ func TestLastBackupAndNextDelay(t *testing.T) {
 		}
 	}
 }
+
+func TestSchedule(t *testing.T) {
+	db := setupTestDB(t)
+	cfg := Config{DB: db, UploadsDir: t.TempDir(), OutDir: t.TempDir()}
+	const firstDelay, interval = 80 * time.Millisecond, 50 * time.Millisecond
+
+	type result struct {
+		at   time.Time
+		path string
+		err  error
+	}
+	runs := make(chan result, 16)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	stopped := make(chan struct{})
+	start := time.Now()
+	go func() {
+		defer close(stopped)
+		Schedule(ctx, cfg, firstDelay, interval, func(path string, err error) {
+			runs <- result{time.Now(), path, err}
+		})
+	}()
+
+	var got []result
+	for len(got) < 3 {
+		select {
+		case r := <-runs:
+			if r.err != nil {
+				t.Fatalf("run %d: %v", len(got)+1, r.err)
+			}
+			if _, err := os.Stat(r.path); err != nil {
+				t.Fatalf("run %d: archive missing: %v", len(got)+1, err)
+			}
+			got = append(got, r)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("only %d runs within 5s", len(got))
+		}
+	}
+	if d := got[0].at.Sub(start); d < firstDelay {
+		t.Errorf("first run after %v, want ≥ %v", d, firstDelay)
+	}
+	for i := 1; i < len(got); i++ {
+		if d := got[i].at.Sub(got[i-1].at); d < interval {
+			t.Errorf("run %d came %v after the previous one, want ≥ %v", i+1, d, interval)
+		}
+	}
+
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Schedule didn't return after ctx was cancelled")
+	}
+}
+
+// Cancelling before the first run fires stops the loop without running.
+func TestScheduleCancelBeforeFirstRun(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	stopped := make(chan struct{})
+	ran := false
+	go func() {
+		defer close(stopped)
+		Schedule(ctx, Config{}, time.Hour, time.Hour, func(string, error) { ran = true })
+	}()
+	cancel()
+	select {
+	case <-stopped:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Schedule didn't return after ctx was cancelled")
+	}
+	if ran {
+		t.Error("backup ran although ctx was cancelled before the first delay")
+	}
+}

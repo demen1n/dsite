@@ -62,6 +62,10 @@ func main() {
 			}
 		}
 	}()
+	// Background backups stop on shutdown, before the DB is closed.
+	backupCtx, stopBackups := context.WithCancel(context.Background())
+	defer stopBackups()
+	backupDone := make(chan struct{})
 	if cfg.BackupInterval > 0 {
 		// A broken remote config shouldn't also stop local backups.
 		remote, err := backup.NewRemote(cfg.BackupRemote, cfg.YaDiskToken, cfg.BackupRemoteDir)
@@ -75,24 +79,24 @@ func main() {
 		delay := backup.NextDelay(backup.LastBackup(cfg.BackupDir), time.Now(), cfg.BackupInterval, 5*time.Minute)
 		log.Printf("backup: next automatic backup in %s", delay.Round(time.Second))
 		go func() {
-			timer := time.NewTimer(delay)
-			for range timer.C {
-				path, err := backup.Run(context.Background(), backup.Config{
-					DB:         db.DB,
-					UploadsDir: cfg.UploadsDir,
-					OutDir:     cfg.BackupDir,
-					Keep:       cfg.BackupKeep,
-					Remote:     remote,
-					RemoteKeep: cfg.BackupRemoteKeep,
-				})
+			defer close(backupDone)
+			backup.Schedule(backupCtx, backup.Config{
+				DB:         db.DB,
+				UploadsDir: cfg.UploadsDir,
+				OutDir:     cfg.BackupDir,
+				Keep:       cfg.BackupKeep,
+				Remote:     remote,
+				RemoteKeep: cfg.BackupRemoteKeep,
+			}, delay, cfg.BackupInterval, func(path string, err error) {
 				if err != nil {
 					log.Printf("backup: %v", err)
 				} else {
 					log.Println("backup: completed,", path)
 				}
-				timer.Reset(cfg.BackupInterval)
-			}
+			})
 		}()
+	} else {
+		close(backupDone)
 	}
 	db.SeedSettings(map[string]string{
 		"site_title": cfg.SiteTitle,
@@ -234,6 +238,8 @@ func main() {
 	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Printf("shutdown: %v", err)
 	}
+	stopBackups()
+	<-backupDone
 	if err := db.DB.Close(); err != nil {
 		log.Printf("db close: %v", err)
 	}
