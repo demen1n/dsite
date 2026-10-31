@@ -3,6 +3,13 @@ name: Deploy
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+
+# One production deploy at a time, in push order: a second merge waits for
+# the first deploy instead of racing it on the VPS.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
 
 env:
   REGISTRY: ghcr.io
@@ -18,36 +25,85 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v4
+        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
+      # Production installs the sha-<commit> tag, so what runs is exactly the
+      # commit this workflow built; :latest is still pushed for anyone
+      # following the image.
       - name: Build and push image
-        uses: docker/build-push-action@v7
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: .
           push: true
-          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # The server's docker-compose.yml runs ghcr.io/<repo>:latest. Instead of
+      # pulling the mutable registry :latest, pull this commit's sha tag and
+      # point the *local* :latest at it, keeping the image that ran before as
+      # :previous. If the new container doesn't answer within ~60s, :latest
+      # goes back to :previous and the job fails.
       - name: Deploy to VPS
-        uses: appleboy/ssh-action@v1
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1.2.5
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           script: |
+            set -eu
             cd /opt/dsite
+            IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+            NEW=$IMAGE:sha-${{ github.sha }}
+
             echo ${{ secrets.GITHUB_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
-            GITHUB_REPOSITORY=${{ github.repository }} docker compose pull
-            GITHUB_REPOSITORY=${{ github.repository }} docker compose up -d
-            docker image prune -f
+            docker pull "$NEW"
+            if docker image inspect "$IMAGE:latest" >/dev/null 2>&1; then
+              docker tag "$IMAGE:latest" "$IMAGE:previous"
+            fi
+            docker tag "$NEW" "$IMAGE:latest"
+            docker compose up -d
+
+            healthy() {
+              want=$(docker image inspect -f '{{.Id}}' "$NEW")
+              for i in $(seq 1 30); do
+                cid=$(docker compose ps -q dsite)
+                if [ -n "$cid" ] \
+                  && [ "$(docker inspect -f '{{.Image}}' "$cid")" = "$want" ] \
+                  && curl -fsS -o /dev/null --max-time 5 http://127.0.0.1:8080/; then
+                  return 0
+                fi
+                sleep 2
+              done
+              return 1
+            }
+
+            if healthy; then
+              echo "deployed ${{ github.sha }}"
+              # Drop older sha-* tags (just untags if :latest/:previous still
+              # point at the image), then the now-dangling images.
+              docker images --format '{{.Repository}}:{{.Tag}}' "$IMAGE" \
+                | grep ':sha-' | grep -vxF "$NEW" | xargs -r docker rmi >/dev/null || true
+              docker image prune -f
+              exit 0
+            fi
+
+            echo "new container is not healthy — rolling back" >&2
+            docker compose logs --tail 50 dsite >&2 || true
+            if docker image inspect "$IMAGE:previous" >/dev/null 2>&1; then
+              docker tag "$IMAGE:previous" "$IMAGE:latest"
+              docker compose up -d
+            fi
+            exit 1
