@@ -21,6 +21,14 @@ module.exports = [
     },
   },
   {
+    // The admin gallery/series scripts use createOrderSaver()/moveItem()
+    // from admin-order.js, loaded before them on the same page.
+    files: ['static/admin-gallery.js', 'static/admin-series.js'],
+    languageOptions: {
+      globals: { createOrderSaver: 'readonly', moveItem: 'readonly' },
+    },
+  },
+  {
     // gallery.js relies on openLightbox() from lightbox.js — both are
     // loaded as sibling <script> tags on the same page and share globals.
     files: ['static/gallery.js'],

@@ -1,6 +1,7 @@
 function initSeriesDraggable() {
   const list = document.getElementById('series-list');
   if (!list) return;
+  const saver = createOrderSaver({ url: '/admin/series/reorder', list, attr: 'seriesId' });
 
   let dragEl = null;
 
@@ -20,18 +21,19 @@ function initSeriesDraggable() {
 
     row.addEventListener('dragend', () => {
       dragEl = null;
-      saveSeriesOrder();
+      saver.save();
     });
   });
-}
 
-function saveSeriesOrder() {
-  const ids = [...document.querySelectorAll('#series-list [data-series-id]')]
-    .map(el => el.dataset.seriesId);
-  fetch('/admin/series/reorder', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: ids.map(id => `ids=${id}`).join('&'),
+  // ↑/↓ buttons: the same reorder from the keyboard or a touch screen.
+  list.addEventListener('click', e => {
+    const btn = e.target.closest('[data-move]');
+    if (!btn) return;
+    const row = btn.closest('[data-series-id]');
+    if (moveItem(row, Number(btn.dataset.move), 'seriesId')) {
+      saver.save();
+      btn.focus();
+    }
   });
 }
 

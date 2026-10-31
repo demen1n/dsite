@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -67,23 +68,95 @@ func Init(path string) error {
 	return nil
 }
 
-// migratePhotosOrder adds sort_order column to existing photos tables.
-// ALTER TABLE doesn't support IF NOT EXISTS, so we ignore the "duplicate column" error.
-func migratePhotosOrder() error {
-	DB.Exec(`ALTER TABLE photos ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`)
-	DB.Exec(`UPDATE photos SET sort_order = id WHERE sort_order = 0`)
+// Migrations are idempotent and run on every startup. Every statement's
+// error is returned: they used to be ignored wholesale (to swallow ALTER
+// TABLE's "duplicate column"), which also hid real failures — a full disk or
+// a locked file let the server start on a half-migrated schema. Columns are
+// now added through addColumn, which checks first instead of relying on
+// the error.
+
+// execAll runs statements in order, stopping at the first error.
+func execAll(stmts ...string) error {
+	for _, q := range stmts {
+		if _, err := DB.Exec(q); err != nil {
+			return fmt.Errorf("%s: %w", firstLine(q), err)
+		}
+	}
 	return nil
+}
+
+func firstLine(q string) string {
+	q = strings.TrimSpace(q)
+	if i := strings.IndexByte(q, '\n'); i >= 0 {
+		q = q[:i]
+	}
+	return q
+}
+
+// hasColumn reports whether table has column (via PRAGMA table_info).
+func hasColumn(table, column string) (bool, error) {
+	rows, err := DB.Query(`SELECT name FROM pragma_table_info(?)`, table)
+	if err != nil {
+		return false, err
+	}
+	defer rows.Close()
+	found := false
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return false, err
+		}
+		found = found || name == column
+	}
+	if err := rows.Err(); err != nil {
+		return false, err
+	}
+	return found, nil
+}
+
+// addColumn adds column (with its SQL type/constraints in def) to table
+// unless it's already there — ALTER TABLE has no ADD COLUMN IF NOT EXISTS.
+// table and column are fixed names from this file, never user input.
+func addColumn(table, column, def string) error {
+	ok, err := hasColumn(table, column)
+	if err != nil {
+		return fmt.Errorf("table_info %s: %w", table, err)
+	}
+	if ok {
+		return nil
+	}
+	if _, err := DB.Exec(`ALTER TABLE ` + table + ` ADD COLUMN ` + column + ` ` + def); err != nil {
+		return fmt.Errorf("add %s.%s: %w", table, column, err)
+	}
+	return nil
+}
+
+// migratePhotosOrder adds sort_order column to existing photos tables.
+func migratePhotosOrder() error {
+	// Fresh install: photos doesn't exist yet, migrate() creates it with
+	// the column.
+	if ok, err := hasTable("photos"); err != nil || !ok {
+		return err
+	}
+	if err := addColumn("photos", "sort_order", "INTEGER NOT NULL DEFAULT 0"); err != nil {
+		return err
+	}
+	return execAll(`UPDATE photos SET sort_order = id WHERE sort_order = 0`)
+}
+
+func hasTable(name string) (bool, error) {
+	var n int
+	err := DB.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&n)
+	return n > 0, err
 }
 
 // migrateCategoryColumn adds category_id to photos for existing databases.
 func migrateCategoryColumn() error {
-	DB.Exec(`ALTER TABLE photos ADD COLUMN category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL`)
-	return nil
+	return addColumn("photos", "category_id", "INTEGER REFERENCES categories(id) ON DELETE SET NULL")
 }
 
 func migratePostsViews() error {
-	DB.Exec(`ALTER TABLE posts ADD COLUMN views INTEGER NOT NULL DEFAULT 0`)
-	return nil
+	return addColumn("posts", "views", "INTEGER NOT NULL DEFAULT 0")
 }
 
 func migratePlaces() error {
@@ -97,46 +170,75 @@ func migratePlaces() error {
 	if err != nil {
 		return err
 	}
-	DB.Exec(`ALTER TABLE photos ADD COLUMN place_id INTEGER REFERENCES places(id) ON DELETE SET NULL`)
-	return nil
+	return addColumn("photos", "place_id", "INTEGER REFERENCES places(id) ON DELETE SET NULL")
 }
+
+// ftsIndexVersion is bumped whenever the posts_fts triggers change in a way
+// that leaves an index built by the old ones stale; migrateFTS then rebuilds
+// it once (tracked in PRAGMA user_version) instead of on every startup —
+// a full rebuild re-tokenizes every post, which grows with the blog.
+//
+// 1: canonical external-content triggers ('delete' command with the old
+// values; the original ones did a plain UPDATE/DELETE and left stale
+// tokens), update trigger scoped to title/body_md.
+const ftsIndexVersion = 1
 
 // migrateFTS creates the posts_fts external-content index and the triggers
 // that keep it in sync with posts. External-content FTS5 tables can't be
 // kept in sync with a plain UPDATE/DELETE on the index — SQLite needs the
 // *old* row values fed back through the special 'delete' command before the
 // new row goes in, otherwise stale tokens survive edits and deleted rows
-// never leave the index. The old triggers (posts_fts_au/posts_fts_ad) did a
-// plain UPDATE/DELETE, so they're dropped and recreated here on every
-// startup; the unconditional rebuild below heals any index left corrupted
-// by the old triggers.
+// never leave the index. The triggers are recreated on every startup (so a
+// changed definition here always takes effect), in one transaction with
+// the rebuild, so an interrupted startup can't leave posts without them.
 func migrateFTS() error {
-	_, err := DB.Exec(`CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
-		title, body_md,
-		content=posts, content_rowid=id
-	)`)
+	tx, err := DB.Begin()
 	if err != nil {
 		return err
 	}
-	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_ai AFTER INSERT ON posts BEGIN
-		INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
-	END`)
-	// Only on title/body_md changes: an unscoped AFTER UPDATE also fired on
-	// every view-counter bump (IncrementViews), re-indexing the whole post
-	// on each page view.
-	DB.Exec(`DROP TRIGGER IF EXISTS posts_fts_au`)
-	DB.Exec(`CREATE TRIGGER posts_fts_au AFTER UPDATE OF title, body_md ON posts BEGIN
-		INSERT INTO posts_fts(posts_fts, rowid, title, body_md) VALUES('delete', old.id, old.title, old.body_md);
-		INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
-	END`)
-	DB.Exec(`DROP TRIGGER IF EXISTS posts_fts_ad`)
-	DB.Exec(`CREATE TRIGGER posts_fts_ad AFTER DELETE ON posts BEGIN
-		INSERT INTO posts_fts(posts_fts, rowid, title, body_md) VALUES('delete', old.id, old.title, old.body_md);
-	END`)
-	// Heal any index corruption left by the old triggers, and populate the
-	// index from existing posts on first run. Idempotent, safe every startup.
-	DB.Exec(`INSERT INTO posts_fts(posts_fts) VALUES('rebuild')`)
-	return nil
+	defer func() { _ = tx.Rollback() }()
+	for _, q := range []string{
+		`CREATE VIRTUAL TABLE IF NOT EXISTS posts_fts USING fts5(
+			title, body_md,
+			content=posts, content_rowid=id
+		)`,
+		`DROP TRIGGER IF EXISTS posts_fts_ai`,
+		`CREATE TRIGGER posts_fts_ai AFTER INSERT ON posts BEGIN
+			INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
+		END`,
+		// Only on title/body_md changes: an unscoped AFTER UPDATE also fired
+		// on every view-counter bump (IncrementViews), re-indexing the whole
+		// post on each page view.
+		`DROP TRIGGER IF EXISTS posts_fts_au`,
+		`CREATE TRIGGER posts_fts_au AFTER UPDATE OF title, body_md ON posts BEGIN
+			INSERT INTO posts_fts(posts_fts, rowid, title, body_md) VALUES('delete', old.id, old.title, old.body_md);
+			INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
+		END`,
+		`DROP TRIGGER IF EXISTS posts_fts_ad`,
+		`CREATE TRIGGER posts_fts_ad AFTER DELETE ON posts BEGIN
+			INSERT INTO posts_fts(posts_fts, rowid, title, body_md) VALUES('delete', old.id, old.title, old.body_md);
+		END`,
+	} {
+		if _, err := tx.Exec(q); err != nil {
+			return fmt.Errorf("%s: %w", firstLine(q), err)
+		}
+	}
+
+	var version int
+	if err := tx.QueryRow(`PRAGMA user_version`).Scan(&version); err != nil {
+		return err
+	}
+	if version < ftsIndexVersion {
+		// Heals an index built by older triggers and fills it on first run.
+		if _, err := tx.Exec(`INSERT INTO posts_fts(posts_fts) VALUES('rebuild')`); err != nil {
+			return fmt.Errorf("rebuild posts_fts: %w", err)
+		}
+		// PRAGMA can't take a bound parameter; the value is a constant.
+		if _, err := tx.Exec(fmt.Sprintf(`PRAGMA user_version = %d`, ftsIndexVersion)); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 // migrateSeries adds the series table (a themed group of posts, e.g. a trip
@@ -158,24 +260,31 @@ func migrateSeries() error {
 	if err != nil {
 		return err
 	}
-	DB.Exec(`ALTER TABLE posts ADD COLUMN series_id INTEGER REFERENCES series(id) ON DELETE SET NULL`)
-	DB.Exec(`ALTER TABLE series ADD COLUMN collect_photos INTEGER NOT NULL DEFAULT 0`)
-	DB.Exec(`ALTER TABLE series ADD COLUMN show_cover INTEGER NOT NULL DEFAULT 1`)
-	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_posts_series_id ON posts(series_id)`)
-	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_series_slug ON series(slug)`)
-	// sort_order: manual ordering set via admin drag-reorder. Reorder always
-	// writes 1-indexed values (see UpdateSeriesOrder), so 0 stays a safe
-	// "unset" sentinel for this backfill on every future startup.
-	DB.Exec(`ALTER TABLE series ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`)
-	DB.Exec(`UPDATE series SET sort_order = id WHERE sort_order = 0`)
-	DB.Exec(`CREATE INDEX IF NOT EXISTS idx_series_sort_order ON series(sort_order)`)
-	// hidden: серия не показывается в /series и sitemap, а её страница
-	// отдаёт 404. Посты серии остаются в ленте как обычные.
-	DB.Exec(`ALTER TABLE series ADD COLUMN hidden INTEGER NOT NULL DEFAULT 0`)
-	// shuffle_photos: в режиме collect_photos показывать фото в случайном
-	// порядке (новом при каждой загрузке), а не по порядку постов.
-	DB.Exec(`ALTER TABLE series ADD COLUMN shuffle_photos INTEGER NOT NULL DEFAULT 0`)
-	return nil
+	for _, c := range [][3]string{
+		{"posts", "series_id", "INTEGER REFERENCES series(id) ON DELETE SET NULL"},
+		{"series", "collect_photos", "INTEGER NOT NULL DEFAULT 0"},
+		{"series", "show_cover", "INTEGER NOT NULL DEFAULT 1"},
+		// sort_order: manual ordering set via admin drag-reorder. Reorder
+		// always writes 1-indexed values (see UpdateSeriesOrder), so 0 stays
+		// a safe "unset" sentinel for the backfill below on every startup.
+		{"series", "sort_order", "INTEGER NOT NULL DEFAULT 0"},
+		// hidden: серия не показывается в /series и sitemap, а её страница
+		// отдаёт 404. Посты серии остаются в ленте как обычные.
+		{"series", "hidden", "INTEGER NOT NULL DEFAULT 0"},
+		// shuffle_photos: в режиме collect_photos показывать фото в
+		// случайном порядке (новом при каждой загрузке), а не по порядку постов.
+		{"series", "shuffle_photos", "INTEGER NOT NULL DEFAULT 0"},
+	} {
+		if err := addColumn(c[0], c[1], c[2]); err != nil {
+			return err
+		}
+	}
+	return execAll(
+		`CREATE INDEX IF NOT EXISTS idx_posts_series_id ON posts(series_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_series_slug ON series(slug)`,
+		`UPDATE series SET sort_order = id WHERE sort_order = 0`,
+		`CREATE INDEX IF NOT EXISTS idx_series_sort_order ON series(sort_order)`,
+	)
 }
 
 // migratePostsPublishedAt adds posts.published_at — когда пост впервые стал
@@ -188,9 +297,10 @@ func migrateSeries() error {
 // published_at сразу (см. CreatePost/UpdatePost), так что на следующих
 // стартах условию соответствуют только посты из старой базы.
 func migratePostsPublishedAt() error {
-	DB.Exec(`ALTER TABLE posts ADD COLUMN published_at TEXT`)
-	DB.Exec(`UPDATE posts SET published_at = created_at WHERE published = 1 AND published_at IS NULL`)
-	return nil
+	if err := addColumn("posts", "published_at", "TEXT"); err != nil {
+		return err
+	}
+	return execAll(`UPDATE posts SET published_at = created_at WHERE published = 1 AND published_at IS NULL`)
 }
 
 // migrateThumbnails adds the thumbnails table: превью для любого файла из
@@ -205,12 +315,13 @@ func migrateThumbnails() error {
 		width    INTEGER NOT NULL DEFAULT 0,
 		height   INTEGER NOT NULL DEFAULT 0
 	)`)
+	if err != nil {
+		return err
+	}
 	// placeholder: крошечная копия картинки (data:-URI), которую показываем
 	// фоном, пока грузится сама картинка. Пусто — ещё не сгенерирована
-	// (BackfillThumbs догенерит) или не нужна (GIF). Ошибка ALTER — колонка
-	// уже есть.
-	DB.Exec(`ALTER TABLE thumbnails ADD COLUMN placeholder TEXT NOT NULL DEFAULT ''`)
-	return err
+	// (BackfillThumbs догенерит) или не нужна (GIF).
+	return addColumn("thumbnails", "placeholder", "TEXT NOT NULL DEFAULT ''")
 }
 
 // migrateSlugHistory adds slug_history: прежние slug постов и серий, чтобы
@@ -253,12 +364,19 @@ func migrateSlugHistory() error {
 }
 
 func migratePhotoDimensions() error {
-	DB.Exec(`ALTER TABLE photos ADD COLUMN width INTEGER NOT NULL DEFAULT 0`)
-	DB.Exec(`ALTER TABLE photos ADD COLUMN height INTEGER NOT NULL DEFAULT 0`)
-	// thumb: превью для сетки галереи, путь относительно uploads/ (обычно
-	// thumbs/<имя>.jpg; для узких фото и GIF — сам оригинал). Пусто — ещё
-	// не сгенерировано: шаблон показывает оригинал, BackfillThumbs догенерит.
-	DB.Exec(`ALTER TABLE photos ADD COLUMN thumb TEXT NOT NULL DEFAULT ''`)
+	for _, c := range [][3]string{
+		{"photos", "width", "INTEGER NOT NULL DEFAULT 0"},
+		{"photos", "height", "INTEGER NOT NULL DEFAULT 0"},
+		// thumb: превью для сетки галереи, путь относительно uploads/
+		// (обычно thumbs/<имя>.jpg; для узких фото и GIF — сам оригинал).
+		// Пусто — ещё не сгенерировано: шаблон показывает оригинал,
+		// BackfillThumbs догенерит.
+		{"photos", "thumb", "TEXT NOT NULL DEFAULT ''"},
+	} {
+		if err := addColumn(c[0], c[1], c[2]); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
