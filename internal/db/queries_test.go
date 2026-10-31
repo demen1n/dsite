@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -153,6 +154,19 @@ func TestIncrementViews(t *testing.T) {
 	p, _ := GetPostByID(int(id))
 	if p.Views != 2 {
 		t.Errorf("IncrementViews: got %d, want 2", p.Views)
+	}
+}
+
+// A view-counter bump must not re-index the post in posts_fts: the update
+// trigger has to be scoped to the indexed columns.
+func TestFTSUpdateTriggerScoped(t *testing.T) {
+	setupTestDB(t)
+	var sql string
+	if err := DB.QueryRow(`SELECT sql FROM sqlite_master WHERE type='trigger' AND name='posts_fts_au'`).Scan(&sql); err != nil {
+		t.Fatalf("posts_fts_au: %v", err)
+	}
+	if !strings.Contains(sql, "UPDATE OF title, body_md ON posts") {
+		t.Errorf("posts_fts_au not scoped to title/body_md: %s", sql)
 	}
 }
 
@@ -1211,5 +1225,29 @@ func TestThumbnails(t *testing.T) {
 	}
 	if list, _ := ListThumbnails(); len(list) != 0 {
 		t.Errorf("after delete: %+v", list)
+	}
+}
+
+func TestFileUsage_HomeBio(t *testing.T) {
+	setupTestDB(t)
+	SetSetting("home_bio", "Привет! ![я](/uploads/bio.jpg)") //nolint
+
+	u, err := GetFileUsage("bio.jpg")
+	if err != nil {
+		t.Fatalf("GetFileUsage: %v", err)
+	}
+	if !u.InHomeBio || !u.InUse() {
+		t.Errorf("GetFileUsage(bio.jpg) = %+v, want InHomeBio", u)
+	}
+
+	all, err := GetAllFileUsage([]string{"bio.jpg", "other.jpg"})
+	if err != nil {
+		t.Fatalf("GetAllFileUsage: %v", err)
+	}
+	if !all["bio.jpg"].InHomeBio {
+		t.Errorf("GetAllFileUsage[bio.jpg] = %+v, want InHomeBio", all["bio.jpg"])
+	}
+	if all["other.jpg"].InUse() {
+		t.Errorf("GetAllFileUsage[other.jpg] = %+v, want unused", all["other.jpg"])
 	}
 }

@@ -121,8 +121,11 @@ func migrateFTS() error {
 	DB.Exec(`CREATE TRIGGER IF NOT EXISTS posts_fts_ai AFTER INSERT ON posts BEGIN
 		INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
 	END`)
+	// Only on title/body_md changes: an unscoped AFTER UPDATE also fired on
+	// every view-counter bump (IncrementViews), re-indexing the whole post
+	// on each page view.
 	DB.Exec(`DROP TRIGGER IF EXISTS posts_fts_au`)
-	DB.Exec(`CREATE TRIGGER posts_fts_au AFTER UPDATE ON posts BEGIN
+	DB.Exec(`CREATE TRIGGER posts_fts_au AFTER UPDATE OF title, body_md ON posts BEGIN
 		INSERT INTO posts_fts(posts_fts, rowid, title, body_md) VALUES('delete', old.id, old.title, old.body_md);
 		INSERT INTO posts_fts(rowid, title, body_md) VALUES (new.id, new.title, new.body_md);
 	END`)

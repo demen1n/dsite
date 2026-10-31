@@ -19,6 +19,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 	"unicode/utf8"
 
@@ -32,11 +33,10 @@ var (
 	adminBaseTmpl  *template.Template
 	templatesDir   string
 	uploadsDir     string
-	siteTitle      string
-	siteDesc       string
+	siteTitle      string     // SITE_TITLE; the site_title setting overrides it
+	siteDesc       string     // SITE_DESC; the site_desc setting overrides it
 	siteURL        string     // canonical base URL, e.g. https://demenin.ru
 	siteLoc        = time.UTC // time zone dates are shown in (SITE_TZ)
-	homeAvatar     string     // filename of profile photo, served from /uploads/
 	secureCookies  bool
 	trustedProxy   bool
 	md             goldmark.Markdown
@@ -170,6 +170,7 @@ func Init(tmplDir, uploads, title, desc, siteBaseURL string, secure, trusted boo
 	uploadsDir = uploads
 	siteTitle = title
 	siteDesc = desc
+	curSettings.Store(nil) // drop a snapshot built from another config (tests)
 	siteURL = strings.TrimRight(siteBaseURL, "/")
 	secureCookies = secure
 	trustedProxy = trusted
@@ -442,17 +443,54 @@ type PageData struct {
 	ResumeHidden  bool
 }
 
-var socials map[string]string
-var resumeHidden bool
-var homeBio template.HTML
+// siteSettings is an immutable snapshot of the admin-editable settings.
+// LoadSettings builds a fresh one and swaps the pointer, so a request that
+// reads it concurrently with a save sees either the old or the new values,
+// never a mix (and without a data race).
+type siteSettings struct {
+	title        string
+	desc         string
+	homeBio      template.HTML
+	homeAvatar   string // filename of profile photo, served from /uploads/
+	socials      map[string]string
+	resumeHidden bool
+}
+
+var curSettings atomic.Pointer[siteSettings]
+
+// settings returns the current snapshot; before the first LoadSettings it
+// falls back to the env defaults from Init.
+func settings() *siteSettings {
+	if st := curSettings.Load(); st != nil {
+		return st
+	}
+	return &siteSettings{title: siteTitle, desc: siteDesc}
+}
 
 func LoadSettings() {
 	s := db.GetAllSettings()
+	st := &siteSettings{
+		title:      siteTitle,
+		desc:       siteDesc,
+		homeAvatar: s["home_avatar"],
+		socials: map[string]string{
+			"github":    s["social_github"],
+			"telegram":  s["social_telegram"],
+			"instagram": s["social_instagram"],
+			"twitter":   s["social_twitter"],
+			"bluesky":   s["social_bluesky"],
+			"mastodon":  s["social_mastodon"],
+			"vk":        s["social_vk"],
+			"linkedin":  s["social_linkedin"],
+			"email":     s["social_email"],
+		},
+		resumeHidden: s["resume_hidden"] == "1",
+	}
 	if v := s["site_title"]; v != "" {
-		siteTitle = v
+		st.title = v
 	}
 	if v := s["site_desc"]; v != "" {
-		siteDesc = v
+		st.desc = v
 	}
 	if v := s["home_bio"]; v != "" {
 		if rendered, err := RenderMD(v); err == nil {
@@ -460,30 +498,17 @@ func LoadSettings() {
 			if strings.HasPrefix(h, "<p>") && strings.HasSuffix(h, "</p>") {
 				h = strings.TrimSpace(h[3 : len(h)-4])
 			}
-			homeBio = template.HTML(h)
+			st.homeBio = template.HTML(h)
 		}
-	} else {
-		homeBio = ""
 	}
-	socials = map[string]string{
-		"github":    s["social_github"],
-		"telegram":  s["social_telegram"],
-		"instagram": s["social_instagram"],
-		"twitter":   s["social_twitter"],
-		"bluesky":   s["social_bluesky"],
-		"mastodon":  s["social_mastodon"],
-		"vk":        s["social_vk"],
-		"linkedin":  s["social_linkedin"],
-		"email":     s["social_email"],
-	}
-	resumeHidden = s["resume_hidden"] == "1"
-	homeAvatar = s["home_avatar"]
+	curSettings.Store(st)
 }
 
-func ResumeHidden() bool { return resumeHidden }
+func ResumeHidden() bool { return settings().resumeHidden }
 
 func page(title string, data any) PageData {
-	return PageData{Title: title, SiteTitle: siteTitle, SiteDesc: siteDesc, HomeBio: homeBio, HomeAvatar: homeAvatar, Socials: socials, Data: data, ResumeHidden: resumeHidden}
+	st := settings()
+	return PageData{Title: title, SiteTitle: st.title, SiteDesc: st.desc, HomeBio: st.homeBio, HomeAvatar: st.homeAvatar, Socials: st.socials, Data: data, ResumeHidden: st.resumeHidden}
 }
 
 func baseURL(r *http.Request) string {

@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"github.com/demen1n/dsite/internal/db"
 )
 
 // ───── slugify / transliterate ─────
@@ -388,5 +390,29 @@ func TestFigures(t *testing.T) {
 				t.Errorf("figures:\n got %q\nwant %q", got, tc.want)
 			}
 		})
+	}
+}
+
+// Saving settings while public pages render must not race (run with -race).
+func TestLoadSettingsConcurrent(t *testing.T) {
+	setupPublic(t)
+	if err := db.SetSetting("site_title", "Из настроек"); err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 200; i++ {
+			LoadSettings()
+		}
+	}()
+	for i := 0; i < 200; i++ {
+		p := page("", nil)
+		_ = p.SiteTitle + p.Socials["github"]
+		_ = ResumeHidden()
+	}
+	<-done
+	if got := page("", nil).SiteTitle; got != "Из настроек" {
+		t.Errorf("SiteTitle = %q, want the setting", got)
 	}
 }

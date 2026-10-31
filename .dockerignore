@@ -1,0 +1,38 @@
+# The builder stage does `COPY . .` — keep runtime data, secrets and local
+# tooling out of the build context (and the builder cache).
+.git
+.github
+.idea
+.vscode
+.claude
+.DS_Store
+node_modules
+dist
+docs
+/dsite
+
+# Runtime data
+*.db
+*.db-shm
+*.db-wal
+uploads
+backups
+.backups
+*.tar.gz
+
+# Secrets / local deploy config
+.env
+.env.*
+docker-compose.yml
+
+# Stray local files in the repo root
+/*.png
+/*.PNG
+/*.jpg
+/*.JPG
+/*.jpeg
+/*.JPEG
+/*.webp
+/*.gif
+/*.md
+*.har

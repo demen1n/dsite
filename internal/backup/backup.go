@@ -46,9 +46,18 @@ func Run(ctx context.Context, cfg Config) (string, error) {
 	}
 	defer os.Remove(snapshotPath)
 
+	// Write under a temp name and rename once complete, so a failed or
+	// interrupted run never leaves a truncated archive that looks finished
+	// (to rotate, to LastBackup, or to whoever restores from it).
 	archivePath := filepath.Join(cfg.OutDir, namePrefix+ts+nameSuffix)
-	if err := writeArchive(archivePath, snapshotPath, cfg.UploadsDir); err != nil {
+	tmpPath := filepath.Join(cfg.OutDir, ".partial-"+ts+nameSuffix)
+	if err := writeArchive(tmpPath, snapshotPath, cfg.UploadsDir); err != nil {
+		_ = os.Remove(tmpPath)
 		return "", fmt.Errorf("write archive: %w", err)
+	}
+	if err := os.Rename(tmpPath, archivePath); err != nil {
+		_ = os.Remove(tmpPath)
+		return "", fmt.Errorf("finalize archive: %w", err)
 	}
 
 	if cfg.Keep > 0 {
@@ -81,13 +90,11 @@ func snapshotDB(ctx context.Context, db *sql.DB, dest string) error {
 	return err
 }
 
-// rotate deletes the oldest backups in dir beyond the newest keep, based on
-// the sortable timestamp embedded in the filename.
-func rotate(dir string, keep int) {
+// archiveNames lists the backup archives in dir, oldest first.
+func archiveNames(dir string) ([]string, error) {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		log.Printf("backup: rotate: %v", err)
-		return
+		return nil, err
 	}
 	var names []string
 	for _, e := range entries {
@@ -96,6 +103,69 @@ func rotate(dir string, keep int) {
 		}
 	}
 	sort.Strings(names) // timestamp format sorts lexically = chronologically
+	return names, nil
+}
+
+// LastBackup returns when the newest local archive in dir was taken (from
+// the timestamp in its name), or the zero time if there is none.
+func LastBackup(dir string) time.Time {
+	names, err := archiveNames(dir)
+	if err != nil || len(names) == 0 {
+		return time.Time{}
+	}
+	ts := strings.TrimSuffix(strings.TrimPrefix(names[len(names)-1], namePrefix), nameSuffix)
+	t, err := time.Parse("20060102-150405", ts)
+	if err != nil {
+		return time.Time{}
+	}
+	return t
+}
+
+// NextDelay is how long the server should wait before its first automatic
+// backup: the rest of the interval since the last local archive, so frequent
+// restarts (a redeploy per merged PR) don't keep pushing the backup back
+// forever — but at least minDelay, so startup itself isn't slowed down and a
+// redeploy doesn't immediately add a backup either.
+func NextDelay(last, now time.Time, interval, minDelay time.Duration) time.Duration {
+	d := interval - now.Sub(last)
+	if last.IsZero() || d < minDelay {
+		d = minDelay
+	}
+	if d > interval {
+		d = interval // clock skew: a "last" in the future
+	}
+	return d
+}
+
+// Schedule runs Run with cfg first after firstDelay, then every interval,
+// until ctx is cancelled; it returns once the loop has stopped (a run in
+// progress is cancelled through ctx), so callers can wait for it before
+// closing the DB. onDone, if set, gets each run's result.
+func Schedule(ctx context.Context, cfg Config, firstDelay, interval time.Duration, onDone func(path string, err error)) {
+	timer := time.NewTimer(firstDelay)
+	defer timer.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-timer.C:
+		}
+		path, err := Run(ctx, cfg)
+		if onDone != nil {
+			onDone(path, err)
+		}
+		timer.Reset(interval)
+	}
+}
+
+// rotate deletes the oldest backups in dir beyond the newest keep, based on
+// the sortable timestamp embedded in the filename.
+func rotate(dir string, keep int) {
+	names, err := archiveNames(dir)
+	if err != nil {
+		log.Printf("backup: rotate: %v", err)
+		return
+	}
 	if len(names) <= keep {
 		return
 	}
