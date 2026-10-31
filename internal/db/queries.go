@@ -2,6 +2,7 @@ package db
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -20,6 +21,27 @@ func UserExists() (bool, error) {
 	var count int
 	err := DB.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count)
 	return count > 0, err
+}
+
+// ErrAdminExists: CreateFirstUser found an admin already there.
+var ErrAdminExists = errors.New("admin user already exists")
+
+// CreateFirstUser creates the admin account only if there is no user yet —
+// check and insert in one statement, so two concurrent /admin/setup
+// submissions can't both succeed (the site has a single admin; GetAdmin and
+// sessions assume so).
+func CreateFirstUser(login, hash string) error {
+	res, err := DB.Exec(`INSERT INTO users (login, password)
+		SELECT ?, ? WHERE NOT EXISTS (SELECT 1 FROM users)`, login, hash)
+	if err != nil {
+		return err
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return err
+	} else if n == 0 {
+		return ErrAdminExists
+	}
+	return nil
 }
 
 func CreateUser(login, hash string) error {
@@ -327,13 +349,88 @@ func seriesIDArg(seriesID int) any {
 	return seriesID
 }
 
+// execer is what both *sql.DB and *sql.Tx provide, so the post write
+// helpers run either standalone or inside SavePost's transaction.
+type execer interface {
+	Exec(query string, args ...any) (sql.Result, error)
+	QueryRow(query string, args ...any) *sql.Row
+}
+
+// ErrSlugTaken: another post/series already uses this slug.
+var ErrSlugTaken = errors.New("slug already taken")
+
+// SlugTaken reports whether a post (kind "post") or series (kind "series")
+// other than exceptID already uses slug.
+func SlugTaken(kind, slug string, exceptID int) (bool, error) {
+	return slugTaken(DB, kind, slug, exceptID)
+}
+
+func slugTaken(e execer, kind, slug string, exceptID int) (bool, error) {
+	table := map[string]string{"post": "posts", "series": "series"}[kind]
+	if table == "" {
+		return false, fmt.Errorf("slugTaken: unknown kind %q", kind)
+	}
+	var n int
+	err := e.QueryRow(`SELECT COUNT(*) FROM `+table+` WHERE slug=? AND id<>?`, slug, exceptID).Scan(&n)
+	return n > 0, err
+}
+
+// PostFields is everything the editor saves for a post.
+type PostFields struct {
+	Slug, Title, BodyMD, BodyHTML, Cover string
+	Published                            bool
+	SeriesID                             int
+	PublishedAt                          time.Time // zero: leave as is / set by the DB on first publish
+	Tags                                 []string
+}
+
+// SavePost creates (id 0) or updates a post together with its publication
+// date and tags in one transaction, so a failure can't leave the post saved
+// with stale tags or date. Returns the post id; ErrSlugTaken if the slug
+// belongs to another post.
+func SavePost(id int, f PostFields) (int, error) {
+	tx, err := DB.Begin()
+	if err != nil {
+		return 0, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if taken, err := slugTaken(tx, "post", f.Slug, id); err != nil {
+		return 0, err
+	} else if taken {
+		return 0, ErrSlugTaken
+	}
+	if id == 0 {
+		newID, err := createPost(tx, f.Slug, f.Title, f.BodyMD, f.BodyHTML, f.Cover, f.Published, f.SeriesID)
+		if err != nil {
+			return 0, err
+		}
+		id = int(newID)
+	} else if err := updatePost(tx, id, f.Slug, f.Title, f.BodyMD, f.BodyHTML, f.Cover, f.Published, f.SeriesID); err != nil {
+		return 0, err
+	}
+	if !f.PublishedAt.IsZero() {
+		if err := setPostPublishedAt(tx, id, f.PublishedAt); err != nil {
+			return 0, err
+		}
+	}
+	if err := setPostTags(tx, id, f.Tags); err != nil {
+		return 0, err
+	}
+	return id, tx.Commit()
+}
+
 func CreatePost(slug, title, bodyMD, bodyHTML, cover string, published bool, seriesID int) (int64, error) {
+	return createPost(DB, slug, title, bodyMD, bodyHTML, cover, published, seriesID)
+}
+
+func createPost(e execer, slug, title, bodyMD, bodyHTML, cover string, published bool, seriesID int) (int64, error) {
 	pub := 0
 	if published {
 		pub = 1
 	}
 	// published_at ставится при первой публикации (см. UpdatePost).
-	res, err := DB.Exec(`INSERT INTO posts (slug, title, body_md, body_html, cover, published, series_id, published_at)
+	res, err := e.Exec(`INSERT INTO posts (slug, title, body_md, body_html, cover, published, series_id, published_at)
 	                      VALUES (?,?,?,?,?,?,?, CASE WHEN ?=1 THEN datetime('now') END)`,
 		slug, title, bodyMD, bodyHTML, cover, pub, seriesIDArg(seriesID), pub)
 	if err != nil {
@@ -343,13 +440,17 @@ func CreatePost(slug, title, bodyMD, bodyHTML, cover string, published bool, ser
 }
 
 func UpdatePost(id int, slug, title, bodyMD, bodyHTML, cover string, published bool, seriesID int) error {
+	return updatePost(DB, id, slug, title, bodyMD, bodyHTML, cover, published, seriesID)
+}
+
+func updatePost(e execer, id int, slug, title, bodyMD, bodyHTML, cover string, published bool, seriesID int) error {
 	pub := 0
 	if published {
 		pub = 1
 	}
 	// published_at ставится при первой публикации и дальше сам не меняется:
 	// снятие с публикации и повторная публикация сохраняют исходную дату.
-	_, err := DB.Exec(`UPDATE posts SET slug=?, title=?, body_md=?, body_html=?, cover=?,
+	_, err := e.Exec(`UPDATE posts SET slug=?, title=?, body_md=?, body_html=?, cover=?,
 	                   published=?, series_id=?, updated_at=datetime('now'),
 	                   published_at=COALESCE(published_at, CASE WHEN ?=1 THEN datetime('now') END)
 	                   WHERE id=?`,
@@ -359,7 +460,11 @@ func UpdatePost(id int, slug, title, bodyMD, bodyHTML, cover string, published b
 
 // SetPostPublishedAt выставляет дату публикации вручную (из редактора).
 func SetPostPublishedAt(id int, t time.Time) error {
-	_, err := DB.Exec(`UPDATE posts SET published_at=? WHERE id=?`, t.UTC().Format(dbTimeLayout), id)
+	return setPostPublishedAt(DB, id, t)
+}
+
+func setPostPublishedAt(e execer, id int, t time.Time) error {
+	_, err := e.Exec(`UPDATE posts SET published_at=? WHERE id=?`, t.UTC().Format(dbTimeLayout), id)
 	return err
 }
 
@@ -980,6 +1085,30 @@ func ListAllTags() ([]Tag, error) {
 	return tags, rows.Err()
 }
 
+// ListLiveTags — теги, у которых есть хотя бы один пост на сайте (для
+// публичного блога: имя тега черновика не должно светиться в облаке тегов).
+func ListLiveTags() ([]Tag, error) {
+	rows, err := DB.Query(`
+		SELECT DISTINCT t.id, t.name, t.slug
+		FROM tags t
+		JOIN post_tags pt ON pt.tag_id = t.id
+		JOIN posts p ON p.id = pt.post_id AND ` + livePostsP + `
+		ORDER BY t.name`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var tags []Tag
+	for rows.Next() {
+		var t Tag
+		if err := rows.Scan(&t.ID, &t.Name, &t.Slug); err != nil {
+			return nil, err
+		}
+		tags = append(tags, t)
+	}
+	return tags, rows.Err()
+}
+
 // GetTagBySlug возвращает тег по slug (sql.ErrNoRows, если такого нет).
 func GetTagBySlug(slug string) (Tag, error) {
 	var t Tag
@@ -1028,8 +1157,15 @@ func SetPostTags(postID int, names []string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := tx.Exec(`DELETE FROM post_tags WHERE post_id=?`, postID); err != nil {
+	if err := setPostTags(tx, postID, names); err != nil {
 		tx.Rollback()
+		return err
+	}
+	return tx.Commit()
+}
+
+func setPostTags(e execer, postID int, names []string) error {
+	if _, err := e.Exec(`DELETE FROM post_tags WHERE post_id=?`, postID); err != nil {
 		return err
 	}
 	for _, name := range names {
@@ -1038,21 +1174,18 @@ func SetPostTags(postID int, names []string) error {
 			continue
 		}
 		slug := TagSlug(name)
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO tags (name, slug) VALUES (?,?)`, name, slug); err != nil {
-			tx.Rollback()
+		if _, err := e.Exec(`INSERT OR IGNORE INTO tags (name, slug) VALUES (?,?)`, name, slug); err != nil {
 			return err
 		}
 		var tagID int
-		if err := tx.QueryRow(`SELECT id FROM tags WHERE slug=?`, slug).Scan(&tagID); err != nil {
-			tx.Rollback()
+		if err := e.QueryRow(`SELECT id FROM tags WHERE slug=?`, slug).Scan(&tagID); err != nil {
 			return err
 		}
-		if _, err := tx.Exec(`INSERT OR IGNORE INTO post_tags (post_id, tag_id) VALUES (?,?)`, postID, tagID); err != nil {
-			tx.Rollback()
+		if _, err := e.Exec(`INSERT OR IGNORE INTO post_tags (post_id, tag_id) VALUES (?,?)`, postID, tagID); err != nil {
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
 }
 
 // TagSlug делает slug из имени тега (lowercase, пробелы → дефис).
@@ -1262,6 +1395,21 @@ func GetAllSettings() map[string]string {
 		}
 	}
 	return m
+}
+
+// SetSettings writes several settings in one transaction: all or none.
+func SetSettings(kv map[string]string) error {
+	tx, err := DB.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() { _ = tx.Rollback() }()
+	for k, v := range kv {
+		if _, err := tx.Exec(`INSERT INTO settings (key, value) VALUES (?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`, k, v); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
 }
 
 func SetSetting(key, value string) error {

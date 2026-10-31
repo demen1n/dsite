@@ -1,7 +1,9 @@
 package db
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -1249,5 +1251,106 @@ func TestFileUsage_HomeBio(t *testing.T) {
 	}
 	if all["other.jpg"].InUse() {
 		t.Errorf("GetAllFileUsage[other.jpg] = %+v, want unused", all["other.jpg"])
+	}
+}
+
+func TestSavePost(t *testing.T) {
+	setupTestDB(t)
+	at := time.Date(2025, 1, 2, 3, 4, 5, 0, time.UTC)
+	id, err := SavePost(0, PostFields{Slug: "a", Title: "A", Published: true, PublishedAt: at, Tags: []string{"x", "y"}})
+	if err != nil {
+		t.Fatalf("SavePost create: %v", err)
+	}
+	p, _ := GetPostByID(id)
+	if p.Title != "A" || !p.PublishedAt.Equal(at) || len(p.Tags) != 2 {
+		t.Errorf("created post = %+v", p)
+	}
+
+	if _, err := SavePost(id, PostFields{Slug: "a", Title: "A2", Published: true, Tags: []string{"z"}}); err != nil {
+		t.Fatalf("SavePost update: %v", err)
+	}
+	p, _ = GetPostByID(id)
+	if p.Title != "A2" || !p.PublishedAt.Equal(at) || len(p.Tags) != 1 || p.Tags[0] != "z" {
+		t.Errorf("updated post = %+v (date must stay %v)", p, at)
+	}
+
+	other, _ := SavePost(0, PostFields{Slug: "b", Title: "B"})
+	if _, err := SavePost(other, PostFields{Slug: "a", Title: "B2", Tags: []string{"q"}}); !errors.Is(err, ErrSlugTaken) {
+		t.Errorf("SavePost to a taken slug: err = %v, want ErrSlugTaken", err)
+	}
+	if _, err := SavePost(0, PostFields{Slug: "a", Title: "C"}); !errors.Is(err, ErrSlugTaken) {
+		t.Errorf("SavePost create with a taken slug: err = %v, want ErrSlugTaken", err)
+	}
+
+	// Anything failing midway rolls the whole save back: a nonexistent
+	// series violates the foreign key after the tags would've been written.
+	if _, err := SavePost(other, PostFields{Slug: "b", Title: "B3", SeriesID: 999, Tags: []string{"q"}}); err == nil {
+		t.Fatal("SavePost with a bad series: want error")
+	}
+	p, _ = GetPostByID(other)
+	if p.Title != "B" || len(p.Tags) != 0 {
+		t.Errorf("failed save left changes: title %q tags %v", p.Title, p.Tags)
+	}
+}
+
+func TestListLiveTags(t *testing.T) {
+	setupTestDB(t)
+	live, _ := CreatePost("live", "Live", "", "", "", true, 0)
+	draft, _ := CreatePost("draft", "Draft", "", "", "", false, 0)
+	sched, _ := CreatePost("sched", "Sched", "", "", "", true, 0)
+	SetPostPublishedAt(int(sched), time.Now().Add(48*time.Hour)) //nolint
+	SetPostTags(int(live), []string{"shared", "public"})         //nolint
+	SetPostTags(int(draft), []string{"shared", "secret"})        //nolint
+	SetPostTags(int(sched), []string{"soon"})                    //nolint
+
+	tags, err := ListLiveTags()
+	if err != nil {
+		t.Fatalf("ListLiveTags: %v", err)
+	}
+	var names []string
+	for _, tg := range tags {
+		names = append(names, tg.Name)
+	}
+	if got := strings.Join(names, ","); got != "public,shared" {
+		t.Errorf("ListLiveTags = %s, want public,shared", got)
+	}
+}
+
+func TestCreateFirstUser(t *testing.T) {
+	// A file DB: with :memory: each pool connection would get its own empty
+	// database, and the goroutines below use several connections.
+	if err := Init(filepath.Join(t.TempDir(), "t.db")); err != nil {
+		t.Fatalf("Init: %v", err)
+	}
+	t.Cleanup(func() { DB.Close() })
+	const n = 8
+	errs := make(chan error, n)
+	for i := 0; i < n; i++ {
+		go func(i int) { errs <- CreateFirstUser(fmt.Sprintf("admin%d", i), "hash") }(i)
+	}
+	ok := 0
+	for i := 0; i < n; i++ {
+		switch err := <-errs; {
+		case err == nil:
+			ok++
+		case !errors.Is(err, ErrAdminExists):
+			t.Errorf("CreateFirstUser: %v", err)
+		}
+	}
+	var users int
+	DB.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&users) //nolint
+	if ok != 1 || users != 1 {
+		t.Errorf("concurrent setup: %d succeeded, %d users; want exactly 1", ok, users)
+	}
+}
+
+func TestSetSettings(t *testing.T) {
+	setupTestDB(t)
+	if err := SetSettings(map[string]string{"a": "1", "b": "2"}); err != nil {
+		t.Fatalf("SetSettings: %v", err)
+	}
+	s := GetAllSettings()
+	if s["a"] != "1" || s["b"] != "2" {
+		t.Errorf("settings = %v", s)
 	}
 }

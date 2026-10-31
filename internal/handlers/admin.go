@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"github.com/demen1n/dsite/internal/db"
@@ -41,20 +42,35 @@ func init() {
 
 // GET /admin/setup — первичная настройка, если нет юзеров
 func Setup(w http.ResponseWriter, r *http.Request) {
-	exists, _ := db.UserExists()
+	exists, err := db.UserExists()
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return
+	}
 	if exists {
 		http.Redirect(w, r, "/admin", http.StatusFound)
 		return
+	}
+	// The token comes from the server log (see EnsureAdminExists): ?token= on
+	// the link, then a hidden form field on submit.
+	token := r.FormValue("token")
+	want := currentSetupToken()
+	if want == "" || subtle.ConstantTimeCompare([]byte(token), []byte(want)) != 1 {
+		http.Error(w, "Ссылка для первичной настройки — в логе сервера (/admin/setup?token=…).", http.StatusForbidden)
+		return
+	}
+	form := func(msg string) {
+		renderFragment(w, "admin/login.html", "admin/setup.html", page("Настройка", setupForm{Token: token, Error: msg}))
 	}
 	if r.Method == http.MethodPost {
 		login := r.FormValue("login")
 		pass := r.FormValue("password")
 		if login == "" || pass == "" {
-			renderFragment(w, "admin/login.html", "admin/setup.html", page("Настройка", "Заполните все поля"))
+			form("Заполните все поля")
 			return
 		}
 		if len(pass) < 8 {
-			renderFragment(w, "admin/login.html", "admin/setup.html", page("Настройка", "Пароль должен быть не короче 8 символов"))
+			form("Пароль должен быть не короче 8 символов")
 			return
 		}
 		hash, err := bcrypt.GenerateFromPassword([]byte(pass), bcrypt.DefaultCost)
@@ -62,15 +78,25 @@ func Setup(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "hash error", 500)
 			return
 		}
-		if err := db.CreateUser(login, string(hash)); err != nil {
+		if err := db.CreateFirstUser(login, string(hash)); err != nil {
+			if errors.Is(err, db.ErrAdminExists) {
+				http.Redirect(w, r, "/admin/login", http.StatusFound)
+				return
+			}
 			log.Printf("create user: %v", err)
-			renderFragment(w, "admin/login.html", "admin/setup.html", page("Настройка", "Ошибка при создании пользователя"))
+			form("Ошибка при создании пользователя")
 			return
 		}
+		setupToken.Store("")
 		http.Redirect(w, r, "/admin/login", http.StatusFound)
 		return
 	}
-	renderFragment(w, "admin/login.html", "admin/setup.html", page("Настройка", ""))
+	form("")
+}
+
+type setupForm struct {
+	Token string
+	Error string
 }
 
 // GET/POST /admin/login
@@ -206,12 +232,13 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	slug := r.FormValue("slug")
-	if slug == "" {
-		slug = slugify(title)
-	}
+	slug := cleanSlug(r.FormValue("slug"), title, "")
 	if slug == "" {
 		slug = fmt.Sprintf("post-%d", time.Now().Unix())
+	}
+	// Before the cover upload, so a rejected save doesn't leave an orphan file.
+	if slugConflict(w, "post", slug, 0) {
+		return
 	}
 
 	bodyHTML, err := RenderMD(bodyMD)
@@ -227,24 +254,65 @@ func CreatePost(w http.ResponseWriter, r *http.Request) {
 	}
 
 	seriesID, _ := strconv.Atoi(r.FormValue("series_id"))
-	id, err := db.CreatePost(slug, title, bodyMD, bodyHTML, cover, published, seriesID)
+	id, err := db.SavePost(0, db.PostFields{
+		Slug: slug, Title: title, BodyMD: bodyMD, BodyHTML: bodyHTML, Cover: cover,
+		Published: published, SeriesID: seriesID, PublishedAt: publishedAt,
+		Tags: parseTags(r.FormValue("tags")),
+	})
 	if err != nil {
-		http.Error(w, "Internal Server Error", 500)
+		postSaveError(w, slug, err)
 		return
 	}
-	if !publishedAt.IsZero() {
-		if err := db.SetPostPublishedAt(int(id), publishedAt); err != nil {
-			log.Printf("SetPostPublishedAt for post %d: %v", id, err)
-		}
-	}
-
-	if tagsStr := r.FormValue("tags"); tagsStr != "" {
-		if err := db.SetPostTags(int(id), parseTags(tagsStr)); err != nil {
-			log.Printf("SetPostTags for post %d: %v", id, err)
-		}
-	}
-
 	http.Redirect(w, r, fmt.Sprintf("/admin/posts/%d/edit", id), http.StatusFound)
+}
+
+// cleanSlug turns a slug typed in the admin into one that fits a single URL
+// path segment ("foo/bar", spaces, "?" etc. used to be stored as-is and
+// produced unreachable pages): it goes through slugify, falling back to the
+// title. The current slug is kept untouched, so saving a post whose old slug
+// predates this normalization doesn't silently change its URL.
+func cleanSlug(input, title, current string) string {
+	input = strings.TrimSpace(input)
+	if input != "" && input == current {
+		return current
+	}
+	if s := slugify(input); s != "" {
+		return s
+	}
+	return slugify(title)
+}
+
+// slugConflict answers 409 if slug belongs to another post/series (kind
+// "post" | "series") and reports whether it did.
+func slugConflict(w http.ResponseWriter, kind, slug string, exceptID int) bool {
+	taken, err := db.SlugTaken(kind, slug, exceptID)
+	if err != nil {
+		http.Error(w, "DB error", 500)
+		return true
+	}
+	if taken {
+		slugTakenError(w, kind, slug)
+	}
+	return taken
+}
+
+func slugTakenError(w http.ResponseWriter, kind, slug string) {
+	what := "другим постом"
+	if kind == "series" {
+		what = "другой серией"
+	}
+	http.Error(w, fmt.Sprintf("Адрес «%s» уже занят %s. Вернитесь назад, укажите другой slug и сохраните ещё раз.", slug, what), http.StatusConflict)
+}
+
+// postSaveError reports a failed SavePost. The editor's draft stays in the
+// browser's localStorage until a save succeeds, so going back restores it.
+func postSaveError(w http.ResponseWriter, slug string, err error) {
+	if errors.Is(err, db.ErrSlugTaken) {
+		slugTakenError(w, "post", slug)
+		return
+	}
+	log.Printf("SavePost: %v", err)
+	http.Error(w, "Не удалось сохранить пост. Черновик остался в браузере — вернитесь назад и попробуйте ещё раз.", 500)
 }
 
 // parsePublishedAt разбирает поле published_at редактора: момент в UTC в
@@ -289,9 +357,20 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.MultipartForm.RemoveAll()
 
+	existing, err := db.GetPostByID(id)
+	if err != nil {
+		NotFound(w, r)
+		return
+	}
 	title := r.FormValue("title")
 	bodyMD := r.FormValue("body")
-	slug := r.FormValue("slug")
+	slug := cleanSlug(r.FormValue("slug"), title, existing.Slug)
+	if slug == "" {
+		slug = existing.Slug
+	}
+	if slugConflict(w, "post", slug, id) {
+		return
+	}
 	published := r.FormValue("published") == "1"
 	publishedAt, err := parsePublishedAt(r.FormValue("published_at"))
 	if err != nil {
@@ -312,25 +391,17 @@ func UpdatePost(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cover == "" && r.FormValue("remove_cover") != "1" {
-		// Оставляем старую
-		existing, _ := db.GetPostByID(id)
-		if existing != nil {
-			cover = existing.Cover
-		}
+		cover = existing.Cover // оставляем старую
 	}
 
 	seriesID, _ := strconv.Atoi(r.FormValue("series_id"))
-	if err := db.UpdatePost(id, slug, title, bodyMD, bodyHTML, cover, published, seriesID); err != nil {
-		http.Error(w, "DB error", 500)
+	if _, err := db.SavePost(id, db.PostFields{
+		Slug: slug, Title: title, BodyMD: bodyMD, BodyHTML: bodyHTML, Cover: cover,
+		Published: published, SeriesID: seriesID, PublishedAt: publishedAt,
+		Tags: parseTags(r.FormValue("tags")),
+	}); err != nil {
+		postSaveError(w, slug, err)
 		return
-	}
-	if !publishedAt.IsZero() {
-		if err := db.SetPostPublishedAt(id, publishedAt); err != nil {
-			log.Printf("SetPostPublishedAt for post %d: %v", id, err)
-		}
-	}
-	if err := db.SetPostTags(id, parseTags(r.FormValue("tags"))); err != nil {
-		log.Printf("SetPostTags for post %d: %v", id, err)
 	}
 	http.Redirect(w, r, fmt.Sprintf("/admin/posts/%d/edit", id), http.StatusFound)
 }
@@ -396,12 +467,12 @@ func CreateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name required", 400)
 		return
 	}
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	if slug == "" {
-		slug = slugify(name)
-	}
+	slug := cleanSlug(r.FormValue("slug"), name, "")
 	if slug == "" {
 		http.Error(w, "invalid name", 400)
+		return
+	}
+	if slugConflict(w, "series", slug, 0) {
 		return
 	}
 	descMD := r.FormValue("description")
@@ -527,12 +598,16 @@ func UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "name required", 400)
 		return
 	}
-	slug := strings.TrimSpace(r.FormValue("slug"))
-	if slug == "" {
-		slug = slugify(name)
+	existing, err := db.GetSeriesByID(id)
+	if err != nil {
+		NotFound(w, r)
+		return
 	}
+	slug := cleanSlug(r.FormValue("slug"), name, existing.Slug)
 	if slug == "" {
-		http.Error(w, "invalid name", 400)
+		slug = existing.Slug
+	}
+	if slugConflict(w, "series", slug, id) {
 		return
 	}
 	descMD := r.FormValue("description")
@@ -547,10 +622,7 @@ func UpdateSeries(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if cover == "" && r.FormValue("remove_cover") != "1" {
-		existing, _ := db.GetSeriesByID(id)
-		if existing != nil {
-			cover = existing.Cover
-		}
+		cover = existing.Cover
 	}
 	collectPhotos := r.FormValue("collect_photos") == "1"
 	showCover := r.FormValue("show_cover") == "1"
@@ -759,20 +831,30 @@ func SaveSettings(w http.ResponseWriter, r *http.Request) {
 		"social_twitter", "social_bluesky", "social_mastodon",
 		"social_vk", "social_linkedin", "social_email",
 	}
+	kv := make(map[string]string, len(fields)+1)
 	for _, key := range fields {
-		if err := db.SetSetting(key, r.FormValue(key)); err != nil {
-			log.Printf("SetSetting %s: %v", key, err)
-		}
+		kv[key] = r.FormValue(key)
 	}
-	resumeHiddenVal := "0"
+	kv["resume_hidden"] = "0"
 	if r.FormValue("resume_hidden") == "1" {
-		resumeHiddenVal = "1"
+		kv["resume_hidden"] = "1"
 	}
-	if err := db.SetSetting("resume_hidden", resumeHiddenVal); err != nil {
-		log.Printf("SetSetting resume_hidden: %v", err)
+	// One transaction: a failure leaves the old settings intact instead of
+	// half the form saved, and the admin gets an error, not a fake success.
+	if err := db.SetSettings(kv); err != nil {
+		saveError(w, "SetSettings", err)
+		return
 	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
+}
+
+// saveError logs a failed admin save and tells the admin it didn't happen
+// (instead of redirecting as if it had). The browser keeps the form's
+// contents on Back, so nothing typed is lost.
+func saveError(w http.ResponseWriter, what string, err error) {
+	log.Printf("%s: %v", what, err)
+	http.Error(w, "Не удалось сохранить изменения. Вернитесь назад и попробуйте ещё раз.", http.StatusInternalServerError)
 }
 
 // POST /admin/settings/password
@@ -806,10 +888,14 @@ func ChangePassword(w http.ResponseWriter, r *http.Request) {
 
 	// Сбрасываем все сессии (включая текущую) — после смены пароля
 	// чужие украденные куки перестают работать. Придётся войти заново.
-	if err := db.DeleteAllSessions(); err != nil {
-		log.Printf("DeleteAllSessions: %v", err)
-	}
 	http.SetCookie(w, &http.Cookie{Name: "session", MaxAge: -1, Path: "/", HttpOnly: true, Secure: secureCookies, SameSite: http.SameSiteLaxMode})
+	if err := db.DeleteAllSessions(); err != nil {
+		// Fail loudly: the point of the reset is that a stolen cookie stops
+		// working, and the admin must know it didn't happen.
+		log.Printf("DeleteAllSessions: %v", err)
+		http.Error(w, "Пароль изменён, но старые сессии сбросить не удалось — другие устройства могут оставаться в системе. Войдите с новым паролем и смените его ещё раз.", http.StatusInternalServerError)
+		return
+	}
 	http.Redirect(w, r, "/admin/login", http.StatusFound)
 }
 
@@ -833,7 +919,8 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := db.SetSetting("home_avatar", filename); err != nil {
-		log.Printf("SetSetting home_avatar: %v", err)
+		saveError(w, "SetSetting home_avatar", err)
+		return
 	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
@@ -842,7 +929,8 @@ func UploadAvatar(w http.ResponseWriter, r *http.Request) {
 // POST /admin/settings/avatar/delete
 func DeleteAvatar(w http.ResponseWriter, r *http.Request) {
 	if err := db.SetSetting("home_avatar", ""); err != nil {
-		log.Printf("SetSetting home_avatar: %v", err)
+		saveError(w, "SetSetting home_avatar", err)
+		return
 	}
 	LoadSettings()
 	http.Redirect(w, r, "/admin/settings", http.StatusFound)
@@ -1000,7 +1088,8 @@ func SaveResume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := db.UpdateResume(bodyMD, bodyHTML); err != nil {
-		log.Printf("UpdateResume: %v", err)
+		saveError(w, "UpdateResume", err)
+		return
 	}
 	http.Redirect(w, r, "/admin/resume", http.StatusFound)
 }

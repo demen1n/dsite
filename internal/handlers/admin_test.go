@@ -290,3 +290,142 @@ func TestDeletePhotoKeepsSharedFile(t *testing.T) {
 		t.Errorf("lonely.jpg (unused) should be removed, stat err = %v", err)
 	}
 }
+
+func TestCleanSlug(t *testing.T) {
+	for _, c := range []struct{ input, title, current, want string }{
+		{"", "Привет мир", "", "privet-mir"},
+		{"foo/bar", "T", "", "foobar"},
+		{"  My Post?#1 ", "T", "", "my-post1"},
+		{"%2F..", "Fallback title", "", "2f"},
+		{"???", "Fallback title", "", "fallback-title"},
+		{"Old_Slug", "T", "Old_Slug", "Old_Slug"}, // unchanged legacy slug is kept
+		{"Old_Slug2", "T", "Old_Slug", "old-slug2"},
+	} {
+		if got := cleanSlug(c.input, c.title, c.current); got != c.want {
+			t.Errorf("cleanSlug(%q, %q, %q) = %q, want %q", c.input, c.title, c.current, got, c.want)
+		}
+	}
+}
+
+func TestPostSlugValidation(t *testing.T) {
+	setupPublic(t)
+	const editPattern = "POST /admin/posts/{id}/edit"
+	create := func(fields map[string]string) *httptest.ResponseRecorder {
+		return postForm(t, CreatePost, "POST /admin/posts/new", "/admin/posts/new", fields)
+	}
+
+	if rec := create(map[string]string{"title": "A", "slug": "foo/bar", "body": "x", "tags": "t1"}); rec.Code != http.StatusFound {
+		t.Fatalf("create: status %d", rec.Code)
+	}
+	a, err := db.GetPostBySlug("foobar")
+	if err != nil {
+		t.Fatalf("slug foo/bar should be stored as foobar: %v", err)
+	}
+	if len(a.Tags) != 1 || a.Tags[0] != "t1" {
+		t.Errorf("tags = %v, want [t1]", a.Tags)
+	}
+
+	// Taken slug on create → 409, nothing created.
+	if rec := create(map[string]string{"title": "B", "slug": "foobar", "body": "x"}); rec.Code != http.StatusConflict {
+		t.Errorf("create with taken slug: status %d, want 409", rec.Code)
+	}
+	if posts, _ := db.ListPostsMeta(false); len(posts) != 1 {
+		t.Errorf("posts after conflict = %d, want 1", len(posts))
+	}
+
+	// Taken slug on update → 409, post unchanged.
+	if rec := create(map[string]string{"title": "B", "slug": "b", "body": "x"}); rec.Code != http.StatusFound {
+		t.Fatalf("create b: status %d", rec.Code)
+	}
+	b, _ := db.GetPostBySlug("b")
+	bPath := "/admin/posts/" + strconv.Itoa(b.ID) + "/edit"
+	if rec := postForm(t, UpdatePost, editPattern, bPath, map[string]string{"title": "B2", "slug": "foobar", "body": "y"}); rec.Code != http.StatusConflict {
+		t.Errorf("update to taken slug: status %d, want 409", rec.Code)
+	}
+	if got, _ := db.GetPostByID(b.ID); got.Slug != "b" || got.Title != "B" {
+		t.Errorf("post changed despite conflict: slug %q title %q", got.Slug, got.Title)
+	}
+
+	// Empty slug on update keeps a usable one instead of storing "".
+	if rec := postForm(t, UpdatePost, editPattern, bPath, map[string]string{"title": "", "slug": "", "body": "y"}); rec.Code != http.StatusFound {
+		t.Fatalf("update with empty slug: status %d", rec.Code)
+	}
+	if got, _ := db.GetPostByID(b.ID); got.Slug != "b" {
+		t.Errorf("empty slug: stored %q, want b", got.Slug)
+	}
+}
+
+func TestSeriesSlugValidation(t *testing.T) {
+	setupPublic(t)
+	if _, err := db.CreateSeries("Trip", "trip", "", "", "", false, true, false, false); err != nil {
+		t.Fatal(err)
+	}
+	rec := postForm(t, CreateSeries, "POST /admin/series/new", "/admin/series/new", map[string]string{"name": "Other", "slug": "trip"})
+	if rec.Code != http.StatusConflict {
+		t.Errorf("create series with taken slug: status %d, want 409", rec.Code)
+	}
+	rec = postForm(t, CreateSeries, "POST /admin/series/new", "/admin/series/new", map[string]string{"name": "Other", "slug": "a/b c"})
+	if rec.Code != http.StatusFound {
+		t.Fatalf("create series: status %d", rec.Code)
+	}
+	if _, err := db.GetSeriesBySlug("ab-c"); err != nil {
+		t.Errorf("slug a/b c should be stored as ab-c: %v", err)
+	}
+}
+
+func TestSetupRequiresToken(t *testing.T) {
+	setupPublic(t)
+	EnsureAdminExists()
+	token := currentSetupToken()
+	if token == "" {
+		t.Fatal("no setup token generated for a site without an admin")
+	}
+	t.Cleanup(func() { setupToken.Store("") })
+	creds := url.Values{"login": {"admin"}, "password": {"password123"}}
+
+	if rec := serve(Setup, "GET /admin/setup", "/admin/setup"); rec.Code != http.StatusForbidden {
+		t.Errorf("GET without token: status %d, want 403", rec.Code)
+	}
+	if rec := serve(Setup, "GET /admin/setup", "/admin/setup?token="+token); rec.Code != 200 || !strings.Contains(rec.Body.String(), `value="`+token+`"`) {
+		t.Errorf("GET with token: status %d, form should carry the token", rec.Code)
+	}
+	if rec := postURLForm(Setup, "POST /admin/setup", "/admin/setup", creds); rec.Code != http.StatusForbidden {
+		t.Errorf("POST without token: status %d, want 403", rec.Code)
+	}
+	if ok, _ := db.UserExists(); ok {
+		t.Fatal("admin created without the token")
+	}
+
+	creds.Set("token", token)
+	if rec := postURLForm(Setup, "POST /admin/setup", "/admin/setup", creds); rec.Code != http.StatusFound {
+		t.Fatalf("POST with token: status %d", rec.Code)
+	}
+	if ok, _ := db.UserExists(); !ok {
+		t.Fatal("admin not created")
+	}
+	if currentSetupToken() != "" {
+		t.Error("setup token should be cleared once the admin exists")
+	}
+	// Setup is closed now, even with the old token.
+	creds.Set("login", "second")
+	if rec := postURLForm(Setup, "POST /admin/setup", "/admin/setup", creds); rec.Code != http.StatusFound || rec.Header().Get("Location") != "/admin" {
+		t.Errorf("second setup: %d → %q, want redirect to /admin", rec.Code, rec.Header().Get("Location"))
+	}
+}
+
+// A failed DB write must surface as an error, not a redirect that looks
+// like success.
+func TestSaveErrorsSurface(t *testing.T) {
+	setupPublic(t)
+	db.DB.Close() // every write fails from here on
+	for name, h := range map[string]http.HandlerFunc{
+		"settings":      SaveSettings,
+		"resume":        SaveResume,
+		"delete avatar": DeleteAvatar,
+	} {
+		rec := postURLForm(h, "POST /x", "/x", url.Values{"site_title": {"T"}, "body": {"b"}})
+		if rec.Code != http.StatusInternalServerError {
+			t.Errorf("%s with a broken DB: status %d, want 500", name, rec.Code)
+		}
+	}
+}

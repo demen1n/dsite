@@ -456,3 +456,18 @@ func TestGalleryCanonical(t *testing.T) {
 		}
 	}
 }
+
+// The public blog's tag list only has tags of posts that are on the site.
+func TestBlogTagsOnlyLive(t *testing.T) {
+	setupPublic(t)
+	createTaggedPost(t, "live", true, "Публичный")
+	createTaggedPost(t, "draft", false, "Секретный")
+
+	body := serve(Index, "GET /blog", "/blog").Body.String()
+	if !strings.Contains(body, "Публичный") {
+		t.Error("blog should list the live post's tag")
+	}
+	if strings.Contains(body, "Секретный") {
+		t.Error("blog lists a tag that only a draft has")
+	}
+}

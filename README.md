@@ -32,7 +32,7 @@ INSECURE_COOKIES=true go run ./cmd/dsite
 > otherwise the session cookie has the `Secure` flag and the browser won't send
 > it, so admin login won't work. Not needed in production behind an HTTPS proxy.
 
-Open http://localhost:8080. On first run, visit `/admin/setup` to create the admin account.
+Open http://localhost:8080. On first run, the server log prints a one-time link `/admin/setup?token=…` — open it to create the admin account.
 
 ## Environment variables
 

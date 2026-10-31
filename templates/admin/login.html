@@ -56,8 +56,9 @@
   <div class="card">
     <h1>Добро пожаловать!</h1>
     <p>Создайте учётную запись администратора.</p>
-    {{if .Data}}<div class="error">{{.Data}}</div>{{end}}
+    {{if .Data.Error}}<div class="error">{{.Data.Error}}</div>{{end}}
     <form method="POST" action="/admin/setup">
+      <input type="hidden" name="token" value="{{.Data.Token}}">
       <label>Логин</label>
       <input type="text" name="login" autofocus required>
       <label>Пароль</label>
