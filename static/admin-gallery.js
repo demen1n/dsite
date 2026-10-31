@@ -156,7 +156,10 @@ function getSelectionBar() {
     bar = document.createElement('div');
     bar.id = 'selection-bar';
     bar.style.cssText = 'display:none; align-items:center; gap:0.75rem; background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); padding:0.5rem 1rem; margin-bottom:0.75rem; font-size:0.88rem;';
-    bar.innerHTML = '<span id="sel-count"></span><button onclick="clearSelection()" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0;font-size:0.82rem;">Снять выделение</button>';
+    bar.innerHTML = '<span id="sel-count"></span>'
+      + '<button type="button" class="btn-move" onclick="moveSelected(-1)" title="Сдвинуть выбранные раньше">← Раньше</button>'
+      + '<button type="button" class="btn-move" onclick="moveSelected(1)" title="Сдвинуть выбранные позже">Позже →</button>'
+      + '<button onclick="clearSelection()" style="background:none;border:none;color:var(--muted);cursor:pointer;padding:0;font-size:0.82rem;">Снять выделение</button>';
     const grid = document.getElementById('gallery-list-grid');
     if (grid) grid.parentNode.insertBefore(bar, grid);
   }
@@ -191,8 +194,28 @@ function toggleSelect(el) {
   updateSelectionBar();
 }
 
+let orderSaver = null;
+
+// moveSelected shifts every selected photo one place earlier (dir -1) or
+// later (+1) — the keyboard/touch alternative to dragging. A selected photo
+// already at the edge, or blocked by another selected one there, stays.
+function moveSelected(dir) {
+  const grid = document.getElementById('gallery-list-grid');
+  if (!grid || !selected.size) return;
+  let els = [...grid.querySelectorAll('[data-photo-id]')].filter(el => selected.has(el.dataset.photoId));
+  if (dir > 0) els = els.reverse();
+  let moved = false;
+  els.forEach(el => {
+    const sib = dir < 0 ? el.previousElementSibling : el.nextElementSibling;
+    if (sib && !selected.has(sib.dataset.photoId) && moveItem(el, dir, 'photoId')) moved = true;
+  });
+  if (moved && orderSaver) orderSaver.save();
+}
+
 function initDraggable() {
   clearSelection();
+  const grid = document.getElementById('gallery-list-grid');
+  orderSaver = grid ? createOrderSaver({ url: '/admin/gallery/reorder', list: grid, attr: 'photoId' }) : null;
   document.querySelectorAll('[data-photo-id]').forEach(el => {
     if (!el.querySelector('.photo-check')) {
       const chk = document.createElement('div');
@@ -262,11 +285,10 @@ function initDraggable() {
       }
 
       clearSelection();
-      saveOrder();
+      if (orderSaver) orderSaver.save();
     });
   });
 
-  const grid = document.getElementById('gallery-list-grid');
   if (grid) {
     grid.addEventListener('click', e => {
       if (!e.target.closest('[data-photo-id]')) clearSelection();
@@ -275,16 +297,6 @@ function initDraggable() {
 }
 
 document.addEventListener('keydown', e => { if (e.key === 'Escape') clearSelection(); });
-
-function saveOrder() {
-  const ids = [...document.querySelectorAll('[data-photo-id]')]
-    .map(el => el.dataset.photoId);
-  fetch('/admin/gallery/reorder', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: ids.map(id => `ids=${id}`).join('&'),
-  });
-}
 
 document.body.addEventListener('htmx:afterSwap', e => {
   const id = e.detail.target.id;
