@@ -314,6 +314,11 @@ func renderStatus(w http.ResponseWriter, status int, name string, data any) {
 		return
 	}
 
+	if pd, ok := data.(PageData); ok && pd.Section == "" {
+		pd.Section = navSections[name]
+		data = pd
+	}
+
 	var buf bytes.Buffer
 	if err = t.ExecuteTemplate(&buf, entrypoint, data); err != nil {
 		log.Printf("execute %s (%s): %v", name, entrypoint, err)
@@ -441,6 +446,18 @@ type PageData struct {
 	Canonical     string
 	Robots        string // <meta name="robots">; пусто — тег не выводится
 	ResumeHidden  bool
+	Section       string // nav section of the page ("blog", "gallery", …) for aria-current; set by renderStatus
+}
+
+// navSections maps public page templates to the nav item they belong to.
+var navSections = map[string]string{
+	"index.html":        "blog", // the blog feed and tag pages
+	"post.html":         "blog",
+	"gallery.html":      "gallery",
+	"series_index.html": "series",
+	"series.html":       "series",
+	"resume.html":       "resume",
+	"search.html":       "search",
 }
 
 // siteSettings is an immutable snapshot of the admin-editable settings.

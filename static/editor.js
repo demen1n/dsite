@@ -20,16 +20,23 @@ function updatePublishLabel() {
 // Дата публикации: сервер хранит и принимает UTC (RFC 3339, скрытое поле
 // published_at), а человек видит и правит её в локальном времени
 // (datetime-local) — переводим туда-обратно здесь, где известен часовой пояс.
+// Show the hidden UTC value in the datetime-local field.
+function syncPublishedAtLocal() {
+  const local = document.getElementById('published-at-local');
+  const hidden = document.getElementById('published-at');
+  if (!local || !hidden) return;
+  if (!hidden.value) { local.value = ''; return; }
+  const d = new Date(hidden.value);
+  const pad = n => String(n).padStart(2, '0');
+  local.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+    'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
 (function publishedAtInit() {
   const local = document.getElementById('published-at-local');
   const hidden = document.getElementById('published-at');
   if (!local || !hidden) return;
-  if (hidden.value) {
-    const d = new Date(hidden.value);
-    const pad = n => String(n).padStart(2, '0');
-    local.value = d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
-      'T' + pad(d.getHours()) + ':' + pad(d.getMinutes());
-  }
+  syncPublishedAtLocal();
   local.addEventListener('change', () => {
     // Пустое поле — дату не трогаем (сервер оставит текущую).
     hidden.value = local.value ? new Date(local.value).toISOString() : '';
@@ -286,22 +293,56 @@ function draftDel(key) {
   try { localStorage.removeItem(key); } catch { /* ignore */ }
 }
 
-// What the server rendered into the form, i.e. what is actually saved.
-// defaultValue, not value: the browser may have restored edits into the
-// textareas on reload.
-function savedState() {
+// The form's current values — what draftSave stores.
+function formState() {
   return {
-    title: document.getElementById('title').defaultValue,
-    body:  document.getElementById('body').defaultValue,
-    tags:  document.getElementById('tags-hidden').value,
+    title:       document.getElementById('title').value,
+    body:        document.getElementById('body').value,
+    tags:        document.getElementById('tags-hidden').value,
+    slug:        document.getElementById('slug').value,
+    seriesID:    document.getElementById('series-id').value,
+    publishedAt: document.getElementById('published-at').value,
+    published:   document.getElementById('published-toggle').checked,
   };
 }
 
+// What the server rendered into the form, i.e. what is actually saved.
+// default*, not the live values: the browser may have restored edits into
+// the fields on reload.
+function savedState() {
+  const series = [...document.getElementById('series-id').options].find(o => o.defaultSelected);
+  return {
+    title:       document.getElementById('title').defaultValue,
+    body:        document.getElementById('body').defaultValue,
+    tags:        document.getElementById('tags-hidden').value,
+    slug:        document.getElementById('slug').defaultValue,
+    seriesID:    series ? series.value : '0',
+    publishedAt: document.getElementById('published-at').defaultValue,
+    published:   document.getElementById('published-toggle').defaultChecked,
+  };
+}
+
+// The server's slugify (helpers.go), so a typed slug compares equal to the
+// one the server stored from it.
+function slugNorm(s) {
+  return transliterate((s || '').toLowerCase())
+    .replace(/[\s_]/g, '-').replace(/[^a-z0-9-]/g, '')
+    .replace(/-+/g, '-').replace(/^-|-$/g, '');
+}
+
+// Fields a draft from before they were stored (undefined) don't count. The
+// server normalizes the slug and fills in the date on first publish, so an
+// empty draft value there matches anything.
 function sameContent(draft, state) {
   const norm = s => (s || '').replace(/\r\n/g, '\n').trim();
+  const opt = (v, eq) => v === undefined || eq(v);
   return norm(draft.title) === norm(state.title)
     && norm(draft.body) === norm(state.body)
-    && (draft.tags || '') === (state.tags || '');
+    && (draft.tags || '') === (state.tags || '')
+    && opt(draft.slug, v => !slugNorm(v) || slugNorm(v) === slugNorm(state.slug))
+    && opt(draft.seriesID, v => v === state.seriesID)
+    && opt(draft.publishedAt, v => !v || Date.parse(v) === Date.parse(state.publishedAt))
+    && opt(draft.published, v => v === state.published);
 }
 
 (function draftLoad() {
@@ -338,6 +379,17 @@ function draftRestore() {
   document.getElementById('title').value = draft.title;
   document.getElementById('body').value  = draft.body;
   document.getElementById('tags-hidden').value  = draft.tags;
+  if (draft.slug !== undefined) {
+    document.getElementById('slug').value = draft.slug;
+    slugEdited = true;
+  }
+  if (draft.seriesID !== undefined) document.getElementById('series-id').value = draft.seriesID;
+  if (draft.publishedAt !== undefined) {
+    document.getElementById('published-at').value = draft.publishedAt;
+    syncPublishedAtLocal();
+  }
+  if (draft.published !== undefined) document.getElementById('published-toggle').checked = draft.published;
+  updatePublishLabel();
   autoResize(document.getElementById('title'));
   htmx.trigger(document.getElementById('body'), 'input');
   document.getElementById('autosave-bar')?.remove();
@@ -351,20 +403,19 @@ function draftDiscard() {
 function draftSave() {
   clearTimeout(autoSaveTimer);
   try {
-    localStorage.setItem(DRAFT_KEY, JSON.stringify({
-      title: document.getElementById('title').value,
-      body:  document.getElementById('body').value,
-      tags:  document.getElementById('tags-hidden').value,
-      ts:    Date.now(),
-    }));
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...formState(), ts: Date.now() }));
   } catch { /* storage full or unavailable — nothing better to do */ }
 }
 
-['title', 'body', 'tags-hidden'].forEach(id => {
-  document.getElementById(id)?.addEventListener('input', () => {
-    clearTimeout(autoSaveTimer);
-    autoSaveTimer = setTimeout(draftSave, 2000);
-  });
+function draftSchedule() {
+  clearTimeout(autoSaveTimer);
+  autoSaveTimer = setTimeout(draftSave, 2000);
+}
+['title', 'body', 'tags-hidden', 'slug'].forEach(id => {
+  document.getElementById(id)?.addEventListener('input', draftSchedule);
+});
+['series-id', 'published-at-local', 'published-toggle'].forEach(id => {
+  document.getElementById(id)?.addEventListener('change', draftSchedule);
 });
 
 // Flush the debounced autosave right away instead of dropping the draft:

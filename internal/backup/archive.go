@@ -5,6 +5,7 @@ import (
 	"compress/gzip"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 )
@@ -46,9 +47,14 @@ func writeArchive(dest, dbSnapshotPath, uploadsDir string) (err error) {
 }
 
 func addFile(tw *tar.Writer, srcPath, archiveName string) error {
-	info, err := os.Stat(srcPath)
+	// Lstat, not Stat: a symlink must not pull whatever it points at (a file
+	// outside uploads, or a huge one) into the archive.
+	info, err := os.Lstat(srcPath)
 	if err != nil {
 		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%s: not a regular file", srcPath)
 	}
 	hdr, err := tar.FileInfoHeader(info, "")
 	if err != nil {
@@ -68,7 +74,9 @@ func addFile(tw *tar.Writer, srcPath, archiveName string) error {
 }
 
 // addDir walks dir and adds every regular file under archivePrefix in the
-// archive, preserving the relative directory structure.
+// archive, preserving the relative directory structure. Symlinks and other
+// non-regular entries are skipped (and logged): uploads only ever contains
+// files the server wrote itself, so anything else was put there by hand.
 func addDir(tw *tar.Writer, dir, archivePrefix string) error {
 	return filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -78,6 +86,10 @@ func addDir(tw *tar.Writer, dir, archivePrefix string) error {
 			return err
 		}
 		if d.IsDir() {
+			return nil
+		}
+		if !d.Type().IsRegular() {
+			log.Printf("backup: skipping %s: not a regular file", path)
 			return nil
 		}
 		rel, err := filepath.Rel(dir, path)

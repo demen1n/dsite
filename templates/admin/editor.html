@@ -250,7 +250,7 @@
   <!-- Series -->
   <div class="editor-tags">
     <span class="editor-tags-label">Серия:</span>
-    <select name="series_id" form="post-form" style="border:1px solid var(--border); border-radius:4px; padding:0.2rem 0.5rem; font-size:0.85rem; background:var(--bg); color:var(--text); font-family:inherit">
+    <select name="series_id" id="series-id" form="post-form" style="border:1px solid var(--border); border-radius:4px; padding:0.2rem 0.5rem; font-size:0.85rem; background:var(--bg); color:var(--text); font-family:inherit">
       <option value="0">— нет —</option>
       {{$curSeries := 0}}{{with .Data}}{{$curSeries = .SeriesID}}{{end}}
       {{range .AllSeries}}

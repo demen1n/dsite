@@ -5,9 +5,9 @@
 
 <form action="/search" method="GET" style="margin-bottom:2rem; display:flex; gap:0.5rem;">
   <input type="search" name="q" value="{{with .Data}}{{.Query}}{{end}}"
-         placeholder="Поиск по постам…"
+         placeholder="Поиск по постам…" aria-label="Поиск по постам"
          autofocus
-         style="flex:1; border:1px solid var(--border); border-radius:4px; padding:0.5rem 0.75rem; font-size:1rem; font-family:var(--sans); background:var(--bg); color:var(--text); outline:none;">
+         style="flex:1; border:1px solid var(--border); border-radius:4px; padding:0.5rem 0.75rem; font-size:1rem; font-family:var(--sans); background:var(--bg); color:var(--text);">
   <button type="submit" style="padding:0.5rem 1.1rem; border:1px solid var(--border); border-radius:4px; background:var(--text); color:var(--bg); font-family:var(--sans); font-size:0.9rem; cursor:pointer;">Найти</button>
 </form>
 

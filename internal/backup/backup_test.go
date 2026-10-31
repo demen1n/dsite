@@ -415,3 +415,31 @@ func TestScheduleCancelBeforeFirstRun(t *testing.T) {
 		t.Error("backup ran although ctx was cancelled before the first delay")
 	}
 }
+
+// A symlink in uploads must not drag the file it points at into the archive.
+func TestRun_SkipsSymlinks(t *testing.T) {
+	db := setupTestDB(t)
+	uploadsDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(uploadsDir, "photo.jpg"), []byte("photo"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	secret := filepath.Join(t.TempDir(), "secret.txt")
+	if err := os.WriteFile(secret, []byte("outside uploads"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(uploadsDir, "link.jpg")); err != nil {
+		t.Skipf("symlinks unsupported: %v", err)
+	}
+
+	path, err := Run(context.Background(), Config{DB: db, UploadsDir: uploadsDir, OutDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	files := readArchive(t, path)
+	if _, ok := files["uploads/photo.jpg"]; !ok {
+		t.Error("regular upload missing from archive")
+	}
+	if _, ok := files["uploads/link.jpg"]; ok {
+		t.Error("symlink was followed into the archive")
+	}
+}
