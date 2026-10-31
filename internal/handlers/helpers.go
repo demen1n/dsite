@@ -761,12 +761,25 @@ func postWord(n int) string {
 	}
 }
 
+// setupToken guards /admin/setup while there's no admin yet: without it,
+// whoever finds a freshly deployed site first could claim it. Generated per
+// process and only printed to the server log, which only the operator sees.
+var setupToken atomic.Value // string; "" once the admin exists
+
+func currentSetupToken() string {
+	t, _ := setupToken.Load().(string)
+	return t
+}
+
 func EnsureAdminExists() {
 	exists, err := db.UserExists()
 	if err != nil {
 		log.Fatal("check user:", err)
 	}
 	if !exists {
-		log.Println("⚠️  No admin user found. Visit /admin/setup to create one.")
+		b := make([]byte, 16)
+		rand.Read(b)
+		setupToken.Store(hex.EncodeToString(b))
+		log.Printf("⚠️  No admin user found. Create one at /admin/setup?token=%s", currentSetupToken())
 	}
 }

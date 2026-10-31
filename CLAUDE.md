@@ -45,7 +45,7 @@ docker build -t dsite .
 docker run -p 8080:8080 -v dsite_data:/data dsite
 ```
 
-First run: visit `/admin/setup` to create the admin account.
+First run: open the one-time `/admin/setup?token=…` link the server logs on startup (`EnsureAdminExists`; without the token setup answers 403) to create the admin account. `db.CreateFirstUser` checks-and-inserts in one statement, so only one admin can ever be created there.
 
 ## Environment Variables
 
@@ -100,13 +100,15 @@ templates/
 
 **Settings**: admin-editable settings (title, bio, avatar, socials…) live in an immutable `siteSettings` snapshot behind an `atomic.Pointer` (`helpers.go`); `LoadSettings` builds a new one and swaps it, readers call `settings()`. Don't add package-level globals for settings — they race with saves.
 
+**Admin saves**: a post is written with its publication date and tags in one transaction (`db.SavePost`), settings via `db.SetSettings`; a failed save answers an error page (`saveError`/`postSaveError`), never the success redirect. The public blog's tag list is `db.ListLiveTags` (tags of posts on the site), not `ListAllTags`.
+
 **Sessions**: Stored in SQLite (`sessions` table). 30-day expiry. Expired sessions cleaned on startup and hourly. Single admin user.
 
 **Images**: Server-side resize/re-encode via `internal/imgproc` (EXIF-corrected, max 1600px wide, JPEG output) — replaced the old browser-side canvas resize. GIFs are stored as-is (unprocessed) to preserve animation. Server stores with a random hex filename. Upload validation checks both file extension (allowlist) and magic bytes (MIME content). `imgproc.Process` no longer self-throttles concurrency — callers must hold an `imgproc.Reserve()` slot for the duration of the call (see `internal/imgproc/imgproc.go`). JPEGs are decoded by `internal/imgproc/jpegdec`, a fork of the stdlib `image/jpeg` decoder that keeps progressive DCT coefficients as int16 and can decode straight to half resolution (`DecodeHalf`, used whenever the photo is shrunk ≥2× anyway) — the stdlib one needed ~560MB for a 36MP progressive 4:4:4 photo and got the 512MB container OOM-killed. Before decoding, `Process` estimates peak memory from the image header (`memCost` in `internal/imgproc/cost.go`) and returns `imgproc.ErrTooLarge` above `maxDecodeBytes`; anything up to 6048×4024 (24MP) must always fit, in any encoding and orientation (tested in `TestProcessDecodeBudget`). Upload handlers turn `ErrTooLarge` into 413 (editor) / `X-Too-Large` (gallery), and only then, for images over 24MP, the admin JS downscales the file in the browser (canvas — lower quality, hence emergency-only) and retries. Every upload also gets an 800px thumbnail (`internal/handlers/thumbs.go`, used in `srcset`) and a 16px placeholder stored as a `data:` URI in `thumbnails.placeholder`, rendered as the `<img>` background so a blurred preview shows while the photo loads (none for GIFs — transparency). `BackfillThumbs` fills in missing thumbnails and placeholders on startup.
 
 **Time zone**: timestamps are stored and compared in UTC; only display converts to `SITE_TZ` (`relDate`/`ruDate`/`fmtDateShort`, `siteTime` in templates). «Сегодня»/«вчера» are calendar days in that zone. Sitemap/Atom keep UTC. tzdata is embedded in the binary (`time/tzdata`), so the zone resolves without OS zoneinfo. The admin editor's publication date uses the browser's zone (`editor.js`).
 
-**Slugs**: `slugify()` in `helpers.go` supports Cyrillic — transliterates to Latin before slugifying, so Russian category/post names work correctly.
+**Slugs**: `slugify()` in `helpers.go` supports Cyrillic — transliterates to Latin before slugifying, so Russian category/post names work correctly. Slugs typed in the admin go through `cleanSlug` (→ `slugify`, falling back to the title; an unchanged legacy slug is kept as is), and a slug used by another post/series is rejected with 409 before anything is written (`db.SlugTaken`; `db.SavePost` re-checks inside its transaction).
 
 **Markdown**: `github.com/yuin/goldmark` with GFM extensions (tables, strikethrough). Unsafe HTML allowed for flexibility. Markdown is stored alongside pre-rendered HTML in the posts table. `RenderMD` then runs the HTML through `internal/typo` (Russian typography: «ёлочки»/„лапки“ quotes, em dashes, ellipsis, non-breaking spaces after short words and numbers; text inside `<pre>`/`<code>`, tags and attributes is left alone). Because HTML is stored pre-rendered, bump `markdownVersion` in `helpers.go` whenever `RenderMD`'s output changes — on startup `RerenderMarkdown` regenerates the stored HTML of posts, series descriptions and the resume when the `markdown_version` setting differs.
 

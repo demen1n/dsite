@@ -94,7 +94,7 @@ func renderBlog(w http.ResponseWriter, r *http.Request, tag *db.Tag) {
 		http.Error(w, "DB error", 500)
 		return
 	}
-	tags, err := db.ListAllTags()
+	tags, err := db.ListLiveTags()
 	if err != nil {
 		http.Error(w, "DB error", 500)
 		return
