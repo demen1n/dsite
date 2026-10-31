@@ -37,23 +37,24 @@
 <header>
   <div class="site-header">
     <a class="site-name" href="/">{{.SiteTitle}}</a>
-    <nav class="site-nav">
-      <a href="/blog">Блог</a>
-      <a href="/gallery">Галерея</a>
-      <a href="/series">Серии</a>
-      {{if not .ResumeHidden}}<a href="/resume">Резюме</a>{{end}}
+    <nav class="site-nav" aria-label="Разделы">
+      <a href="/blog"{{if eq .Section "blog"}} aria-current="page"{{end}}>Блог</a>
+      <a href="/gallery"{{if eq .Section "gallery"}} aria-current="page"{{end}}>Галерея</a>
+      <a href="/series"{{if eq .Section "series"}} aria-current="page"{{end}}>Серии</a>
+      {{if not .ResumeHidden}}<a href="/resume"{{if eq .Section "resume"}} aria-current="page"{{end}}>Резюме</a>{{end}}
+      <a href="/search"{{if eq .Section "search"}} aria-current="page"{{end}}>Поиск</a>
     </nav>
     {{with .Socials}}
     <div class="site-socials">
-      {{if .github}}<a href="{{.github}}" target="_blank" rel="noopener" title="GitHub"><svg><use href="#si-github"/></svg></a>{{end}}
-      {{if .telegram}}<a href="{{.telegram}}" target="_blank" rel="noopener" title="Telegram"><svg><use href="#si-telegram"/></svg></a>{{end}}
-      {{if .instagram}}<a href="{{.instagram}}" target="_blank" rel="noopener" title="Instagram"><svg><use href="#si-instagram"/></svg></a>{{end}}
-      {{if .twitter}}<a href="{{.twitter}}" target="_blank" rel="noopener" title="Twitter / X"><svg><use href="#si-twitter"/></svg></a>{{end}}
-      {{if .bluesky}}<a href="{{.bluesky}}" target="_blank" rel="noopener" title="Bluesky"><svg><use href="#si-bluesky"/></svg></a>{{end}}
-      {{if .mastodon}}<a href="{{.mastodon}}" target="_blank" rel="noopener" title="Mastodon"><svg><use href="#si-mastodon"/></svg></a>{{end}}
-      {{if .vk}}<a href="{{.vk}}" target="_blank" rel="noopener" title="ВКонтакте"><svg><use href="#si-vk"/></svg></a>{{end}}
-      {{if .linkedin}}<a href="{{.linkedin}}" target="_blank" rel="noopener" title="LinkedIn"><svg><use href="#si-linkedin"/></svg></a>{{end}}
-      {{if .email}}<a href="mailto:{{.email}}" title="Email"><svg><use href="#si-email"/></svg></a>{{end}}
+      {{if .github}}<a href="{{.github}}" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub"><svg aria-hidden="true"><use href="#si-github"/></svg></a>{{end}}
+      {{if .telegram}}<a href="{{.telegram}}" target="_blank" rel="noopener" title="Telegram" aria-label="Telegram"><svg aria-hidden="true"><use href="#si-telegram"/></svg></a>{{end}}
+      {{if .instagram}}<a href="{{.instagram}}" target="_blank" rel="noopener" title="Instagram" aria-label="Instagram"><svg aria-hidden="true"><use href="#si-instagram"/></svg></a>{{end}}
+      {{if .twitter}}<a href="{{.twitter}}" target="_blank" rel="noopener" title="Twitter / X" aria-label="Twitter / X"><svg aria-hidden="true"><use href="#si-twitter"/></svg></a>{{end}}
+      {{if .bluesky}}<a href="{{.bluesky}}" target="_blank" rel="noopener" title="Bluesky" aria-label="Bluesky"><svg aria-hidden="true"><use href="#si-bluesky"/></svg></a>{{end}}
+      {{if .mastodon}}<a href="{{.mastodon}}" target="_blank" rel="noopener" title="Mastodon" aria-label="Mastodon"><svg aria-hidden="true"><use href="#si-mastodon"/></svg></a>{{end}}
+      {{if .vk}}<a href="{{.vk}}" target="_blank" rel="noopener" title="ВКонтакте" aria-label="ВКонтакте"><svg aria-hidden="true"><use href="#si-vk"/></svg></a>{{end}}
+      {{if .linkedin}}<a href="{{.linkedin}}" target="_blank" rel="noopener" title="LinkedIn" aria-label="LinkedIn"><svg aria-hidden="true"><use href="#si-linkedin"/></svg></a>{{end}}
+      {{if .email}}<a href="mailto:{{.email}}" title="Email" aria-label="Email"><svg aria-hidden="true"><use href="#si-email"/></svg></a>{{end}}
     </div>
     {{end}}
   </div>
@@ -62,14 +63,14 @@
   {{block "content" .}}{{end}}
 </main>
 <footer>
-  <div><a href="/feed.xml">RSS</a> · <a href="/privacy">Конфиденциальность</a> · <a href="/admin" title="admin"><svg style="width:13px;height:13px;fill:currentColor;vertical-align:-1px"><use href="#si-lock"/></svg></a></div>
+  <div><a href="/feed.xml">RSS</a> · <a href="/privacy">Конфиденциальность</a> · <a href="/admin" title="admin" aria-label="Админка"><svg aria-hidden="true" style="width:13px;height:13px;fill:currentColor;vertical-align:-1px"><use href="#si-lock"/></svg></a></div>
 </footer>
 
-<div id="lightbox">
-  <button id="lightbox-close">✕</button>
-  <button id="lightbox-prev">&#8592;</button>
+<div id="lightbox" role="dialog" aria-modal="true" aria-label="Фото">
+  <button type="button" id="lightbox-close" aria-label="Закрыть">✕</button>
+  <button type="button" id="lightbox-prev" aria-label="Предыдущее фото">&#8592;</button>
   <img id="lightbox-img" src="" alt="">
-  <button id="lightbox-next">&#8594;</button>
+  <button type="button" id="lightbox-next" aria-label="Следующее фото">&#8594;</button>
 </div>
 <script src="{{static "lightbox.js"}}"></script>
 

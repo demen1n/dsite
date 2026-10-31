@@ -2,7 +2,7 @@
 :root {
   --bg: #fff;
   --text: #1c1c1e;
-  --muted: #8a8a8e;
+  --muted: #6e6e73; /* 5.1:1 on white (the old #8a8a8e was 3.4:1 — too faint for small text) */
   --border: #e5e5ea;
   --max-w: 700px;
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -17,13 +17,18 @@ body { font-family: var(--serif); font-size: 1.0625rem; background: var(--bg); c
 a { color: inherit; text-decoration: underline; text-underline-offset: 2px; }
 a:hover { color: var(--muted); }
 
+/* One visible focus ring for keyboard users everywhere (mouse clicks don't
+   trigger :focus-visible on links/buttons). */
+:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+#lightbox :focus-visible { outline-color: #fff; }
+
 /* ── Header ── */
 .site-header { max-width: var(--max-w); margin: 0 auto; padding: 1.75rem 1.5rem 1.5rem; display: flex; align-items: baseline; gap: 2rem; font-family: var(--sans); }
 .site-name { font-size: 1rem; font-weight: 600; color: var(--text); text-decoration: none; flex-shrink: 0; }
 .site-name:hover { color: var(--muted); }
 .site-nav { display: flex; gap: 1.25rem; }
 .site-nav a { font-size: 0.9rem; color: var(--muted); text-decoration: none; }
-.site-nav a:hover { color: var(--text); }
+.site-nav a:hover, .site-nav a[aria-current] { color: var(--text); }
 .site-socials { margin-left: auto; display: flex; align-items: center; gap: 0.6rem; }
 .site-socials a { color: var(--muted); display: flex; text-decoration: none; }
 .site-socials a:hover { color: var(--text); }
@@ -203,7 +208,7 @@ footer a:hover { color: var(--text); }
 .not-found-code { font-size: 4.5rem; font-weight: 700; line-height: 1; color: var(--border); letter-spacing: -0.03em; margin-bottom: 1rem; }
 .not-found-text { color: var(--muted); max-width: 28rem; margin: 0 auto 2rem; font-size: 0.95rem; }
 .not-found-search { display: flex; gap: 0.5rem; max-width: 24rem; margin: 0 auto 2rem; }
-.not-found-search input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem; font-size: 1rem; font-family: var(--sans); background: var(--bg); color: var(--text); outline: none; }
+.not-found-search input { flex: 1; min-width: 0; border: 1px solid var(--border); border-radius: var(--radius); padding: 0.5rem 0.75rem; font-size: 1rem; font-family: var(--sans); background: var(--bg); color: var(--text); }
 .not-found-search input:focus { border-color: var(--muted); }
 .not-found-search button { padding: 0.5rem 1.1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--text); color: var(--bg); font-family: var(--sans); font-size: 0.9rem; cursor: pointer; }
 .not-found-links { display: flex; justify-content: center; flex-wrap: wrap; gap: 0.5rem 1.25rem; font-size: 0.9rem; }

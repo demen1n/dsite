@@ -1,7 +1,7 @@
 {{define "head"}}
 <style>
   main { max-width: 100%; padding: 0; }
-  .gallery-title { max-width: var(--max-w); margin: 0 auto; padding: 2rem 1.5rem 1rem; font-size: 1.75rem; font-weight: 700; font-family: var(--sans); }
+  .gallery-title { max-width: var(--max-w); margin: 0 auto; line-height: 1.7; padding: 2rem 1.5rem 1rem; font-size: 1.75rem; font-weight: 700; font-family: var(--sans); }
   .gallery-filters { max-width: var(--max-w); margin: 0 auto; padding: 0 1.5rem 1.5rem; display: flex; flex-direction: column; gap: 0.6rem; font-family: var(--sans); }
   .gallery-filter-row { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; }
   .gallery-filter-label { font-size: 0.75rem; color: var(--muted); margin-right: 0.2rem; }
@@ -38,7 +38,7 @@
 {{end}}
 
 {{define "content"}}
-<div class="gallery-title">Галерея</div>
+<h1 class="gallery-title">Галерея</h1>
 
 {{if or .Data.Categories .Data.Places}}
 <div class="gallery-filters">
@@ -64,9 +64,9 @@
   {{if .Data.Places}}
   <div class="gallery-filter-row gallery-places">
     <span class="gallery-filter-label">Место:</span>
-    <button class="place-toggle{{if ne .Data.ActivePlace ""}} active{{end}}" id="place-toggle">
+    <button type="button" class="place-toggle{{if ne .Data.ActivePlace ""}} active{{end}}" id="place-toggle" aria-expanded="false" aria-controls="place-options">
       <span id="place-toggle-label">{{if eq .Data.ActivePlace ""}}Везде{{else}}{{range .Data.Places}}{{if eq $.Data.ActivePlace .Slug}}{{.Name}}{{end}}{{end}}{{end}}</span>
-      <span class="ptarrow">▾</span>
+      <span class="ptarrow" aria-hidden="true">▾</span>
     </button>
     <div class="place-options" id="place-options">
       <a href="/gallery{{if .Data.ActiveCat}}?cat={{.Data.ActiveCat}}{{end}}"

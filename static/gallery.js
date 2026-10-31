@@ -5,8 +5,17 @@ function setupGalleryLightbox() {
     const img = el.querySelector('img');
     return img.dataset.full || img.getAttribute('src');
   });
+  const alts = items.map(el => el.querySelector('img').alt);
   items.forEach((item, i) => {
-    item.onclick = () => openLightbox(srcs[i], srcs);
+    const open = () => openLightbox(srcs[i], srcs, alts);
+    item.onclick = open;
+    // A tile is a button for keyboard and screen-reader users too.
+    item.tabIndex = 0;
+    item.setAttribute('role', 'button');
+    item.setAttribute('aria-label', alts[i] ? `Открыть фото: ${alts[i]}` : `Открыть фото ${i + 1} из ${items.length}`);
+    item.onkeydown = e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); open(); }
+    };
   });
 }
 
@@ -290,6 +299,7 @@ function togglePlaces() {
   if (!btn || !opts) return;
   const open = opts.classList.toggle('open');
   btn.classList.toggle('open', open);
+  btn.setAttribute('aria-expanded', open);
 }
 
 function closePlaces() {
@@ -298,6 +308,7 @@ function closePlaces() {
   if (!btn || !opts) return;
   opts.classList.remove('open');
   btn.classList.remove('open');
+  btn.setAttribute('aria-expanded', 'false');
 }
 
 document.addEventListener('click', e => {

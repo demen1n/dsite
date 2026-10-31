@@ -471,3 +471,35 @@ func TestBlogTagsOnlyLive(t *testing.T) {
 		t.Error("blog lists a tag that only a draft has")
 	}
 }
+
+// The nav marks the current section and always offers search.
+func TestNavCurrentSection(t *testing.T) {
+	setupPublic(t)
+	for _, c := range []struct {
+		h       http.HandlerFunc
+		pattern string
+		target  string
+		current string // href of the nav item that must be aria-current, "" for none
+	}{
+		{Index, "GET /blog", "/blog", "/blog"},
+		{Gallery, "GET /gallery", "/gallery", "/gallery"},
+		{SeriesIndex, "GET /series", "/series", "/series"},
+		{Search, "GET /search", "/search", "/search"},
+		{Home, "GET /{$}", "/", ""},
+	} {
+		body := serve(c.h, c.pattern, c.target).Body.String()
+		if !strings.Contains(body, `<a href="/search"`) {
+			t.Errorf("%s: no search link in the nav", c.target)
+		}
+		if n := strings.Count(body, `aria-current="page"`); (c.current == "" && n != 0) || (c.current != "" && n != 1) {
+			t.Errorf("%s: %d aria-current items", c.target, n)
+		}
+		if c.current != "" && !strings.Contains(body, `<a href="`+c.current+`" aria-current="page">`) {
+			t.Errorf("%s: %s not marked current", c.target, c.current)
+		}
+	}
+
+	if body := serve(Gallery, "GET /gallery", "/gallery").Body.String(); !strings.Contains(body, `<h1 class="gallery-title">`) {
+		t.Error("gallery title should be an h1")
+	}
+}
